@@ -558,7 +558,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildFieldWelder(scene, WELL_X + MAST_OFFSET_X + 14, 12);
     // Guide-storage rack on the FAR side of the MG unit (−Z, opposite the
     // camera-facing worksite). Quarter size and rotated 90°.
-    buildGuideRack(scene, MG_UNIT_X, -9, Math.PI / 2, 0.25);
+    buildGuideRack(scene, MG_UNIT_X, -6, Math.PI / 2, 0.5);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
     buildSafetyCones(scene);
@@ -1007,6 +1007,57 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           cap.scale.copy(peak.scale);
           scene.add(cap);
         }
+      }
+    });
+
+    // --- DISTANT FIELD SILHOUETTES: a sparse ring of neighbouring facilities
+    // (tank batteries, pump-jack shapes, small units) rendered as simple LOW-POLY
+    // HAZY SILHOUETTES far out on the terrain, so the site feels like part of a
+    // working oil field without adding many draw calls. Deterministic + minimal.
+    const silCol = new THREE.Color(isNightMode ? 0x1a2230 : 0x7f8391); // hazy distance tint
+    const silMat = new THREE.MeshStandardMaterial({ color: silCol, roughness: 1.0, metalness: 0.0 });
+    let dSeed = 4242;
+    const dRnd = () => { dSeed = (dSeed * 1103515245 + 12345) & 0x7fffffff; return dSeed / 0x7fffffff; };
+    const groundAt = (px: number, pz: number) => {
+      // Match the terrain height formula (rise ramp) so props sit ON the ground.
+      const dist = Math.hypot(px, pz);
+      return THREE.MathUtils.smoothstep(dist, 120, 300) * 26.0 - 0.15;
+    };
+    // Distant cluster sites at varied bearings/distances (kept OUTSIDE the pad).
+    const distantSites: Array<{ x: number; z: number; kind: 'tanks' | 'pumpjack' | 'unit' }> = [
+      { x: 120, z: -70, kind: 'tanks' },
+      { x: -140, z: 40, kind: 'pumpjack' },
+      { x: 60, z: 150, kind: 'unit' },
+      { x: -90, z: -150, kind: 'tanks' },
+      { x: 170, z: 60, kind: 'pumpjack' },
+      { x: -60, z: 170, kind: 'pumpjack' },
+      { x: 200, z: -30, kind: 'unit' },
+      { x: -180, z: -90, kind: 'tanks' },
+    ];
+    distantSites.forEach((site) => {
+      const gy = groundAt(site.x, site.z);
+      if (site.kind === 'tanks') {
+        const n = 2 + Math.floor(dRnd() * 3);
+        for (let i = 0; i < n; i++) {
+          const r = 2.2 + dRnd() * 1.2, hh = 6 + dRnd() * 3;
+          const tk = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 12), silMat);
+          tk.position.set(site.x + i * (r * 2 + 1), gy + hh / 2, site.z + (dRnd() - 0.5) * 2);
+          scene.add(tk);
+        }
+      } else if (site.kind === 'pumpjack') {
+        // Simple pump-jack silhouette: post + tilted beam.
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.8, 5, 0.8), silMat);
+        post.position.set(site.x, gy + 2.5, site.z); scene.add(post);
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(8, 0.7, 0.7), silMat);
+        beam.position.set(site.x, gy + 5, site.z); beam.rotation.z = 0.18; scene.add(beam);
+        const cw = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 0.6), silMat);
+        cw.position.set(site.x - 3.6, gy + 3.6, site.z); scene.add(cw);
+      } else {
+        // Generic unit/derrick block.
+        const body = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 2.5), silMat);
+        body.position.set(site.x, gy + 1.5, site.z); scene.add(body);
+        const derr = new THREE.Mesh(new THREE.ConeGeometry(1.6, 9, 4), silMat);
+        derr.position.set(site.x + 3, gy + 4.5, site.z); scene.add(derr);
       }
     });
 
@@ -2685,44 +2736,55 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     }
 
     // --- Continuous Coiled Rod Pack -----------------------------------------
-    // A big FAT black doughnut of tightly-packed rod that FILLS the whole drum
-    // width and builds a large outer diameter — completely covering the axle,
-    // spokes and most of the orange rims (only the rim edges peek out), exactly
-    // like a real bulk CoRod coil. Built as a solid dark core banded with many
-    // torus "wraps" over the full width + concentric rings on both end faces so
-    // every visible surface reads as coiled rod, not a plain cylinder.
-    const coilMat = new THREE.MeshStandardMaterial({ color: 0x14110f, metalness: 0.3, roughness: 0.72 });
-    const HUB_R = 0.55;         // inner radius (packs right down to the axle)
-    const OUTER_R = 2.28;       // large outer radius — covers the 2.3 rims edge-to-edge
-    const ROD_R = 0.052;        // radius of the continuous rod tube
-    const WRAP_GAP = ROD_R * 1.9; // tight packing
-    const halfWidth = 1.28;     // FILLS the full drum width (past the ±1.25 rims)
+    // A big FAT doughnut of tightly-packed steel rod that FILLS the whole drum
+    // width and builds a LARGE outer diameter (bigger than the rims, so the coil
+    // is the dominant mass). Modelled as a solid core banded, over its ENTIRE
+    // outer surface, with many closely-spaced torus "wraps" (each wrap = one turn
+    // of rod), plus concentric spiral rings on both end faces. Slight per-wrap
+    // colour jitter makes individual turns read instead of a plain cylinder.
+    const HUB_R = 0.5;          // inner radius (down to the axle)
+    const OUTER_R = 2.5;        // outer radius — LARGER than the 2.3 rims (coil dominates)
+    const ROD_R = 0.07;         // thicker rod so each wrap is clearly visible
+    const WRAP_GAP = ROD_R * 1.75;
+    const halfWidth = 1.3;      // fills the full drum width
 
-    // Solid filler drum so the coil is a dense mass (no see-through gaps).
+    const coilColors = [0x14110f, 0x1c1815, 0x0e0c0a, 0x211c18]; // subtle turn-to-turn jitter
+    const coilMats = coilColors.map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.45, roughness: 0.55 }));
+    const coilMatFor = (i: number) => coilMats[i % coilMats.length];
+
+    // Solid filler drum just inside the wrap radius so no gaps show through.
     const filler = new THREE.Mesh(
-      new THREE.CylinderGeometry(OUTER_R - ROD_R * 0.5, OUTER_R - ROD_R * 0.5, halfWidth * 2, 48),
-      coilMat,
+      new THREE.CylinderGeometry(OUTER_R - ROD_R * 1.2, OUTER_R - ROD_R * 1.2, halfWidth * 2, 56),
+      coilMats[0],
     );
     filler.rotation.x = Math.PI / 2;
     filler.castShadow = true;
     filler.receiveShadow = true;
     spool.add(filler);
 
-    // Outer wrap rings across the FULL width (the curved rod surface you see).
+    // OUTER SURFACE: one torus per turn, packed tightly across the full width.
     const outerWraps = Math.floor((halfWidth * 2) / WRAP_GAP);
     for (let w = 0; w <= outerWraps; w++) {
-      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R, ROD_R, 6, 48), coilMat);
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R, ROD_R, 8, 56), coilMatFor(w));
       torus.rotation.y = Math.PI / 2;
       torus.position.z = -halfWidth + w * WRAP_GAP;
       torus.castShadow = true;
       spool.add(torus);
     }
-    // Concentric rings covering BOTH end faces hub→outer (the coiled cross-section).
+    // A SECOND, slightly smaller layer of wraps offset half a gap → denser, no
+    // straight-cylinder look between turns.
+    for (let w = 0; w < outerWraps; w++) {
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R * 2.1, ROD_R, 8, 56), coilMatFor(w + 1));
+      torus.rotation.y = Math.PI / 2;
+      torus.position.z = -halfWidth + (w + 0.5) * WRAP_GAP;
+      spool.add(torus);
+    }
+    // END FACES: concentric spiral rings hub→outer on both sides.
     const radialLayers = Math.floor((OUTER_R - HUB_R) / WRAP_GAP);
-    [-halfWidth - ROD_R * 0.4, halfWidth + ROD_R * 0.4].forEach((zFace) => {
+    [-halfWidth - ROD_R * 0.3, halfWidth + ROD_R * 0.3].forEach((zFace) => {
       for (let l = 0; l <= radialLayers; l++) {
         const r = HUB_R + l * WRAP_GAP;
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, ROD_R, 5, 48), coilMat);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, ROD_R, 6, 56), coilMatFor(l));
         ring.rotation.y = Math.PI / 2;
         ring.position.z = zFace;
         spool.add(ring);
