@@ -273,6 +273,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const rodTextureOffset = useRef<number>(0);
   // RIH/POOH dynamic-motion effect refs
   const injectorGroupRef = useRef<THREE.Group | null>(null);
+  // Meshes of the LIVE over-well rod guide (only), highlighted by operation mode:
+  // blue on RIH, green on POOH, red on slip. The storage-rack guides are excluded.
+  const injectorGuideMeshesRef = useRef<THREE.Mesh[]>([]);
   // Background pumpjacks: each entry drives a nodding-beam animation. `phase`
   // offsets each unit so they don't all nod in unison.
   const pumpjacksRef = useRef<Array<{ walkingBeam: THREE.Group; crank: THREE.Group; phase: number; rate: number }>>([]);
@@ -622,6 +625,24 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         pj.crank.rotation.z = ang;              // crank+counterweights spin
         pj.walkingBeam.rotation.z = Math.sin(ang) * 0.16; // beam nods ±0.16 rad
       });
+
+      // 2c. LIVE ROD-GUIDE mode highlight (only the over-well guide): blue on RIH
+      // (rod running IN, speed > 0), green on POOH (pulling OUT, speed < 0), red
+      // on SLIP (grip slipping or safety clamp engaged). Neutral = dark steel.
+      if (injectorGuideMeshesRef.current.length) {
+        const rodS = stateRef.current.rod;
+        const clampOn = stateRef.current.hydraulics.safetyClampLever === 'ON';
+        let guideColor = 0x111827; // neutral dark steel
+        let guideEmissive = 0x000000;
+        if (rodS.rodGripSlipping || clampOn) { guideColor = 0xdc2626; guideEmissive = 0x3a0a0a; }
+        else if (rodS.rodSpeedFtPerMin > 0.1) { guideColor = 0x2563eb; guideEmissive = 0x0a1a3a; }
+        else if (rodS.rodSpeedFtPerMin < -0.1) { guideColor = 0x16a34a; guideEmissive = 0x08240f; }
+        for (const gm of injectorGuideMeshesRef.current) {
+          const gmat = gm.material as THREE.MeshStandardMaterial;
+          gmat.color.setHex(guideColor);
+          gmat.emissive.setHex(guideEmissive);
+        }
+      }
 
       // 3. Gripper Chain Shoes & Teeth Movement
       if (gripperChainLeftRef.current && gripperChainRightRef.current) {
@@ -2664,7 +2685,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Reel on its own trailer: set back into depth (−Z) from the wellhead line
     // and closer to the well. Sized so the coil sits above its trailer deck.
     reelGroup.position.set(REEL_X, 3.8, REEL_Z);
-    reelGroup.scale.setScalar(1.15);
+    reelGroup.scale.setScalar(1.0);
     // Mount the whole reel assembly with a slight forward/downward inclination
     // toward the front base (about the depth axis), as on a real transport reel.
     reelGroup.rotation.x = 0.1;
@@ -2745,31 +2766,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // smooth solid doughnut (a big flat-profile torus) in weathered gunmetal, and
     // fine wrap grooves are added only as a light surface texture so the mass
     // reads as a true bulk string.
-    const HUB_R = 0.55;                 // inner radius of the coil ring
-    const OUTER_R = 2.55;               // large outer radius — dominant mass
-    const halfWidth = 1.35;             // fills the full drum width
-    const meanR = (HUB_R + OUTER_R) / 2;      // torus centre-line radius
-    const tubeR = (OUTER_R - HUB_R) / 2;      // torus tube radius (radial thickness)
+    const HUB_R = 0.5;                  // inner radius of the coil ring
+    const OUTER_R = 2.15;               // sits just INSIDE the rims (2.3) — no spill
+    const halfWidth = 1.05;             // fills the drum width without bulging past rims
 
-    const coilBodyMat = new THREE.MeshStandardMaterial({ color: 0x141210, metalness: 0.55, roughness: 0.5 });
+    const coilBodyMat = new THREE.MeshStandardMaterial({ color: 0x161310, metalness: 0.45, roughness: 0.55 });
 
-    // Main uniform doughnut body (thick, smooth). Scaled along the axis (z) so it
-    // fills the full drum width as a rounded barrel rather than a thin ring.
-    const coilBody = new THREE.Mesh(new THREE.TorusGeometry(meanR, tubeR, 20, 64), coilBodyMat);
-    coilBody.rotation.y = Math.PI / 2;                 // axis → z (spool axis)
-    coilBody.scale.z = halfWidth / tubeR;              // stretch across drum width
+    // Main coil body: a clean CYLINDER (flat ends, straight sides) — the packed
+    // bulk of rod. No z-stretched torus (that caused the bulging barrel).
+    const coilBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(OUTER_R, OUTER_R, halfWidth * 2, 64),
+      coilBodyMat,
+    );
+    coilBody.rotation.x = Math.PI / 2;                 // axis → z (spool axis)
     coilBody.castShadow = true;
     coilBody.receiveShadow = true;
     spool.add(coilBody);
-
-    // Solid inner filler so the hub area reads as packed rod (no see-through).
-    const filler = new THREE.Mesh(
-      new THREE.CylinderGeometry(OUTER_R - 0.02, OUTER_R - 0.02, halfWidth * 2 - 0.05, 64),
-      coilBodyMat,
-    );
-    filler.rotation.x = Math.PI / 2;
-    filler.castShadow = true;
-    spool.add(filler);
 
     // Fine wrap GROOVES on the outer cylindrical surface (subtle darker bands)
     // to suggest tightly wound turns without a busy silhouette.
@@ -2904,8 +2916,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // guide follows `curve`; the rod threads through it. No blue holders — just the
   // black guide sections with yellow wear-pad stripes and mounting plates at the
   // joints between sections. Added to `parent` (scene or a placement group).
-  function buildGuideAlongCurve(parent: THREE.Object3D, curve: THREE.CatmullRomCurve3) {
-    const guideMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.55 });
+  function buildGuideAlongCurve(
+    parent: THREE.Object3D,
+    curve: THREE.CatmullRomCurve3,
+    collect?: THREE.Mesh[],           // if provided, push section tubes here for highlighting
+    tubeRadius = 0.15,                // channel radius; larger keeps the rod visually inside
+  ) {
+    // Each section gets its OWN material instance so the live guide can be
+    // recoloured per operation mode without affecting other guides.
     const plateMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.55, roughness: 0.5 });
     const padMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.2 });
 
@@ -2923,9 +2941,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         pts.push(curve.getPoint(u0 + (u1 - u0) * (k / samples)));
       }
       const seg = new THREE.CatmullRomCurve3(pts);
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 14, 0.15, 10, false), guideMat);
+      const secMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.55 });
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 14, tubeRadius, 10, false), secMat);
       tube.castShadow = true;
       parent.add(tube);
+      collect?.push(tube);
 
       // Mounting plate at the START joint of each section (bolted flange look).
       const jp = curve.getPoint(u0);
@@ -2960,7 +2980,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // from the reel up to the injector top. (No blue holder — the guide is self-
   // supported like the real over-the-well arch.)
   function buildRodGuideRack(scene: THREE.Scene) {
-    buildGuideAlongCurve(scene, getRodGuideCurve());
+    // Wider channel (0.24) so the rod stays visually INSIDE the guide even where
+    // the shared curve bows slightly; collect the section tubes for mode-colour.
+    injectorGuideMeshesRef.current = [];
+    buildGuideAlongCurve(scene, getRodGuideCurve(), injectorGuideMeshesRef.current, 0.24);
   }
 
   // Portable field welder skid (red Weatherford-style unit): steel skid base,
@@ -3137,17 +3160,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       skid.position.set(rx, 0.08, 0); skid.receiveShadow = true; g.add(skid);
     });
 
-    // --- Stack of curved black guide beams cradled in the rack ---
-    // Each stacked beam is itself split into 11 bolt-together SECTIONS of varying
-    // length (matching the live over-well guide), with yellow wear-pad stripes.
-    const NUM = 6;                       // number of stacked guides in the rack
-    const SECTIONS = 11;                 // sections per guide
-    const rawLens = [1.0, 0.7, 1.3, 0.85, 1.15, 0.6, 1.25, 0.9, 1.1, 0.75, 1.2];
-    const totalLen = rawLens.reduce((a, b) => a + b, 0);
+    // --- 11 curved guide beams (TOTAL) cradled in the rack, of VARYING SIZE ---
+    // These are the numbered field guides stored together; 11 individual beams
+    // stacked up the towers, each a single curved box-beam with yellow wear pads.
+    const NUM = 11;                              // total guides in the rack
+    const sizeFactors = [1.0, 0.82, 1.12, 0.9, 1.05, 0.75, 1.18, 0.88, 1.0, 0.8, 1.1];
     for (let i = 0; i < NUM; i++) {
-      const y = 1.1 + i * 0.5;             // stacked up the towers
-      const sag = 1.1 - i * 0.06;          // varying curvature per guide
-      const half = RACK_W / 2 - 0.4;
+      const y = 0.9 + i * 0.28;                  // stacked tightly up the towers
+      const sf = sizeFactors[i % sizeFactors.length];
+      const half = (RACK_W / 2 - 0.4) * sf;      // varying span per beam
+      const sag = (1.1 - i * 0.03) * sf;         // varying curvature per beam
       const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, y, -half),
         new THREE.Vector3(0, y + sag * 0.8, -half * 0.4),
@@ -3155,26 +3177,17 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         new THREE.Vector3(0, y + sag * 0.8, half * 0.4),
         new THREE.Vector3(0, y, half),
       ]);
-      // Build the 11 varying-length sections along this curve.
-      let u0 = 0;
-      for (let s = 0; s < SECTIONS; s++) {
-        const u1 = u0 + rawLens[s] / totalLen;
-        const pts: THREE.Vector3[] = [];
-        for (let k = 0; k <= 6; k++) pts.push(curve.getPoint(u0 + (u1 - u0) * (k / 6)));
-        const seg = new THREE.CatmullRomCurve3(pts);
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 8, 0.16, 8, false), guideMat);
-        tube.castShadow = true; g.add(tube);
-        // Bolt plate at the section start joint.
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.06), guideMat);
-        plate.position.copy(curve.getPoint(u0)); g.add(plate);
-        // One yellow wear-pad mid-section.
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.42), padMat);
-        pad.position.copy(seg.getPoint(0.5)); pad.position.y += 0.15; g.add(pad);
-        u0 = u1;
-      }
-      // Chunky end mounting heads (the numbered lugs) at both ends.
+      const beam = new THREE.Mesh(new THREE.TubeGeometry(curve, 26, 0.15, 8, false), guideMat);
+      beam.castShadow = true; g.add(beam);
+      // Yellow wear-pad stripes along the beam.
+      [0.22, 0.42, 0.58, 0.78].forEach((u) => {
+        const p = curve.getPoint(u);
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.42), padMat);
+        pad.position.copy(p); pad.position.y += 0.14; g.add(pad);
+      });
+      // Chunky numbered end lugs at both ends.
       [-half, half].forEach((pz) => {
-        const lug = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.4), guideMat);
+        const lug = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.36), guideMat);
         lug.position.set(0, y, pz); g.add(lug);
       });
     }
