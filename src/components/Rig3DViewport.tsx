@@ -2759,24 +2759,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       spool.add(spokeR);
     }
 
-    // --- Continuous Coiled Rod Pack (DENSELY-WOUND DOUGHNUT) ----------------
-    // Per spec: a thick doughnut of densely packed, tightly WOUND continuous rod
-    // filling the full drum width at a large outer radius. Built as a real weave
-    // of individual rod turns: RADIAL LAYERS (inner→outer) × WIDTH COLUMNS across
-    // the drum, each a thin torus. A dark solid core sits just under the innermost
-    // layer so no gaps show through. This reads as bulk coiled rod, not a barrel.
+    // --- Continuous Coiled Rod Pack (SPOOLED like a cable drum) -------------
+    // Per the reference: the rod is wound around the drum barrel as big circular
+    // turns (each turn = one wrap around the reel axis). Turns are close-packed
+    // ACROSS the NARROW drum width to complete a layer, then the NEXT layer sits
+    // radially on top — so the coil builds a LARGE DIAMETER on a comparatively
+    // NARROW width. Each individual turn is a visible torus (you see the rods).
     const HUB_R = 0.85;                 // innermost wound layer radius (on the hub)
-    const OUTER_R = 2.2;                // large outer radius of the built-up coil
-    const ROD_R = 0.05;                 // individual rod radius
-    const PACK = ROD_R * 1.95;          // centre-to-centre spacing of tight turns
-    const halfWidth = 1.15;             // coil half-width (fills the drum)
+    const OUTER_R = 2.25;               // large outer radius of the built-up coil
+    const ROD_R = 0.06;                 // individual rod radius (slightly chunky so turns read)
+    const PACK = ROD_R * 2.0;           // centre-to-centre spacing of tight turns
+    const halfWidth = 0.72;             // NARROW drum width (big-diameter/narrow look)
 
-    // Weathered gunmetal with slight turn-to-turn variation so wraps read.
-    const coilShades = [0x161310, 0x1d1915, 0x100d0b, 0x231d18];
+    // Weathered gunmetal with slight turn-to-turn variation so wraps read clearly.
+    const coilShades = [0x1a1613, 0x221d18, 0x120f0d, 0x2a231d];
     const coilMats = coilShades.map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.5, roughness: 0.5 }));
 
-    // Solid dark core just under the first wound layer (fills the centre so the
-    // spokes/axle don't show through the weave).
+    // Thin dark core cylinder under the first layer so gaps never show through.
     const core = new THREE.Mesh(
       new THREE.CylinderGeometry(HUB_R - ROD_R, HUB_R - ROD_R, halfWidth * 2, 40),
       coilMats[0],
@@ -2785,22 +2784,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     core.castShadow = true; core.receiveShadow = true;
     spool.add(core);
 
+    // MANY radial layers (big diameter build-up) × FEW width turns per layer.
     const radialLayers = Math.max(1, Math.round((OUTER_R - HUB_R) / PACK));
     const widthTurns = Math.max(1, Math.round((halfWidth * 2) / PACK));
     for (let li = 0; li < radialLayers; li++) {
       const r = HUB_R + li * PACK;
-      // Each layer's turns are offset half a pitch (like real close-wound layers).
-      const zOff = (li % 2) * (PACK * 0.5);
+      const zOff = (li % 2) * (PACK * 0.5); // nest alternate layers half a pitch
       for (let wi = 0; wi <= widthTurns; wi++) {
         const z = -halfWidth + wi * PACK + zOff;
         if (z < -halfWidth - 0.01 || z > halfWidth + 0.01) continue;
         const turn = new THREE.Mesh(
-          new THREE.TorusGeometry(r, ROD_R, 5, 28),
+          new THREE.TorusGeometry(r, ROD_R, 6, 40),
           coilMats[(li + wi) % coilMats.length],
         );
-        turn.rotation.y = Math.PI / 2;   // torus axis → z (spool axis)
+        turn.rotation.y = Math.PI / 2;   // torus axis → z = spool axis (wraps around drum)
         turn.position.z = z;
-        if (li === radialLayers - 1) turn.castShadow = true; // only outer casts (perf)
+        if (li >= radialLayers - 2) turn.castShadow = true; // outer layers cast (perf)
         spool.add(turn);
       }
     }
