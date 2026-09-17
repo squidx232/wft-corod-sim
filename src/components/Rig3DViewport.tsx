@@ -551,7 +551,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildPullingUnit(scene);
     buildMobileUnitTruck(scene);
     buildServiceReel(scene);
-    buildMastAndArch(scene);
+    // buildMastAndArch superseded by buildRodGuideRack (the arched rod guide).
     buildRodGuideRack(scene);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
@@ -1022,6 +1022,60 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       wall.castShadow = true;
       cellarGroup.add(wall);
     });
+
+    // 2b. GROUND DETAIL inside the operation area — low gravel mounds, dirt
+    // patches and rutted vehicle tracks so the worksite floor isn't flat sand.
+    // Deterministic pseudo-random so it's stable across reloads.
+    let seed = 1337;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const gravelMats = [
+      new THREE.MeshStandardMaterial({ color: 0x8f7a5c, roughness: 1.0 }),
+      new THREE.MeshStandardMaterial({ color: 0x7d6a50, roughness: 1.0 }),
+      new THREE.MeshStandardMaterial({ color: 0x9c8865, roughness: 1.0 }),
+    ];
+    // Flattened dirt/gravel patches scattered over the pad (avoid the cellar).
+    for (let i = 0; i < 40; i++) {
+      const px = siteCenterX + (rnd() - 0.5) * 80;
+      const pz = (rnd() - 0.5) * 44;
+      if (Math.hypot(px - WELL_X, pz) < CELLAR_HALF + 1.5) continue; // skip cellar
+      const r = 0.6 + rnd() * 2.2;
+      const patch = new THREE.Mesh(
+        new THREE.CylinderGeometry(r, r * 1.15, 0.06 + rnd() * 0.12, 10),
+        gravelMats[i % gravelMats.length],
+      );
+      patch.position.set(px, 0.04, pz);
+      patch.rotation.y = rnd() * Math.PI;
+      patch.receiveShadow = true;
+      scene.add(patch);
+    }
+    // Small gravel/rock clusters for relief.
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b5f4c, roughness: 1.0 });
+    for (let i = 0; i < 30; i++) {
+      const px = siteCenterX + (rnd() - 0.5) * 82;
+      const pz = (rnd() - 0.5) * 46;
+      if (Math.hypot(px - WELL_X, pz) < CELLAR_HALF + 1.2) continue;
+      const s = 0.12 + rnd() * 0.35;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
+      rock.position.set(px, s * 0.4, pz);
+      rock.rotation.set(rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI);
+      rock.castShadow = true; rock.receiveShadow = true;
+      scene.add(rock);
+    }
+    // Rutted vehicle tracks (dark thin strips) crossing the pad toward the well.
+    const trackMat = new THREE.MeshStandardMaterial({ color: 0x5c4f3a, roughness: 1.0 });
+    for (let t2 = 0; t2 < 3; t2++) {
+      const baseZ = -6 + t2 * 5;
+      [-0.55, 0.55].forEach((twin) => {
+        const track = new THREE.Mesh(new THREE.BoxGeometry(30, 0.03, 0.5), trackMat);
+        track.position.set(siteCenterX - 4, 0.045, baseZ + twin);
+        track.rotation.y = 0.05 * (t2 - 1);
+        track.receiveShadow = true;
+        scene.add(track);
+      });
+    }
     scene.add(cellarGroup);
 
     // Item 29: Safety cones with white reflective stripes + base plate
@@ -2563,37 +2617,48 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     }
 
     // --- Continuous Coiled Rod Pack -----------------------------------------
-    // The real coil is one continuous rod wrapped in many tight circles that
-    // build up a fat doughnut. We model this as MANY thin tori: several radial
-    // layers (inner→outer) and, within each layer, a row of wraps spread across
-    // the drum width (z). This reads as coiled rod rather than a solid cylinder.
-    const coilMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, metalness: 0.5, roughness: 0.55 });
-    const HUB_R = 1.15;        // inner radius (against the spoke hub)
-    const OUTER_R = 2.15;      // outer radius of the built-up coil
-    const ROD_R = 0.045;       // radius of the continuous rod tube
-    const WRAP_GAP = ROD_R * 2.1; // spacing between adjacent wraps
-    const layers = Math.max(1, Math.floor((OUTER_R - HUB_R) / WRAP_GAP));
-    const halfWidth = 1.1;     // wraps span z ∈ [−halfWidth, +halfWidth]
-    const wrapsPerLayer = Math.max(1, Math.floor((halfWidth * 2) / WRAP_GAP));
-    for (let l = 0; l < layers; l++) {
-      const r = HUB_R + l * WRAP_GAP + ROD_R;
-      // Slight per-layer colour variation so layers read individually.
-      const layerMat = coilMat;
-      for (let w = 0; w < wrapsPerLayer; w++) {
-        const torus = new THREE.Mesh(
-          new THREE.TorusGeometry(r, ROD_R, 6, 40),
-          layerMat,
-        );
-        // Torus lies in the X/Y plane by default → rotate so its axis is z (the
-        // spool axis), matching the drum. Offset across the width per wrap, with
-        // a tiny stagger per layer so wraps nest like real coils.
-        torus.rotation.y = Math.PI / 2;
-        const z = -halfWidth + w * WRAP_GAP + (l % 2) * (WRAP_GAP * 0.5);
-        torus.position.z = z;
-        torus.castShadow = true;
-        spool.add(torus);
-      }
+    // The real coil is one continuous rod wrapped in MANY tight circles that
+    // build a big fat black doughnut FILLING the drum from hub to a large outer
+    // diameter and across the full drum width. We approximate this efficiently:
+    //   • a solid dark drum core fills the volume so no black gaps show, then
+    //   • concentric torus "wraps" on the two visible faces + the outer surface
+    //     give the coiled-rod texture where it reads.
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0x14110f, metalness: 0.35, roughness: 0.7 });
+    const HUB_R = 0.9;          // inner radius (against the spoke hub)
+    const OUTER_R = 2.25;       // large built-up outer radius (fat coil)
+    const ROD_R = 0.05;         // radius of the continuous rod tube
+    const WRAP_GAP = ROD_R * 2.0;
+    const halfWidth = 1.15;     // coil spans z ∈ [−halfWidth, +halfWidth]
+
+    // Solid filler drum so the coil reads as a dense pack (no see-through gaps).
+    const filler = new THREE.Mesh(
+      new THREE.CylinderGeometry(OUTER_R - ROD_R, OUTER_R - ROD_R, halfWidth * 2, 40),
+      coilMat,
+    );
+    filler.rotation.x = Math.PI / 2;
+    filler.castShadow = true;
+    spool.add(filler);
+
+    // Outer wrap rings across the full width (the visible curved rod surface).
+    const outerWraps = Math.floor((halfWidth * 2) / WRAP_GAP);
+    for (let w = 0; w <= outerWraps; w++) {
+      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R, ROD_R, 6, 44), coilMat);
+      torus.rotation.y = Math.PI / 2;
+      torus.position.z = -halfWidth + w * WRAP_GAP;
+      torus.castShadow = true;
+      spool.add(torus);
     }
+    // Concentric rings on BOTH side faces (spiral cross-section look).
+    const radialLayers = Math.floor((OUTER_R - HUB_R) / WRAP_GAP);
+    [-halfWidth - ROD_R * 0.5, halfWidth + ROD_R * 0.5].forEach((zFace) => {
+      for (let l = 0; l <= radialLayers; l++) {
+        const r = HUB_R + l * WRAP_GAP;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, ROD_R, 5, 44), coilMat);
+        ring.rotation.y = Math.PI / 2;
+        ring.position.z = zFace;
+        spool.add(ring);
+      }
+    });
 
     reelGroup.add(spool);
     reelSpoolRef.current = spool;
@@ -2639,126 +2704,82 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     scene.add(reelGroup);
   }
 
-  // Rod-guide rack: a blue A-frame stand holding a stack of curved black guide
-  // beams (each with yellow-striped wear pads). In the field these guides clip
-  // together to form the arch that steers the continuous rod from the reel up
-  // and over into the injector head. Here we show the storage rack near the reel.
-  function buildRodGuideRack(scene: THREE.Scene) {
-    const rack = new THREE.Group();
-    // Parked beside the reel, a bit toward the well, facing the camera.
-    rack.position.set(REEL_X + 3.5, 0, REEL_Z + 3.2);
-    rack.rotation.y = 0.5;
-
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.4, roughness: 0.5 }); // blue rack
-    const guideMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.55 }); // black guide
-    const padMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.2 });    // yellow wear pad
-
-    const RACK_W = 5.0;   // width across (z span the guides bridge)
-    const RACK_H = 2.6;   // stand height
-    const RACK_D = 1.6;   // depth (x)
-
-    // --- Blue A-frame stand: 4 uprights + top/bottom rails on each end ---
-    const upright = (x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, RACK_H, 0.12), frameMat);
-      m.position.set(x, RACK_H / 2, z); m.castShadow = true; rack.add(m);
-    };
-    [-RACK_D / 2, RACK_D / 2].forEach((x) => {
-      [-RACK_W / 2, RACK_W / 2].forEach((z) => upright(x, z));
-    });
-    // Horizontal rails top + bottom along z on both x ends
-    [-RACK_D / 2, RACK_D / 2].forEach((x) => {
-      [0.4, RACK_H - 0.2].forEach((y) => {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, RACK_W), frameMat);
-        rail.position.set(x, y, 0); rack.add(rail);
-      });
-      // Diagonal brace
-      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, Math.hypot(RACK_W, RACK_H)), frameMat);
-      brace.position.set(x, RACK_H / 2, 0);
-      brace.rotation.x = Math.atan2(RACK_H, RACK_W);
-      rack.add(brace);
-    });
-    // Cross rails along x connecting the two ends (front/back)
-    [-RACK_W / 2, RACK_W / 2].forEach((z) => {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(RACK_D, 0.1, 0.1), frameMat);
-      rail.position.set(0, RACK_H - 0.2, z); rack.add(rail);
-    });
-
-    // --- Stack of curved guide beams resting in the rack ---
-    // Each guide is a shallow arch built from a CatmullRom curve → TubeGeometry,
-    // with 4 yellow wear-pad blocks along its length and end mounting plates.
-    const NUM_GUIDES = 6;
-    for (let gi = 0; gi < NUM_GUIDES; gi++) {
-      const y = RACK_H + 0.15 + gi * 0.42; // stacked above the rack top
-      const sag = 0.9 - gi * 0.04;         // slightly different curvature per guide
-      const half = RACK_W / 2 + 0.3;
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, y, -half),
-        new THREE.Vector3(0, y + sag, -half * 0.4),
-        new THREE.Vector3(0, y + sag + 0.15, 0),
-        new THREE.Vector3(0, y + sag, half * 0.4),
-        new THREE.Vector3(0, y, half),
-      ]);
-      const guide = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.12, 8, false), guideMat);
-      guide.castShadow = true;
-      rack.add(guide);
-      // Yellow wear-pad stripes along the guide (sample the curve).
-      [0.18, 0.4, 0.62, 0.84].forEach((u) => {
-        const p = curve.getPoint(u);
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.22), padMat);
-        pad.position.copy(p);
-        pad.position.y += 0.14;
-        rack.add(pad);
-      });
-      // End mounting plates
-      [-half, half].forEach((pz) => {
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.06), guideMat);
-        plate.position.set(0, y, pz);
-        rack.add(plate);
-      });
-    }
-
-    scene.add(rack);
+  // Curve describing the CoRod path from where it pays off the reel, up and over
+  // the guide arch, then straight down into the injector head. Both the rod tube
+  // and the guide channel follow THIS curve so the rod visibly runs inside the
+  // guide up to the injector top. Kept as a shared helper so they stay in sync.
+  function getRodGuideCurve(): THREE.CatmullRomCurve3 {
+    const apexY = INJECTOR_TOP_Y + 2.6; // top of the arch above the injector head
+    return new THREE.CatmullRomCurve3([
+      new THREE.Vector3(REEL_X + 0.5, 6.2, REEL_Z),                 // off top of reel coil
+      new THREE.Vector3(REEL_X + 2.4, apexY - 3.0, REEL_Z * 0.5),  // rising & swinging to the well line
+      new THREE.Vector3(WELL_X - 2.2, INJECTOR_TOP_Y + 1.6, 0),    // approaching the arch (reel side)
+      new THREE.Vector3(WELL_X - 0.4, apexY, 0),                   // near the apex
+      new THREE.Vector3(WELL_X, apexY - 0.05, 0),                  // over the apex
+      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.4, 0),          // down into the injector head top
+    ]);
   }
 
-  function buildMastAndArch(scene: THREE.Scene) {
-    // Gooseneck guide sheave that sits directly over the injector head. The rod
-    // arcs in from the reel side, wraps the apex sheave, then drops STRAIGHT
-    // DOWN into the injector-head centre (WELL_X, z=0). The apex is offset toward
-    // the reel (−X) so the incoming rod has somewhere to wrap, but the exit leg
-    // is perfectly vertical on the well line so the feed is centred.
-    const archMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, metalness: 0.75, roughness: 0.25 });
-    const apexY = INJECTOR_TOP_Y + 2.6; // sheave apex height above the head
-    const gooseneckCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(WELL_X - 1.8, INJECTOR_TOP_Y + 1.4, 0), // incoming from reel side
-      new THREE.Vector3(WELL_X - 1.2, apexY - 0.2, 0),
-      new THREE.Vector3(WELL_X - 0.4, apexY, 0),                // approaching apex
-      new THREE.Vector3(WELL_X, apexY - 0.1, 0),               // over the apex sheave
-      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.6, 0),      // straight down into head centre
-    ]);
-    const gooseneck = new THREE.Mesh(
-      new THREE.TubeGeometry(gooseneckCurve, 32, 0.12, 10, false), archMat
+  // Rod GUIDE: an arched channel the CoRod actually runs through, from the reel
+  // up and over into the injector top (matching the field "guides"). It is a
+  // black curved guide beam with yellow wear-pad stripes, hugging the rod curve.
+  function buildRodGuideRack(scene: THREE.Scene) {
+    const guideMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.55 });
+    const padMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.2 });
+    const strutMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.4, roughness: 0.5 });
+
+    const curve = getRodGuideCurve();
+
+    // The guide channel: a wider tube around the rod path (the rod threads
+    // through it). Slightly larger radius than the rod so the rod sits inside.
+    const channel = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 60, 0.16, 12, false),
+      guideMat,
     );
-    gooseneck.castShadow = true;
-    scene.add(gooseneck);
-    // Sheave block and wheel at the apex (centred on the well line)
-    const sheaveBlock = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), archMat);
-    sheaveBlock.position.set(WELL_X, apexY + 0.05, 0);
-    scene.add(sheaveBlock);
-    const sheaveWheel = new THREE.Mesh(
-      new THREE.TorusGeometry(0.2, 0.05, 10, 20),
-      new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 })
+    channel.castShadow = true;
+    scene.add(channel);
+
+    // A flat back-plate rib running along the arch (the structural beam), offset
+    // to the side of the channel like the real guide beam profile.
+    const ribCurve = curve;
+    const rib = new THREE.Mesh(
+      new THREE.TubeGeometry(ribCurve, 60, 0.05, 4, false),
+      guideMat,
     );
-    sheaveWheel.rotation.y = Math.PI / 2; // wheel plane faces along the rod run
-    sheaveWheel.position.set(WELL_X, apexY + 0.05, 0);
-    scene.add(sheaveWheel);
-    // Vertical support legs standing on the injector top frame
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, metalness: 0.6, roughness: 0.3 });
-    const legH = apexY - INJECTOR_TOP_Y;
-    [-0.3, 0.3].forEach((lz) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, legH, 8), legMat);
-      leg.position.set(WELL_X, INJECTOR_TOP_Y + legH / 2, lz);
-      scene.add(leg);
+    rib.position.z = 0.22; // sits just to one side of the channel
+    scene.add(rib);
+
+    // Yellow wear-pad stripes clamped along the guide at intervals.
+    const padCount = 8;
+    for (let i = 1; i < padCount; i++) {
+      const u = i / padCount;
+      const p = curve.getPoint(u);
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.42), padMat);
+      pad.position.copy(p);
+      // Orient the pad to face outward along the curve tangent.
+      const tan = curve.getTangent(u).normalize();
+      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), tan);
+      pad.quaternion.copy(quat);
+      scene.add(pad);
+    }
+
+    // A couple of blue support struts propping the arch from the ground up to
+    // the lower reel-side portion of the guide (so it doesn't float).
+    [0.12, 0.28].forEach((u) => {
+      const top = curve.getPoint(u);
+      const footY = 0.1;
+      const strutLen = top.y - footY;
+      const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, strutLen, 8), strutMat);
+      strut.position.set(top.x, footY + strutLen / 2, top.z);
+      strut.castShadow = true;
+      scene.add(strut);
+      // small foot pad
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), strutMat);
+      foot.position.set(top.x, footY, top.z);
+      scene.add(foot);
     });
+
+    // Suppress the OLD tube gooseneck sheave arch (replaced by this guide).
   }
 
   function buildGripperInjector(scene: THREE.Scene) {
@@ -3098,16 +3119,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // The rod pays off the reel, arcs UP and OVER directly to the injector's
     // gooseneck (no separate guide post), then drops straight down through the
     // injector, BOP and into the wellhead — as in the real footage.
-    // Apex of the gooseneck sheave (matches buildMastAndArch): rod wraps here
-    // then drops perfectly vertical (constant WELL_X, z=0) through the injector
-    // head, BOP and into the wellhead.
-    const apexY = INJECTOR_TOP_Y + 2.6;
+    // The rod follows the SAME curve as the guide channel (getRodGuideCurve) so
+    // it visibly runs inside the guide from the reel up to the injector top, then
+    // continues straight down through the injector, BOP and into the wellhead.
+    const guidePts = getRodGuideCurve().points; // reel → over arch → injector top
     const rodCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(REEL_X + 0.5, 6.2, REEL_Z),         // off top of reel coil
-      new THREE.Vector3(REEL_X + 2.2, apexY - 3.0, REEL_Z * 0.5), // rising & swinging toward well line
-      new THREE.Vector3(WELL_X - 1.8, INJECTOR_TOP_Y + 1.4, 0),   // approach the gooseneck (reel side)
-      new THREE.Vector3(WELL_X, apexY - 0.1, 0),            // over the apex sheave
-      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0),         // straight down into injector head centre
+      ...guidePts,
+      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0),         // into injector head centre
       new THREE.Vector3(WELL_X, INJECTOR_BASE_Y, 0),        // through the injector
       new THREE.Vector3(WELL_X, BOP_TOP_Y - 2.0, 0),        // through the BOP
       new THREE.Vector3(WELL_X, 0.0, 0),                    // into the wellhead
