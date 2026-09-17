@@ -2759,51 +2759,51 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       spool.add(spokeR);
     }
 
-    // --- Continuous Coiled Rod Pack (UNIFORM DOUGHNUT) ----------------------
-    // Per spec: a thick, uniform doughnut of densely packed continuous steel rod
-    // filling the full drum width with a large outer radius. Rather than sparse
-    // individual wraps (which read as a hollow cylinder), the coil body is ONE
-    // smooth solid doughnut (a big flat-profile torus) in weathered gunmetal, and
-    // fine wrap grooves are added only as a light surface texture so the mass
-    // reads as a true bulk string.
-    const HUB_R = 0.5;                  // inner radius of the coil ring
-    const OUTER_R = 2.15;               // sits just INSIDE the rims (2.3) — no spill
-    const halfWidth = 1.05;             // fills the drum width without bulging past rims
+    // --- Continuous Coiled Rod Pack (DENSELY-WOUND DOUGHNUT) ----------------
+    // Per spec: a thick doughnut of densely packed, tightly WOUND continuous rod
+    // filling the full drum width at a large outer radius. Built as a real weave
+    // of individual rod turns: RADIAL LAYERS (inner→outer) × WIDTH COLUMNS across
+    // the drum, each a thin torus. A dark solid core sits just under the innermost
+    // layer so no gaps show through. This reads as bulk coiled rod, not a barrel.
+    const HUB_R = 0.85;                 // innermost wound layer radius (on the hub)
+    const OUTER_R = 2.2;                // large outer radius of the built-up coil
+    const ROD_R = 0.05;                 // individual rod radius
+    const PACK = ROD_R * 1.95;          // centre-to-centre spacing of tight turns
+    const halfWidth = 1.15;             // coil half-width (fills the drum)
 
-    const coilBodyMat = new THREE.MeshStandardMaterial({ color: 0x161310, metalness: 0.45, roughness: 0.55 });
+    // Weathered gunmetal with slight turn-to-turn variation so wraps read.
+    const coilShades = [0x161310, 0x1d1915, 0x100d0b, 0x231d18];
+    const coilMats = coilShades.map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.5, roughness: 0.5 }));
 
-    // Main coil body: a clean CYLINDER (flat ends, straight sides) — the packed
-    // bulk of rod. No z-stretched torus (that caused the bulging barrel).
-    const coilBody = new THREE.Mesh(
-      new THREE.CylinderGeometry(OUTER_R, OUTER_R, halfWidth * 2, 64),
-      coilBodyMat,
+    // Solid dark core just under the first wound layer (fills the centre so the
+    // spokes/axle don't show through the weave).
+    const core = new THREE.Mesh(
+      new THREE.CylinderGeometry(HUB_R - ROD_R, HUB_R - ROD_R, halfWidth * 2, 40),
+      coilMats[0],
     );
-    coilBody.rotation.x = Math.PI / 2;                 // axis → z (spool axis)
-    coilBody.castShadow = true;
-    coilBody.receiveShadow = true;
-    spool.add(coilBody);
+    core.rotation.x = Math.PI / 2;
+    core.castShadow = true; core.receiveShadow = true;
+    spool.add(core);
 
-    // Fine wrap GROOVES on the outer cylindrical surface (subtle darker bands)
-    // to suggest tightly wound turns without a busy silhouette.
-    const grooveMat = new THREE.MeshStandardMaterial({ color: 0x0b0a09, metalness: 0.5, roughness: 0.6 });
-    const grooveCount = 26;
-    for (let w = 0; w <= grooveCount; w++) {
-      const groove = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R + 0.005, 0.028, 6, 64), grooveMat);
-      groove.rotation.y = Math.PI / 2;
-      groove.position.z = -halfWidth + (w / grooveCount) * (halfWidth * 2);
-      spool.add(groove);
-    }
-    // Faint concentric spiral hint on the two end faces.
-    const faceGrooveCount = 12;
-    [-halfWidth - 0.01, halfWidth + 0.01].forEach((zFace) => {
-      for (let l = 1; l <= faceGrooveCount; l++) {
-        const r = HUB_R + (l / faceGrooveCount) * (OUTER_R - HUB_R);
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.02, 5, 64), grooveMat);
-        ring.rotation.y = Math.PI / 2;
-        ring.position.z = zFace;
-        spool.add(ring);
+    const radialLayers = Math.max(1, Math.round((OUTER_R - HUB_R) / PACK));
+    const widthTurns = Math.max(1, Math.round((halfWidth * 2) / PACK));
+    for (let li = 0; li < radialLayers; li++) {
+      const r = HUB_R + li * PACK;
+      // Each layer's turns are offset half a pitch (like real close-wound layers).
+      const zOff = (li % 2) * (PACK * 0.5);
+      for (let wi = 0; wi <= widthTurns; wi++) {
+        const z = -halfWidth + wi * PACK + zOff;
+        if (z < -halfWidth - 0.01 || z > halfWidth + 0.01) continue;
+        const turn = new THREE.Mesh(
+          new THREE.TorusGeometry(r, ROD_R, 5, 28),
+          coilMats[(li + wi) % coilMats.length],
+        );
+        turn.rotation.y = Math.PI / 2;   // torus axis → z (spool axis)
+        turn.position.z = z;
+        if (li === radialLayers - 1) turn.castShadow = true; // only outer casts (perf)
+        spool.add(turn);
       }
-    });
+    }
 
     reelGroup.add(spool);
     reelSpoolRef.current = spool;
