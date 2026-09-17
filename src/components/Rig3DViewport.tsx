@@ -2942,7 +2942,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       }
       const seg = new THREE.CatmullRomCurve3(pts);
       const secMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.55 });
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 14, tubeRadius, 10, false), secMat);
+      // Square-section tube (4 radial segments) reads as a chunky rectangular
+      // BOX-BEAM (like the rack guides), not a round cylinder. The rod runs just
+      // beneath it in the channel.
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 16, tubeRadius, 4, false), secMat);
       tube.castShadow = true;
       parent.add(tube);
       collect?.push(tube);
@@ -2983,7 +2986,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Wider channel (0.24) so the rod stays visually INSIDE the guide even where
     // the shared curve bows slightly; collect the section tubes for mode-colour.
     injectorGuideMeshesRef.current = [];
-    buildGuideAlongCurve(scene, getRodGuideCurve(), injectorGuideMeshesRef.current, 0.24);
+    // 0.18 square-section beam reads as a box-beam; the rod (radius ~0.045) runs
+    // through the same curve so it stays visually within the guide.
+    buildGuideAlongCurve(scene, getRodGuideCurve(), injectorGuideMeshesRef.current, 0.18);
   }
 
   // Portable field welder skid (red Weatherford-style unit): steel skid base,
