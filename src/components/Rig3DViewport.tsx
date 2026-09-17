@@ -556,9 +556,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Portable field welder ~100 ft behind the pulling unit but shifted to the
     // LEFT and CLOSER to the camera (more positive Z), kept within the pad.
     buildFieldWelder(scene, WELL_X + MAST_OFFSET_X + 14, 12);
-    // Blue A-frame guide-storage rack on the FAR side of the MG unit (−Z, the
-    // opposite side from the camera-facing worksite).
-    buildGuideRack(scene, MG_UNIT_X, -9, 0);
+    // Guide-storage rack on the FAR side of the MG unit (−Z, opposite the
+    // camera-facing worksite). Quarter size and rotated 90°.
+    buildGuideRack(scene, MG_UNIT_X, -9, Math.PI / 2, 0.25);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
     buildSafetyCones(scene);
@@ -924,20 +924,25 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const FLAT_RADIUS = 42; // keep the worksite area flat
     const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG);
     const tPos = terrainGeo.attributes.position as THREE.BufferAttribute;
-    const baseCol = new THREE.Color(isNightMode ? 0x16261a : 0x6b7a3a);
-    const hiCol = new THREE.Color(isNightMode ? 0x24361f : 0x8a9550);
-    const loCol = new THREE.Color(isNightMode ? 0x101c12 : 0x54632c);
+    // SAND palette matching the lease pad (not green). Day vs night variants.
+    const baseCol = new THREE.Color(isNightMode ? 0x3a3325 : 0x8a7355);
+    const hiCol = new THREE.Color(isNightMode ? 0x4a4230 : 0xa08a63); // sun-lit dune crests
+    const loCol = new THREE.Color(isNightMode ? 0x2a2418 : 0x6e5c44); // shaded hollows
     const colors: number[] = [];
     const _c = new THREE.Color();
     for (let i = 0; i < tPos.count; i++) {
       const x = tPos.getX(i);
       const y = tPos.getY(i); // plane-local Y maps to world −Z after rotation
       const dist = Math.hypot(x, y);
-      // Layered sine hills → smooth pseudo-random relief.
+      // Layered sine dunes → smooth pseudo-random relief with MORE height
+      // variation, and rising sharply toward the horizon to blend into mountains.
       let h =
-        Math.sin(x * 0.018) * Math.cos(y * 0.021) * 6.0 +
-        Math.sin(x * 0.045 + 1.7) * Math.cos(y * 0.038 + 0.6) * 2.6 +
-        Math.sin(x * 0.09 + 3.1) * Math.cos(y * 0.075 + 2.2) * 1.1;
+        Math.sin(x * 0.014) * Math.cos(y * 0.017) * 11.0 +
+        Math.sin(x * 0.035 + 1.7) * Math.cos(y * 0.03 + 0.6) * 5.0 +
+        Math.sin(x * 0.08 + 3.1) * Math.cos(y * 0.065 + 2.2) * 2.0;
+      // Ramp terrain upward far from the site so it climbs into the mountain ring.
+      const rise = THREE.MathUtils.smoothstep(dist, 120, 300) * 26.0;
+      h += rise;
       // Fade the relief to zero across the flat worksite so nothing floats.
       const fade = THREE.MathUtils.smoothstep(dist, FLAT_RADIUS, FLAT_RADIUS + 60);
       h *= fade;
@@ -966,6 +971,44 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     field.position.y = -0.15;
     field.receiveShadow = true;
     scene.add(field);
+
+    // --- MOUNTAIN RANGE ringing the horizon (varying heights, day/night tint).
+    // Two staggered rings of low-poly peaks give depth. Deterministic layout.
+    let mSeed = 8641;
+    const mRnd = () => { mSeed = (mSeed * 1103515245 + 12345) & 0x7fffffff; return mSeed / 0x7fffffff; };
+    const mtNear = new THREE.Color(isNightMode ? 0x2a3340 : 0x8f8674); // dusty rock
+    const mtFar = new THREE.Color(isNightMode ? 0x1e2836 : 0xa9b0bd);  // hazy distance
+    const mtSnow = new THREE.Color(isNightMode ? 0x3a4658 : 0xeef2f6); // capped peaks
+    [{ radius: 300, count: 34, hMin: 26, hMax: 60, col: mtNear },
+     { radius: 380, count: 30, hMin: 40, hMax: 95, col: mtFar }].forEach((ring) => {
+      for (let m = 0; m < ring.count; m++) {
+        const ang = (m / ring.count) * Math.PI * 2 + mRnd() * 0.12;
+        const rad = ring.radius + (mRnd() - 0.5) * 40;
+        const px = Math.cos(ang) * rad;
+        const pz = Math.sin(ang) * rad;
+        const height = ring.hMin + mRnd() * (ring.hMax - ring.hMin);
+        const baseR = height * (0.7 + mRnd() * 0.5);
+        const peak = new THREE.Mesh(
+          new THREE.ConeGeometry(baseR, height, 5 + Math.floor(mRnd() * 4), 1),
+          new THREE.MeshStandardMaterial({ color: ring.col.clone().lerp(mtSnow, mRnd() * 0.15), roughness: 1.0, flatShading: true }),
+        );
+        peak.position.set(px, height / 2 - 4, pz);
+        peak.rotation.y = mRnd() * Math.PI;
+        peak.scale.x = 0.8 + mRnd() * 0.5;
+        scene.add(peak);
+        // Snow/light cap on the taller far peaks.
+        if (height > 60) {
+          const cap = new THREE.Mesh(
+            new THREE.ConeGeometry(baseR * 0.4, height * 0.28, 5, 1),
+            new THREE.MeshStandardMaterial({ color: mtSnow, roughness: 0.9, flatShading: true }),
+          );
+          cap.position.set(px, height - 4 - height * 0.14, pz);
+          cap.rotation.copy(peak.rotation);
+          cap.scale.copy(peak.scale);
+          scene.add(cap);
+        }
+      }
+    });
 
     // 1b. Wellsite lease pad (dirt/gravel) — the worked ground the rig sits on.
     // Built as a Shape with a SQUARE HOLE punched out over the wellhead so you
@@ -1082,16 +1125,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       rock.castShadow = true; rock.receiveShadow = true;
       scene.add(rock);
     }
-    // Rutted vehicle tracks (dark thin strips) crossing the pad toward the well.
+    // Rutted vehicle tracks (dark thin strips) crossing the pad toward the well,
+    // built as SHORT DASHES so we can skip any that would cross the open cellar
+    // (a long strip previously floated over the pit hole).
     const trackMat = new THREE.MeshStandardMaterial({ color: 0x5c4f3a, roughness: 1.0 });
+    const DASH_LEN = 1.6, DASH_GAP = 0.5;
     for (let t2 = 0; t2 < 3; t2++) {
-      const baseZ = -6 + t2 * 5;
+      const baseZ = -8 + t2 * 6;
       [-0.55, 0.55].forEach((twin) => {
-        const track = new THREE.Mesh(new THREE.BoxGeometry(30, 0.03, 0.5), trackMat);
-        track.position.set(siteCenterX - 4, 0.045, baseZ + twin);
-        track.rotation.y = 0.05 * (t2 - 1);
-        track.receiveShadow = true;
-        scene.add(track);
+        const zc = baseZ + twin;
+        for (let dx = siteCenterX - 18; dx < siteCenterX + 14; dx += DASH_LEN + DASH_GAP) {
+          // Skip dashes overlapping the cellar opening footprint (+margin).
+          if (Math.abs(dx - WELL_X) < CELLAR_HALF + 1.2 && Math.abs(zc) < CELLAR_HALF + 1.2) continue;
+          const dash = new THREE.Mesh(new THREE.BoxGeometry(DASH_LEN, 0.03, 0.5), trackMat);
+          dash.position.set(dx, 0.045, zc);
+          dash.receiveShadow = true;
+          scene.add(dash);
+        }
       });
     }
     scene.add(cellarGroup);
@@ -2824,42 +2874,72 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const box = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 1.6), redMat);
     box.position.set(-0.4, 1.05, 0); box.castShadow = true; g.add(box);
 
-    // Branded label texture: Weatherford wordmark + "PFW" (Portable Field Welder).
+    // Branded label texture: Weatherford wordmark + "PFW" (Portable Field Welder),
+    // CENTRED on the panel with louvre/detail lines for a more finished look.
     const makeBrandTexture = () => {
       const cv = document.createElement('canvas');
       cv.width = 512; cv.height = 256;
       const ctx = cv.getContext('2d')!;
       ctx.fillStyle = '#b91c1c'; ctx.fillRect(0, 0, cv.width, cv.height);
-      // Weatherford wordmark (red brand uses a chevron; approximate with text).
+      // Subtle darker inner border frame.
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 8;
+      ctx.strokeRect(14, 14, cv.width - 28, cv.height - 28);
+      // Louvre detail lines top & bottom (cooling vents).
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 4;
+      for (let i = 0; i < 6; i++) {
+        const yy = 34 + i * 6;
+        ctx.beginPath(); ctx.moveTo(40, yy); ctx.lineTo(cv.width - 40, yy); ctx.stroke();
+      }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // Weatherford wordmark (centred).
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 62px Arial, sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Weatherford', 26, 96);
-      // Chevron accent
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 10;
-      ctx.beginPath(); ctx.moveTo(30, 150); ctx.lineTo(70, 175); ctx.lineTo(110, 150); ctx.stroke();
-      // PFW big
-      ctx.font = 'bold 96px Arial, sans-serif';
-      ctx.fillText('PFW', 150, 190);
+      ctx.font = 'bold 54px Arial, sans-serif';
+      ctx.fillText('Weatherford', cv.width / 2, 112);
+      // Chevron accent under the wordmark, centred.
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.moveTo(cv.width / 2 - 44, 150); ctx.lineTo(cv.width / 2, 172); ctx.lineTo(cv.width / 2 + 44, 150);
+      ctx.stroke();
+      // PFW big, centred.
+      ctx.font = 'bold 92px Arial, sans-serif';
+      ctx.fillText('PFW', cv.width / 2, 210);
       const tex = new THREE.CanvasTexture(cv);
       tex.anisotropy = 4;
       return tex;
     };
     const brandTex = makeBrandTexture();
     const brandMat = new THREE.MeshStandardMaterial({ map: brandTex, roughness: 0.6 });
-    // Branded panels on BOTH long sides of the enclosure (±Z faces).
-    [0.81, -0.81].forEach((pz, i) => {
-      const panelB = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), brandMat);
+    // Branded panels on BOTH long sides of the enclosure (±Z faces), slightly
+    // proud of the box so they read cleanly.
+    [0.805, -0.805].forEach((pz, i) => {
+      const panelB = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.35), brandMat);
       panelB.position.set(-0.4, 1.05, pz);
       panelB.rotation.y = i === 0 ? 0 : Math.PI;
       g.add(panelB);
     });
-    // Radiator/expanded-metal screen at the back (+X end)
+    // Radiator/expanded-metal screen at the back (+X end) with vent slats.
     const screen = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.5), new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.6, roughness: 0.6 }));
     screen.position.set(1.3, 0.95, 0); g.add(screen);
-    // Control panel with gauges on the front
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.1), darkMat);
-    panel.position.set(-0.4, 1.5, 0.85); g.add(panel);
+    for (let sv = 0; sv < 5; sv++) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 1.3), darkMat);
+      slat.position.set(2.01, 0.6 + sv * 0.16, 0); g.add(slat);
+    }
+    // --- Added detail: lifting bail hoop, hinged access hatch, small gauges on
+    // the END face (not the branded side, so the logo stays clean). ---
+    const bailHoop = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.03, 8, 20, Math.PI), steelMat);
+    bailHoop.position.set(-0.4, 1.85, 0); bailHoop.rotation.x = Math.PI / 2; g.add(bailHoop);
+    // Gauges + control panel on the −X END face (away from the branded sides).
+    const endPanel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 1.0), darkMat);
+    endPanel.position.set(-1.62, 1.15, 0); g.add(endPanel);
+    [-0.25, 0, 0.25].forEach((gz) => {
+      const gauge = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 14),
+        new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.5 }));
+      gauge.rotation.z = Math.PI / 2;
+      gauge.position.set(-1.66, 1.2, gz); g.add(gauge);
+    });
+    // Coiled welding lead draped on the skid.
+    const lead = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 8, 20), darkMat);
+    lead.position.set(0.9, 0.45, 0.7); lead.rotation.x = Math.PI / 2; g.add(lead);
     // Twin gas/fuel bottles
     [-1.5, -1.1].forEach((bx) => {
       const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.1, 14), redMat);
@@ -2887,12 +2967,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // frame (two A-frame end towers + long top/bottom rails) cradling a STACK of
   // curved black guide beams (each with yellow wear-pad stripes and a painted
   // number), with a few pointed hanger tools sticking up at the top corners.
-  function buildGuideRack(scene: THREE.Scene, x: number, z: number, ry: number) {
+  function buildGuideRack(scene: THREE.Scene, x: number, z: number, ry: number, scale = 1) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = ry;
+    g.scale.setScalar(scale);
 
-    const blueMat = new THREE.MeshStandardMaterial({ color: 0x2563a8, metalness: 0.4, roughness: 0.55 });
+    const blueMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, metalness: 0.4, roughness: 0.55 }); // red frame
     const guideMat = new THREE.MeshStandardMaterial({ color: 0x22262b, metalness: 0.45, roughness: 0.6 });
     const padMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.2 });
 
