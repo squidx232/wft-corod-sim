@@ -62,6 +62,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   onInstallClamp,
   onRemoveClamp,
   onSetClampCount,
+  onEmergencyAction,
   onTapTest,
   onAttachContainment,
   onToggleReelSafetyFork,
