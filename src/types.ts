@@ -247,6 +247,11 @@ export interface SimulatorState {
   emergencyTriggerTime: number | null;
   emergencyResolved: boolean;
 
+  // Interactive emergency-response session (drives the Emergency Response HUD).
+  // `emergencyScenarioId` matches an EMERGENCY_SCENARIOS entry id; null when idle.
+  emergencyScenarioId: string | null;
+  emergencyStepIndex: number;
+
   // Emergency drill tracking flags (for scenario validation)
   airHornSounded: boolean;
   evacuatedToMuster: boolean;

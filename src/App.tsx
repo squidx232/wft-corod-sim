@@ -6,6 +6,7 @@ import {
   TelemetryPoint,
 } from './types';
 import { ROD_SPECIFICATIONS, SQUEEZE_PRESSURE_CURVES } from './data/manualReference';
+import { EMERGENCY_SCENARIOS, getEmergencyScenario } from './data/emergencyScenarios';
 import { useInputSystem } from './input/useInputSystem';
 import { ControlBindingsPanel } from './components/ControlBindingsPanel';
 import { InputStatusHud } from './components/InputStatusHud';
@@ -21,6 +22,7 @@ import { EmergencyDrillModal } from './components/EmergencyDrillModal';
 import { ManualReferenceModal } from './components/ManualReferenceModal';
 import { JsaModal } from './components/JsaModal';
 import { EngineStartModal } from './components/EngineStartModal';
+import { EmergencyResponseHud } from './components/EmergencyResponseHud';
 import { Rig3DViewport } from './components/Rig3DViewport';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
 
@@ -159,6 +161,8 @@ const INITIAL_STATE: SimulatorState = {
   activeEmergency: 'none',
   emergencyTriggerTime: null,
   emergencyResolved: false,
+  emergencyScenarioId: null,
+  emergencyStepIndex: 0,
   airHornSounded: false,
   evacuatedToMuster: false,
   scbaEquipped: false,
@@ -306,7 +310,13 @@ export default function App() {
         } else if (hyd.ptoEngaged) {
           // PTO ON — per manual: system max 2500 PSI (regulated), picker up to 4200 PSI
           const joyActive = Math.abs(prev.joystickPosition) > 0.05;
-          const targetCharge = prev.activeEmergency === 'charge_pressure_loss' ? 180 : joyActive ? 280 : 360;
+          // Active emergencies force low charge pressure until the safety clamp
+          // is engaged (which resolves the freefall risk).
+          const emgLowCharge =
+            (prev.activeEmergency === 'charge_pressure_loss' ||
+              prev.activeEmergency === 'freefalling_rod') &&
+            hyd.safetyClampLever !== 'ON';
+          const targetCharge = emgLowCharge ? 180 : joyActive ? 280 : 360;
           hyd.chargePressure = hyd.chargePressure + (targetCharge - hyd.chargePressure) * 0.2;
 
           // Ramp system & picker pressure dynamically (not instant)
@@ -529,6 +539,78 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // =========================================================================
+  // EMERGENCY STEP AUTO-VALIDATION
+  // Watches the active emergency scenario, validates the current step against
+  // live console state, auto-advances, applies time-limit consequences, and
+  // resolves the emergency when the final step passes.
+  // =========================================================================
+  const emgStepStartRef = useRef<number>(0);
+  const emgTimedOutRef = useRef<Set<string>>(new Set());
+  const [emergencyToast, setEmergencyToast] = useState<string | null>(null);
+
+  // Reset the per-step timer whenever the active step changes.
+  useEffect(() => {
+    emgStepStartRef.current = Date.now();
+  }, [state.emergencyScenarioId, state.emergencyStepIndex]);
+
+  useEffect(() => {
+    if (!state.emergencyScenarioId) return;
+    const scenario = getEmergencyScenario(state.emergencyScenarioId);
+    if (!scenario) return;
+
+    const interval = setInterval(() => {
+      const s = stateRef.current;
+      if (!s.emergencyScenarioId) return;
+      const sc = getEmergencyScenario(s.emergencyScenarioId);
+      if (!sc) return;
+      const idx = s.emergencyStepIndex;
+      const step = sc.steps[idx];
+      if (!step) return;
+
+      // Time-limit consequence handling (fires once per step)
+      if (step.timeLimitSec && !emgTimedOutRef.current.has(step.id)) {
+        const elapsed = (Date.now() - emgStepStartRef.current) / 1000;
+        if (elapsed > step.timeLimitSec && !step.validationFn(s)) {
+          emgTimedOutRef.current.add(step.id);
+          if (step.onTimeout) {
+            setState((prev) => ({
+              ...prev,
+              hydraulics: { ...prev.hydraulics, ...(step.onTimeout!.hydraulics || {}) },
+              rod: { ...prev.rod, ...(step.onTimeout!.rod || {}) },
+              bop: { ...prev.bop, ...(step.onTimeout!.bop || {}) },
+            }));
+          }
+          if (step.timeoutMessage) {
+            soundManager.playBuzzerAlert(1.5);
+            setEmergencyToast(step.timeoutMessage);
+            setTimeout(() => setEmergencyToast(null), 5000);
+          }
+        }
+      }
+
+      // Step completion → advance or resolve
+      if (step.validationFn(s)) {
+        soundManager.playSuccessChime();
+        if (idx + 1 < sc.steps.length) {
+          setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
+        } else {
+          // Final step complete — emergency resolved
+          setState((prev) => ({
+            ...prev,
+            activeEmergency: 'none',
+            emergencyScenarioId: null,
+            emergencyStepIndex: 0,
+            emergencyResolved: true,
+          }));
+          emgTimedOutRef.current.clear();
+        }
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [state.emergencyScenarioId]);
+
   // Update handlers
   const updateHydraulics = (updates: Partial<SimulatorState['hydraulics']>) => {
     setState((prev) => ({
@@ -628,6 +710,61 @@ export default function App() {
       engineRunning: true,
       engineRpm: 1100,
     });
+  };
+
+  // =========================================================================
+  // INTERACTIVE EMERGENCY RESPONSE
+  // Triggering an emergency injects a live fault and starts the Response HUD.
+  // The operator must respond on the real console; steps auto-validate in the
+  // physics/validation tick below.
+  // =========================================================================
+  const triggerEmergencyScenario = (scenarioId: string) => {
+    const scenario = getEmergencyScenario(scenarioId);
+    if (!scenario) return;
+    soundManager.playBuzzerAlert(2.0);
+    setState((prev) => {
+      const inj = scenario.inject;
+      return {
+        ...prev,
+        activeEmergency: scenario.emergencyKey,
+        emergencyScenarioId: scenario.id,
+        emergencyStepIndex: 0,
+        emergencyTriggerTime: Date.now(),
+        emergencyResolved: false,
+        // Reset drill flags so a fresh response is required each time
+        airHornSounded: false,
+        evacuatedToMuster: false,
+        scbaEquipped: false,
+        hydraulics: { ...prev.hydraulics, ...(inj.hydraulics || {}) },
+        rod: { ...prev.rod, ...(inj.rod || {}) },
+        bop: { ...prev.bop, ...(inj.bop || {}) },
+      };
+    });
+  };
+
+  const resolveEmergencyScenario = () => {
+    soundManager.playSuccessChime();
+    setState((prev) => ({
+      ...prev,
+      activeEmergency: 'none',
+      emergencyScenarioId: null,
+      emergencyStepIndex: 0,
+      emergencyResolved: true,
+    }));
+  };
+
+  const cancelEmergencyScenario = () => {
+    setState((prev) => ({
+      ...prev,
+      activeEmergency: 'none',
+      emergencyScenarioId: null,
+      emergencyStepIndex: 0,
+      emergencyResolved: false,
+    }));
+  };
+
+  const advanceEmergencyStep = () => {
+    setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
   };
 
   // Trip Mode handler: RIH (Run In Hole from surface), POOH (Pull Out Of Hole from bottom), or FREE (Mid-well)
@@ -1420,114 +1557,88 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-base font-black uppercase text-slate-100">
-                    High-Risk Emergency Response Drills & Reaction Timers
+                    Interactive Emergency Response — Act on the Real Console
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Practice rapid reactions under simulated failure conditions with millisecond precision
+                    Inject a live fault, then perform the manual&apos;s response procedure on the actual console controls. Steps auto-validate; time-critical steps have consequences.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                {/* Drill 1 */}
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3">
-                  <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800">
-                      DRILL 1 • SECTION 4.18
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-100 mt-2">
-                      Loss of Charge Pressure / Freefall
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Charge &lt;250 psi triggers freewheeling. Slam Safety Lever DOWN, blast horn, install 2 clamps, tap test 3x.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveDrillType('freefall');
-                      setState((prev) => ({ ...prev, activeEmergency: 'charge_pressure_loss', emergencyResolved: false, emergencyTriggerTime: Date.now() }));
-                    }}
-                    className="w-full py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase shadow-md active:scale-95"
-                  >
-                    Launch Freefall Drill
-                  </button>
+              {state.emergencyScenarioId && (
+                <div className="rounded-xl bg-red-950/60 border border-red-700 p-3 text-sm text-red-100 flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
+                  A live emergency is in progress — respond on the console using the floating Response HUD.
                 </div>
+              )}
 
-                {/* Drill 2 */}
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+                {EMERGENCY_SCENARIOS.map((emg) => {
+                  const sevStyle =
+                    emg.severity === 'critical'
+                      ? 'bg-red-950 text-red-400 border-red-800'
+                      : emg.severity === 'high'
+                      ? 'bg-amber-950 text-amber-400 border-amber-800'
+                      : 'bg-yellow-900 text-yellow-300 border-yellow-700';
+                  const btnStyle =
+                    emg.severity === 'critical'
+                      ? 'bg-red-600 hover:bg-red-500'
+                      : emg.severity === 'high'
+                      ? 'bg-amber-600 hover:bg-amber-500'
+                      : 'bg-yellow-600 hover:bg-yellow-500';
+                  return (
+                    <div
+                      key={emg.id}
+                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3"
+                    >
+                      <div>
+                        <span
+                          className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${sevStyle}`}
+                        >
+                          {emg.severity} • {emg.manualSection}
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-100 mt-2">{emg.title}</h4>
+                        <p className="text-xs text-slate-400 mt-1">{emg.cause}</p>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {emg.steps.length} response steps
+                        </p>
+                      </div>
+                      <button
+                        disabled={!!state.emergencyScenarioId}
+                        onClick={() => {
+                          triggerEmergencyScenario(emg.id);
+                          setState((prev) => ({ ...prev, activeTab: 'console' }));
+                        }}
+                        className={`w-full py-2 rounded-lg text-white font-bold text-xs uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${btnStyle}`}
+                      >
+                        {state.emergencyScenarioId ? 'Emergency Active…' : `Inject: ${emg.title}`}
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Random surprise drill */}
+                <div className="p-4 rounded-xl bg-slate-900 border-2 border-dashed border-slate-600 flex flex-col justify-between space-y-3">
                   <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800">
-                      DRILL 2 • SECTION 4.19
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border bg-slate-800 text-slate-300 border-slate-600">
+                      Surprise Drill
                     </span>
-                    <h4 className="text-sm font-bold text-slate-100 mt-2">
-                      Well Blowout & Rapid BOP Shut-In
-                    </h4>
+                    <h4 className="text-sm font-bold text-slate-100 mt-2">Random Emergency</h4>
                     <p className="text-xs text-slate-400 mt-1">
-                      Well kick detected. Inflate Regan BOP to 1250 psi under 60 seconds (EUB standard) and secure rod clamp.
+                      Inject a random emergency without warning to test your reaction.
                     </p>
                   </div>
                   <button
+                    disabled={!!state.emergencyScenarioId}
                     onClick={() => {
-                      setActiveDrillType('blowout');
-                      setState((prev) => ({ ...prev, activeEmergency: 'well_kick', emergencyResolved: false, emergencyTriggerTime: Date.now() }));
+                      const pick =
+                        EMERGENCY_SCENARIOS[Math.floor(Math.random() * EMERGENCY_SCENARIOS.length)];
+                      triggerEmergencyScenario(pick.id);
+                      setState((prev) => ({ ...prev, activeTab: 'console' }));
                     }}
-                    className="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase shadow-md active:scale-95"
+                    className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs uppercase shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Launch Blowout Drill
-                  </button>
-                </div>
-
-                {/* Drill 3 */}
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3">
-                  <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-800">
-                      DRILL 3 • SECTION 4.20
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-100 mt-2">
-                      H2S Sour Gas Release & Rescue
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-1">
-                      GasBadge alarm triggers. Evacuate to upwind muster, equip SCBA, execute backward arm drag rescue.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveDrillType('h2s');
-                      setState((prev) => ({ ...prev, activeEmergency: 'h2s_alarm', emergencyResolved: false, emergencyTriggerTime: Date.now() }));
-                    }}
-                    className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase shadow-md active:scale-95"
-                  >
-                    Launch H2S Drill
-                  </button>
-                </div>
-
-                {/* Drill 4 */}
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3">
-                  <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
-                      DRILL 4 • SECTION 4.23.5
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-100 mt-2">
-                      Hydraulic Overheat (&gt;70°C)
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Fluid temp exceeds 70°C. Disengage load, clamp rod, switch cooler fan bypass to MANUAL, shut down.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setActiveDrillType('overheat');
-                      setState((prev) => ({
-                        ...prev,
-                        activeEmergency: 'hydraulic_overheat',
-                        emergencyResolved: false,
-                        emergencyTriggerTime: Date.now(),
-                        hydraulics: { ...prev.hydraulics, hydraulicFluidTempC: 78 }, // force overheat
-                      }));
-                    }}
-                    className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs uppercase shadow-md active:scale-95"
-                  >
-                    Launch Overheat Drill
+                    Random Drill
                   </button>
                 </div>
               </div>
@@ -1587,6 +1698,15 @@ export default function App() {
 
       {/* Reference Manual Modal */}
       {showManualModal && <ManualReferenceModal onClose={() => setShowManualModal(false)} />}
+
+      {/* Interactive Emergency Response HUD (floating, non-blocking) */}
+      {state.emergencyScenarioId && (
+        <EmergencyResponseHud
+          state={state}
+          toast={emergencyToast}
+          onCancel={cancelEmergencyScenario}
+        />
+      )}
 
       {/* Engine Start-Up Sequence Modal */}
       {showEngineStartModal && (
