@@ -488,7 +488,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 </div>
 
                 {/* 3. INJECTOR BRAKE BLOCK (Bronze Metal Block) */}
-                <div className="flex flex-col items-center gap-2 p-2 bg-slate-800/80 border border-slate-600/60 rounded-lg shadow-xl relative h-full">
+                <div data-control-id="ctrl-switch-injectorbrake" className="flex flex-col items-center gap-2 p-2 bg-slate-800/80 border border-slate-600/60 rounded-lg shadow-xl relative h-full">
                   {/* Top 4 Hex Screws */}
                   <div className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-neutral-900 border border-slate-600" />
                   <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-neutral-900 border border-slate-600" />
@@ -530,7 +530,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 </div>
 
                 {/* 4. EYE-CATCHING LIME GREEN "SAFETY" BLOCK */}
-                <div className="flex flex-col items-center gap-2 p-2 bg-slate-800/80 border border-emerald-600/60 rounded-lg shadow-lg relative h-full">
+                <div data-control-id="ctrl-lever-safety" className="flex flex-col items-center gap-2 p-2 bg-slate-800/80 border border-emerald-600/60 rounded-lg shadow-lg relative h-full">
                   {/* Top 4 Black Hex Screws */}
                   <div className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-neutral-950 border border-neutral-800" />
                   <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-neutral-950 border border-neutral-800" />
@@ -601,7 +601,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 {/* TOP: EMERGENCY SHUT-DOWN + HORN side by side */}
                 <div className="flex flex-row items-stretch gap-2 bg-neutral-950/80 p-3 rounded-lg border border-neutral-800 shadow-xl flex-1">
                   {/* ESD switch */}
-                  <div className="flex-1 flex flex-col items-center gap-1">
+                  <div data-control-id="ctrl-estop-j" className="flex-1 flex flex-col items-center gap-1">
                     <PhysicalEmergencyShutdown
                       id="ctrl-estop-j"
                       letterLabel="J"
@@ -611,7 +611,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                     />
                   </div>
                   {/* HORN button */}
-                  <div className="flex flex-col items-center justify-center gap-1.5 border-l border-neutral-700 pl-2">
+                  <div data-control-id="ctrl-horn" className="flex flex-col items-center justify-center gap-1.5 border-l border-neutral-700 pl-2">
                     <div className="bg-gradient-to-b from-slate-200 via-slate-100 to-slate-300 border border-slate-700 rounded-sm px-2 py-0.5 text-center shadow-sm">
                       <span className="text-[11px] font-black uppercase font-mono text-slate-900 whitespace-nowrap">HORN</span>
                     </div>

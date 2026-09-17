@@ -36,6 +36,7 @@ interface OperatorStationViewProps {
   onInstallClamp: () => void;
   onRemoveClamp?: () => void;
   onSetClampCount?: (count: number) => void;
+  onEmergencyAction?: (action: 'evacuate' | 'scba') => void;
   onTapTest: () => void;
   onAttachContainment: () => void;
   onToggleReelSafetyFork: () => void;
@@ -76,13 +77,13 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   // Allow deep-linking / sharing a specific station layout via the URL hash,
   // e.g. #console, #split, #rig, #cockpit. Falls back to the cockpit view.
   const initialLayout: StationLayoutMode = (() => {
-    if (typeof window === 'undefined') return 'cockpit';
+    if (typeof window === 'undefined') return 'split';
     const h = window.location.hash.replace('#', '').toLowerCase();
     if (h === 'console' || h === 'console-focus') return 'console-focus';
     if (h === 'split') return 'split';
     if (h === 'rig' || h === 'rig-focus') return 'rig-focus';
-    if (h === 'cockpit') return 'cockpit';
-    return 'cockpit';
+    // 'cockpit' (Operator Cab) view has been retired — default to split.
+    return 'split';
   })();
   const [layoutMode, setLayoutMode] = useState<StationLayoutMode>(initialLayout);
   const [showHands, setShowHands] = useState(false);
@@ -342,7 +343,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               VIEW:
             </span>
             {[
-              { id: 'cockpit' as const, label: 'Operator Cab', icon: Layers },
+              // 'Operator Cab' (cockpit) view retired — Side-by-Side Split is default.
               { id: 'split' as const, label: 'Side-by-Side Split', icon: Columns },
               { id: 'rig-focus' as const, label: '3D Windshield Focus', icon: Maximize2 },
               { id: 'console-focus' as const, label: 'Console Focus', icon: Sliders },
@@ -790,6 +791,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               onInstallClamp={onInstallClamp}
               onRemoveClamp={onRemoveClamp}
               onSetClampCount={onSetClampCount}
+            onEmergencyAction={onEmergencyAction}
               onTapTest={onTapTest}
               onAttachContainment={onAttachContainment}
               onToggleReelSafetyFork={onToggleReelSafetyFork}
@@ -837,6 +839,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             onInstallClamp={onInstallClamp}
             onRemoveClamp={onRemoveClamp}
             onSetClampCount={onSetClampCount}
+            onEmergencyAction={onEmergencyAction}
             onTapTest={onTapTest}
             onAttachContainment={onAttachContainment}
             onToggleReelSafetyFork={onToggleReelSafetyFork}

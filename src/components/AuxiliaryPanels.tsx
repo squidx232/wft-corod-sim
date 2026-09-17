@@ -25,6 +25,7 @@ interface AuxiliaryPanelsProps {
   onUpdatePicker: (updates: Partial<SimulatorState['picker']>) => void;
   onUpdateHydraulics: (updates: Partial<SimulatorState['hydraulics']>) => void;
   onSetClampCount?: (count: number) => void;
+  onEmergencyAction?: (action: 'evacuate' | 'scba') => void;
   onStrokeBopHandPump: () => void;
 }
 
@@ -36,6 +37,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
   onUpdatePicker,
   onUpdateHydraulics,
   onSetClampCount,
+  onEmergencyAction,
   onStrokeBopHandPump,
 }) => {
   const [activeAuxTab, setActiveAuxTab] = useState<'bop' | 'ytool' | 'outriggers' | 'picker' | 'thermal' | 'cab'>('bop');
@@ -135,6 +137,42 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             >
               − Remove
             </button>
+          </div>
+        </div>
+
+        {/* EMERGENCY RESPONSE ACTIONS — evacuate & SCBA (for H2S / weather drills) */}
+        <div className="flex-1 min-w-[240px] bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-slate-700 rounded-md shadow-lg px-4 py-3">
+          <div className="text-[12px] font-black uppercase tracking-widest text-slate-100 text-center mb-2 font-mono border-b border-slate-700 pb-1">
+            Emergency Response Actions
+          </div>
+          <div className="flex flex-col gap-2 mt-2">
+            <button
+              type="button"
+              data-control-id="ctrl-evacuate"
+              onClick={() => onEmergencyAction?.('evacuate')}
+              className={`w-full py-2.5 rounded-lg font-bold text-xs uppercase shadow active:scale-95 border transition-all ${
+                state.evacuatedToMuster
+                  ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
+                  : 'bg-amber-700 hover:bg-amber-600 border-amber-500 text-white'
+              }`}
+            >
+              {state.evacuatedToMuster ? '✓ Evacuated to Muster' : 'Evacuate to Muster Point'}
+            </button>
+            <button
+              type="button"
+              data-control-id="ctrl-scba"
+              onClick={() => onEmergencyAction?.('scba')}
+              className={`w-full py-2.5 rounded-lg font-bold text-xs uppercase shadow active:scale-95 border transition-all ${
+                state.scbaEquipped
+                  ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
+                  : 'bg-cyan-800 hover:bg-cyan-700 border-cyan-500 text-white'
+              }`}
+            >
+              {state.scbaEquipped ? '✓ SCBA Equipped' : 'Equip SCBA Gear'}
+            </button>
+            <p className="text-[9px] text-slate-500 font-mono text-center mt-1">
+              Used during H2S &amp; severe-weather emergency drills
+            </p>
           </div>
         </div>
       </div>

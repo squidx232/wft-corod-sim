@@ -373,6 +373,11 @@ export default function App() {
           if (hyd.bopPressure < 500) {
             bop.reganBopClosed = false;
           }
+          // BUG FIX: Reset the hand-pump stroke counter once fully bled down —
+          // strokes must be re-accumulated to re-pressurize the BOP.
+          if (hyd.bopPressure <= 0) {
+            bop.handPumpStrokes = 0;
+          }
         } else if (bop.bopPumpSwitch) {
           // Per manual: "pump up the Reagan to 1250psi" — auto pump caps at 1250
           hyd.bopPressure = Math.min(1250, hyd.bopPressure + 80);
@@ -548,6 +553,15 @@ export default function App() {
   const emgStepStartRef = useRef<number>(0);
   const emgTimedOutRef = useRef<Set<string>>(new Set());
   const [emergencyToast, setEmergencyToast] = useState<string | null>(null);
+  // Snapshot of the sim state captured the moment a DRILL is injected, so the
+  // simulation can be restored to normal operating conditions once the drill
+  // is completed or aborted.
+  const preDrillSnapshotRef = useRef<{
+    hydraulics: SimulatorState['hydraulics'];
+    rod: SimulatorState['rod'];
+    bop: SimulatorState['bop'];
+    joystickPosition: number;
+  } | null>(null);
 
   // Reset the per-step timer whenever the active step changes.
   useEffect(() => {
@@ -595,15 +609,26 @@ export default function App() {
         if (idx + 1 < sc.steps.length) {
           setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
         } else {
-          // Final step complete — emergency resolved
+          // Final step complete — emergency resolved. Restore the pre-drill
+          // simulation state so normal operation resumes cleanly.
+          const snap = preDrillSnapshotRef.current;
           setState((prev) => ({
             ...prev,
             activeEmergency: 'none',
             emergencyScenarioId: null,
             emergencyStepIndex: 0,
             emergencyResolved: true,
+            airHornSounded: false,
+            evacuatedToMuster: false,
+            scbaEquipped: false,
+            joystickPosition: snap ? snap.joystickPosition : prev.joystickPosition,
+            hydraulics: snap ? { ...snap.hydraulics } : prev.hydraulics,
+            rod: snap ? { ...snap.rod } : prev.rod,
+            bop: snap ? { ...snap.bop } : prev.bop,
           }));
+          preDrillSnapshotRef.current = null;
           emgTimedOutRef.current.clear();
+          soundManager.playSuccessChime();
         }
       }
     }, 300);
@@ -722,6 +747,13 @@ export default function App() {
     const scenario = getEmergencyScenario(scenarioId);
     if (!scenario) return;
     soundManager.playBuzzerAlert(2.0);
+    // Capture pre-drill conditions for restoration on completion.
+    preDrillSnapshotRef.current = {
+      hydraulics: { ...stateRef.current.hydraulics },
+      rod: { ...stateRef.current.rod },
+      bop: { ...stateRef.current.bop },
+      joystickPosition: stateRef.current.joystickPosition,
+    };
     setState((prev) => {
       const inj = scenario.inject;
       return {
@@ -995,7 +1027,7 @@ export default function App() {
       case 'bop.handPump': {
         // BUG FIX: Hand pump now caps at 1250 PSI (was 1500, exceeding manual spec).
         // Per manual: "pump up the Reagan to 1250psi"
-        const newBopPressure = Math.min(1250, s.hydraulics.bopPressure + 50);
+        const newBopPressure = Math.min(1250, s.hydraulics.bopPressure + 150);
         updateBop({ handPumpStrokes: s.bop.handPumpStrokes + 1 });
         updateHydraulics({ bopPressure: newBopPressure });
         if (newBopPressure >= 1000) updateBop({ reganBopClosed: true });
@@ -1369,6 +1401,10 @@ export default function App() {
                   rod: { ...prev.rod, mechanicalClampsInstalled: count, clampTorqueFtLbs: count > 0 ? 550 : 0 },
                 }));
               }}
+              onEmergencyAction={(action) => {
+                if (action === 'evacuate') setState((prev) => ({ ...prev, evacuatedToMuster: true }));
+                else if (action === 'scba') setState((prev) => ({ ...prev, scbaEquipped: true }));
+              }}
               onSetClampCount={(count: number) => {
                 soundManager.playMetalTap();
                 setState((prev) => ({
@@ -1417,7 +1453,7 @@ export default function App() {
                   ...prev,
                   hydraulics: {
                     ...prev.hydraulics,
-                    bopPressure: Math.min(1500, prev.hydraulics.bopPressure + 150),
+                    bopPressure: Math.min(1250, prev.hydraulics.bopPressure + 150),
                   },
                   bop: { ...prev.bop, handPumpStrokes: prev.bop.handPumpStrokes + 1 },
                 }));
@@ -1438,7 +1474,7 @@ export default function App() {
                     ...prev,
                     hydraulics: {
                       ...prev.hydraulics,
-                      bopPressure: Math.min(1500, prev.hydraulics.bopPressure + 150),
+                      bopPressure: Math.min(1250, prev.hydraulics.bopPressure + 150),
                     },
                     bop: { ...prev.bop, handPumpStrokes: prev.bop.handPumpStrokes + 1 },
                   }));
@@ -1545,7 +1581,7 @@ export default function App() {
                   ...prev,
                   hydraulics: {
                     ...prev.hydraulics,
-                    bopPressure: Math.min(1500, prev.hydraulics.bopPressure + 150),
+                    bopPressure: Math.min(1250, prev.hydraulics.bopPressure + 150),
                   },
                   bop: { ...prev.bop, handPumpStrokes: prev.bop.handPumpStrokes + 1 },
                 }));
