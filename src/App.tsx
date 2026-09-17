@@ -786,13 +786,26 @@ export default function App() {
   };
 
   const cancelEmergencyScenario = () => {
+    // Aborting a drill also restores the pre-drill simulation state so the
+    // injected fault (freefall, low charge, etc.) is cleared and normal
+    // operation resumes — same as completing it.
+    const snap = preDrillSnapshotRef.current;
     setState((prev) => ({
       ...prev,
       activeEmergency: 'none',
       emergencyScenarioId: null,
       emergencyStepIndex: 0,
       emergencyResolved: false,
+      airHornSounded: false,
+      evacuatedToMuster: false,
+      scbaEquipped: false,
+      joystickPosition: snap ? snap.joystickPosition : prev.joystickPosition,
+      hydraulics: snap ? { ...snap.hydraulics } : prev.hydraulics,
+      rod: snap ? { ...snap.rod } : prev.rod,
+      bop: snap ? { ...snap.bop } : prev.bop,
     }));
+    preDrillSnapshotRef.current = null;
+    emgTimedOutRef.current.clear();
   };
 
   const advanceEmergencyStep = () => {
@@ -1469,6 +1482,21 @@ export default function App() {
                 onUpdateOutriggers={updateOutriggers}
                 onUpdatePicker={updatePicker}
                 onUpdateHydraulics={updateHydraulics}
+                onSetClampCount={(count: number) => {
+                  soundManager.playMetalTap();
+                  setState((prev) => ({
+                    ...prev,
+                    rod: {
+                      ...prev.rod,
+                      mechanicalClampsInstalled: count,
+                      clampTorqueFtLbs: count > 0 ? 550 : 0,
+                    },
+                  }));
+                }}
+                onEmergencyAction={(action) => {
+                  if (action === 'evacuate') setState((prev) => ({ ...prev, evacuatedToMuster: true }));
+                  else if (action === 'scba') setState((prev) => ({ ...prev, scbaEquipped: true }));
+                }}
                 onStrokeBopHandPump={() => {
                   setState((prev) => ({
                     ...prev,
