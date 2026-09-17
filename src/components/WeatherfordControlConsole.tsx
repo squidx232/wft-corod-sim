@@ -116,20 +116,8 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
           </div>
 
             {/* Unified panel — no need for order toggle anymore */}
-
-            {/* Air Horn Alert & E-Stop Status */}
-            <button
-              type="button"
-              onClick={() => {
-                soundManager.playAirHorn(1.5);
-                onSoundAirHorn();
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-md transition-all"
-              title="Sound Rig Air Horn (Mandatory Wellsite Alert)"
-            >
-              <Volume2 className="w-4 h-4" />
-              <span>Rig Air Horn</span>
-            </button>
+            {/* (Header 'Rig Air Horn' button removed — the HORN button in the
+                console body is the single air-horn control.) */}
 
             {hydraulics.emergencyStopTripped && (
               <button

@@ -446,6 +446,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildMastAndArch(scene);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
+    buildSafetyCones(scene);
     buildContinuousRodPath(scene);
     buildExhaustParticleSystem(scene);
 
@@ -2398,6 +2399,47 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     rodClampRefs.current = clampGroups;
   }
 
+  // Safety cones (traffic cones) laid out around the wellsite perimeter to
+  // demarcate the work exclusion zone. Loads one GLB then clones it.
+  function buildSafetyCones(scene: THREE.Scene) {
+    // Cone placements (world X, Z) ringing the wellhead / walkway.
+    const conePositions: [number, number][] = [
+      [WELL_X - 3.2, 2.6],
+      [WELL_X + 3.2, 2.6],
+      [WELL_X - 3.2, -2.6],
+      [WELL_X + 3.2, -2.6],
+      [WELL_X, 3.6],
+      [WELL_X - 6.5, 0],
+    ];
+    gltfLoader.load(
+      '/models/cone.glb',
+      (gltf) => {
+        const proto = gltf.scene;
+        proto.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        // Normalise the prototype to ~0.9 units tall, base at y=0.
+        const box = new THREE.Box3().setFromObject(proto);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const scale = size.y > 0.0001 ? 0.9 / size.y : 1;
+        conePositions.forEach(([x, z], i) => {
+          const cone = proto.clone(true);
+          cone.scale.setScalar(scale);
+          const cb = new THREE.Box3().setFromObject(cone);
+          cone.position.set(x, -cb.min.y, z);
+          cone.rotation.y = (i * Math.PI) / 3; // vary facing
+          scene.add(cone);
+        });
+      },
+      undefined,
+      (err) => console.warn('[Rig3DViewport] Failed to load cone.glb', err),
+    );
+  }
+
   function buildWellheadBopStack(scene: THREE.Scene) {
     const wellheadGroup = new THREE.Group();
     wellheadGroup.position.set(WELL_X, 0.3, 0);
@@ -2405,15 +2447,40 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const steelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.75, roughness: 0.25 });
     const bopMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, metalness: 0.5, roughness: 0.35 });
 
+    // --- External GLB models: real Wellhead + BOP replace the procedural body.
+    // The animated dog-clamp jaws and BOP rams (below) remain procedural overlays
+    // so their existing animations keep working.
+    const wellheadModelHolder = new THREE.Group();
+    wellheadGroup.add(wellheadModelHolder);
+    loadEquipmentModel('/models/wellhead.glb', wellheadModelHolder, {
+      targetHeight: 2.4,
+      onLoaded: (root) => {
+        root.position.y += 0.0; // seated at group base
+      },
+    });
+    const bopModelHolder = new THREE.Group();
+    bopModelHolder.position.y = 1.2;
+    wellheadGroup.add(bopModelHolder);
+    loadEquipmentModel('/models/bop.glb', bopModelHolder, {
+      targetHeight: 1.8,
+    });
+
+    // NOTE: The procedural flange/bopBody below are retained but made invisible —
+    // kept so nothing that references the layout breaks, hidden since the GLBs
+    // now provide the visual. Set `showProcedural` true to fall back.
+    const showProcedural = false;
+
     // Tubing Head Flange
     const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.6, 24), steelMat);
     flange.position.y = 0.3;
+    flange.visible = showProcedural;
     wellheadGroup.add(flange);
 
     // Annular BOP Body
     const bopBody = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 1.2, 24), bopMat);
     bopBody.position.y = 1.2;
     bopBody.castShadow = true;
+    bopBody.visible = showProcedural;
     wellheadGroup.add(bopBody);
 
     // BOP Hydraulic Actuator Rams (Side Cylinders)
