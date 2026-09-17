@@ -3543,14 +3543,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // The rod follows the SAME curve as the guide channel (getRodGuideCurve) so
     // it visibly runs inside the guide from the reel up to the injector top, then
     // continues straight down through the injector, BOP and into the wellhead.
-    const guidePts = getRodGuideCurve().points; // reel → over arch → injector top
-    const rodCurve = new THREE.CatmullRomCurve3([
-      ...guidePts,
-      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0),         // into injector head centre
-      new THREE.Vector3(WELL_X, INJECTOR_BASE_Y, 0),        // through the injector
-      new THREE.Vector3(WELL_X, BOP_TOP_Y - 2.0, 0),        // through the BOP
-      new THREE.Vector3(WELL_X, 0.0, 0),                    // into the wellhead
-    ]);
+    // Follow the EXACT guide arch by sampling the guide curve densely, then append
+    // the vertical descent. Because the shared arc is baked in as many fixed
+    // points, the descent points can't bend it — so the rod sits perfectly inside
+    // the guide (relocation only; guide width unchanged).
+    const guideCurve = getRodGuideCurve();
+    const ARC_SAMPLES = 80;
+    const rodPoints: THREE.Vector3[] = [];
+    for (let i = 0; i <= ARC_SAMPLES; i++) {
+      rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
+    }
+    // Continue straight down the well line from the guide's exit point.
+    rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0));   // into injector head centre
+    rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_BASE_Y, 0));  // through the injector
+    rodPoints.push(new THREE.Vector3(WELL_X, BOP_TOP_Y - 2.0, 0));  // through the BOP
+    rodPoints.push(new THREE.Vector3(WELL_X, 0.0, 0));              // into the wellhead
+    const rodCurve = new THREE.CatmullRomCurve3(rodPoints);
 
     const canvas = document.createElement('canvas');
     canvas.width = 64;
