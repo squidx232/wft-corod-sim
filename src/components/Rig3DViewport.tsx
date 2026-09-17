@@ -553,11 +553,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildServiceReel(scene);
     // buildMastAndArch superseded by buildRodGuideRack (the arched rod guide).
     buildRodGuideRack(scene);
-    // Portable field welder ~100 ft (≈25 units) behind the pulling unit, with a
-    // stored guide arch beside it; plus another stored guide next to the MG unit.
-    buildFieldWelder(scene, WELL_X + MAST_OFFSET_X + 25, -4);
-    buildStoredGuide(scene, WELL_X + MAST_OFFSET_X + 25, 1.5, Math.PI / 2);   // at the welder
-    buildStoredGuide(scene, MG_UNIT_X + 4, 6, 0);                             // beside the MG truck
+    // Portable field welder ~100 ft behind the pulling unit but shifted to the
+    // LEFT and CLOSER to the camera (more positive Z), kept within the pad.
+    buildFieldWelder(scene, WELL_X + MAST_OFFSET_X + 14, 12);
+    // Blue A-frame guide-storage rack on the FAR side of the MG unit (−Z, the
+    // opposite side from the camera-facing worksite).
+    buildGuideRack(scene, MG_UNIT_X, -9, 0);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
     buildSafetyCones(scene);
@@ -944,7 +945,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // opening far below the pit floor so the ground plane doesn't cap the pit
       // (leaving the open cellar visible when you look down into it). Local x ≈
       // world x, local y ≈ world z (plane is rotated −90° about X afterwards).
-      if (Math.abs(x - WELL_X) < CELLAR_HALF + 0.2 && Math.abs(y) < CELLAR_HALF + 0.2) {
+      if (Math.abs(x - WELL_X) < CELLAR_HALF + 2.0 && Math.abs(y) < CELLAR_HALF + 2.0) {
         h = -(CELLAR_DEPTH + 3.0);
       }
       tPos.setZ(i, h);
@@ -1019,7 +1020,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Four retaining walls lining the pit on ALL sides (tops flush with grade
     // ≈ y0). The cellar is "open" at the TOP — you look down into it — but every
     // side is walled so you never see through it to the horizon.
-    const wallH = CELLAR_DEPTH;
+    // Walls run from the pit floor up to a low CURB slightly ABOVE grade so the
+    // concrete lip cleanly occludes the pad/terrain edges around the opening
+    // (prevents ground from appearing to overlap into the pit).
+    const CURB = 0.35;                 // how far the wall tops rise above grade
+    const wallH = CELLAR_DEPTH + CURB;
     const wallDefs: Array<[number, number, number, number]> = [
       // [x, z, width(x), depth(z)]
       [0, CELLAR_HALF, CELLAR_HALF * 2 + WALL_T * 2, WALL_T], // +Z wall
@@ -1029,7 +1034,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     ];
     wallDefs.forEach(([wx, wz, ww, wd]) => {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(ww, wallH, wd), concreteMat);
-      wall.position.set(wx, -wallH / 2, wz);
+      // Centre so the top sits at +CURB and the bottom at −CELLAR_DEPTH.
+      wall.position.set(wx, CURB - wallH / 2, wz);
       wall.receiveShadow = true;
       wall.castShadow = true;
       cellarGroup.add(wall);
@@ -2817,9 +2823,37 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Main engine/generator enclosure
     const box = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 1.6), redMat);
     box.position.set(-0.4, 1.05, 0); box.castShadow = true; g.add(box);
-    // Weatherford-ish white label panel
-    const label = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 1.2), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
-    label.position.set(-1.61, 1.0, 0); g.add(label);
+
+    // Branded label texture: Weatherford wordmark + "PFW" (Portable Field Welder).
+    const makeBrandTexture = () => {
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = 256;
+      const ctx = cv.getContext('2d')!;
+      ctx.fillStyle = '#b91c1c'; ctx.fillRect(0, 0, cv.width, cv.height);
+      // Weatherford wordmark (red brand uses a chevron; approximate with text).
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 62px Arial, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Weatherford', 26, 96);
+      // Chevron accent
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(30, 150); ctx.lineTo(70, 175); ctx.lineTo(110, 150); ctx.stroke();
+      // PFW big
+      ctx.font = 'bold 96px Arial, sans-serif';
+      ctx.fillText('PFW', 150, 190);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.anisotropy = 4;
+      return tex;
+    };
+    const brandTex = makeBrandTexture();
+    const brandMat = new THREE.MeshStandardMaterial({ map: brandTex, roughness: 0.6 });
+    // Branded panels on BOTH long sides of the enclosure (±Z faces).
+    [0.81, -0.81].forEach((pz, i) => {
+      const panelB = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), brandMat);
+      panelB.position.set(-0.4, 1.05, pz);
+      panelB.rotation.y = i === 0 ? 0 : Math.PI;
+      g.add(panelB);
+    });
     // Radiator/expanded-metal screen at the back (+X end)
     const screen = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.5), new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.6, roughness: 0.6 }));
     screen.position.set(1.3, 0.95, 0); g.add(screen);
@@ -2849,34 +2883,97 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     scene.add(g);
   }
 
-  // A parked/stored guide arch (same 11-section guide) placed as a prop at a
-  // given world position — used next to the MG truck and at the field welder.
-  function buildStoredGuide(scene: THREE.Scene, x: number, z: number, ry: number) {
+  // Blue A-FRAME GUIDE STORAGE RACK matching the field photo: a welded blue
+  // frame (two A-frame end towers + long top/bottom rails) cradling a STACK of
+  // curved black guide beams (each with yellow wear-pad stripes and a painted
+  // number), with a few pointed hanger tools sticking up at the top corners.
+  function buildGuideRack(scene: THREE.Scene, x: number, z: number, ry: number) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = ry;
-    // A compact arch in LOCAL space (spanning z), sitting low on a simple stand.
-    const span = 5.5;
-    const rise = 2.2;
-    const localCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 1.0, -span / 2),
-      new THREE.Vector3(0, 1.0 + rise * 0.75, -span * 0.22),
-      new THREE.Vector3(0, 1.0 + rise, 0),
-      new THREE.Vector3(0, 1.0 + rise * 0.75, span * 0.22),
-      new THREE.Vector3(0, 1.0, span / 2),
-    ]);
-    buildGuideAlongCurve(g, localCurve);
-    // Simple grey stand legs (not blue) holding the arch ends.
-    const standMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.4, roughness: 0.6 });
-    [-span / 2, span / 2].forEach((lz) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.0, 8), standMat);
-      leg.position.set(0, 0.5, lz);
-      leg.castShadow = true;
-      g.add(leg);
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), standMat);
-      foot.position.set(0, 0.05, lz);
-      g.add(foot);
+
+    const blueMat = new THREE.MeshStandardMaterial({ color: 0x2563a8, metalness: 0.4, roughness: 0.55 });
+    const guideMat = new THREE.MeshStandardMaterial({ color: 0x22262b, metalness: 0.45, roughness: 0.6 });
+    const padMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.2 });
+
+    const RACK_W = 9.0;   // long axis (z) — width of the rack
+    const RACK_H = 4.2;   // tower height
+    const RACK_D = 2.2;   // depth (x) between the two A-frame planes
+
+    // --- Two A-frame end towers (at ±RACK_W/2 along z) ---
+    const buildTower = (zc: number) => {
+      // Splayed legs front/back (±x) meeting near the top.
+      const legDefs: [number, number][] = [[-RACK_D / 2, 0], [RACK_D / 2, 0]];
+      legDefs.forEach(([lx]) => {
+        const foot = new THREE.Vector3(lx, 0.1, zc);
+        const apex = new THREE.Vector3(0, RACK_H, zc);
+        const dir = new THREE.Vector3().subVectors(apex, foot);
+        const len = dir.length();
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, len, 0.16), blueMat);
+        leg.position.copy(foot).addScaledVector(dir, 0.5);
+        leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        leg.castShadow = true;
+        g.add(leg);
+      });
+      // Vertical mullion + horizontal cross-ties on the tower.
+      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.14, RACK_H, 0.14), blueMat);
+      mull.position.set(0, RACK_H / 2, zc); g.add(mull);
+      [1.2, 2.4, 3.6].forEach((ty) => {
+        const tie = new THREE.Mesh(new THREE.BoxGeometry(RACK_D + 0.2, 0.12, 0.12), blueMat);
+        tie.position.set(0, ty, zc); g.add(tie);
+      });
+      // Pointed hanger tools sticking up at the tower top.
+      [-0.2, 0.05, 0.3].forEach((dz, i) => {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.6, 8),
+          new THREE.MeshStandardMaterial({ color: i === 0 ? 0x3a3a3a : 0x5a4a3a, metalness: 0.5, roughness: 0.5 }));
+        spike.position.set(-0.2 + i * 0.2, RACK_H + 0.3, zc + dz * 0.4);
+        g.add(spike);
+      });
+    };
+    buildTower(-RACK_W / 2);
+    buildTower(RACK_W / 2);
+
+    // --- Long top & bottom rails tying the two towers together (both x sides) ---
+    [-RACK_D / 2, RACK_D / 2].forEach((rx) => {
+      [0.3, RACK_H - 0.2].forEach((ry2) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, RACK_W + 0.3), blueMat);
+        rail.position.set(rx, ry2, 0); g.add(rail);
+      });
     });
+    // Base skids on the ground.
+    [-RACK_D / 2, RACK_D / 2].forEach((rx) => {
+      const skid = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, RACK_W + 1.2), blueMat);
+      skid.position.set(rx, 0.08, 0); skid.receiveShadow = true; g.add(skid);
+    });
+
+    // --- Stack of curved black guide beams cradled in the rack ---
+    const NUM = 6;
+    for (let i = 0; i < NUM; i++) {
+      const y = 1.1 + i * 0.5;             // stacked up the towers
+      const sag = 1.1 - i * 0.06;          // varying curvature
+      const half = RACK_W / 2 - 0.4;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, y, -half),
+        new THREE.Vector3(0, y + sag * 0.8, -half * 0.4),
+        new THREE.Vector3(0, y + sag, 0),
+        new THREE.Vector3(0, y + sag * 0.8, half * 0.4),
+        new THREE.Vector3(0, y, half),
+      ]);
+      const beam = new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.17, 8, false), guideMat);
+      beam.castShadow = true; g.add(beam);
+      // Yellow wear-pad stripes along the beam.
+      [0.2, 0.42, 0.58, 0.8].forEach((u) => {
+        const p = curve.getPoint(u);
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.5), padMat);
+        pad.position.copy(p); pad.position.y += 0.16; g.add(pad);
+      });
+      // End mounting heads (the chunky numbered lugs).
+      [-half, half].forEach((pz) => {
+        const lug = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.4), guideMat);
+        lug.position.set(0, y, pz); g.add(lug);
+      });
+    }
+
     scene.add(g);
   }
 
@@ -3042,13 +3139,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // demarcate the work exclusion zone. Loads one GLB then clones it.
   function buildSafetyCones(scene: THREE.Scene) {
     // Cone placements (world X, Z) ringing the wellhead / walkway.
+    // Ring the cones OUTSIDE the cellar opening (CELLAR_HALF = 2.6) so none sit
+    // on the pit edge or float over the open hole. ~4.5-unit standoff ring.
     const conePositions: [number, number][] = [
-      [WELL_X - 3.2, 2.6],
-      [WELL_X + 3.2, 2.6],
-      [WELL_X - 3.2, -2.6],
-      [WELL_X + 3.2, -2.6],
-      [WELL_X, 3.6],
-      [WELL_X - 6.5, 0],
+      [WELL_X - 4.6, 4.6],
+      [WELL_X + 4.6, 4.6],
+      [WELL_X - 4.6, -4.6],
+      [WELL_X + 4.6, -4.6],
+      [WELL_X, 5.4],
+      [WELL_X, -5.4],
+      [WELL_X - 7.5, 0],
     ];
     gltfLoader.load(
       '/models/cone.glb',
