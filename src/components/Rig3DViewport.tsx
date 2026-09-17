@@ -2304,12 +2304,15 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     }
 
     // Dual Opposed Continuous Gripper Chains & Hardened Shoes
+    // Hidden: the imported injector.glb now provides the visual body. The groups
+    // and refs are kept so the 60fps animation loop still has valid targets.
     const chainMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.2 });
     const leftChain = new THREE.Group();
     leftChain.position.set(-0.25, 0, 0);
     for (let i = 0; i < 7; i++) {
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.4), chainMat);
       block.position.set(0, (i - 3) * 0.45, 0);
+      block.visible = false;
       leftChain.add(block);
     }
     injectorGroup.add(leftChain);
@@ -2320,19 +2323,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     for (let i = 0; i < 7; i++) {
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.4), chainMat);
       block.position.set(0, (i - 3) * 0.45, 0);
+      block.visible = false;
       rightChain.add(block);
     }
     injectorGroup.add(rightChain);
     gripperChainRightRef.current = rightChain;
 
-    // Squeeze Hydraulic Backing Beams
+    // Squeeze Hydraulic Backing Beams (hidden — replaced by injector.glb)
     const squeezePlates = new THREE.Group();
     const beamL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.2, 0.35), motorMat);
     beamL.position.set(-0.32, 0, 0);
+    beamL.visible = false;
     squeezePlates.add(beamL);
 
     const beamR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.2, 0.35), motorMat);
     beamR.position.set(0.32, 0, 0);
+    beamR.visible = false;
     squeezePlates.add(beamR);
     injectorGroup.add(squeezePlates);
     squeezePlatesRef.current = squeezePlates;
@@ -2490,65 +2496,76 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const ramL = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.1, 16), steelMat);
     ramL.rotation.z = Math.PI / 2;
     ramL.position.set(-0.8, 0, 0);
+    ramL.visible = showProcedural;
     bopRamsGroup.add(ramL);
 
     const ramR = ramL.clone();
     ramR.position.set(0.8, 0, 0);
+    ramR.visible = showProcedural;
     bopRamsGroup.add(ramR);
     wellheadGroup.add(bopRamsGroup);
     bopRamsRef.current = bopRamsGroup;
 
-    // Safety Dog Clamp Table
+    // Safety Dog Clamp Table (hidden — GLB stack now provides the visual)
     const clampTable = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 1.15), steelMat);
     clampTable.position.y = 2.2;
+    clampTable.visible = showProcedural;
     wellheadGroup.add(clampTable);
 
-    // Mechanical Safety Dog Clamp Jaws (Component V)
+    // Mechanical Safety Dog Clamp Jaws (Component V) — hidden; group/ref kept
+    // so the safety-clamp animation still targets a valid object.
     const clampJaws = new THREE.Group();
     clampJaws.position.y = 2.6;
     const clampMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6 });
 
     const jawL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.5), clampMat);
     jawL.position.set(-0.22, 0, 0);
+    jawL.visible = showProcedural;
     clampJaws.add(jawL);
 
     const jawR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.5), clampMat);
     jawR.position.set(0.22, 0, 0);
+    jawR.visible = showProcedural;
     clampJaws.add(jawR);
     wellheadGroup.add(clampJaws);
     safetyClampJawsRef.current = clampJaws;
 
-    // Item 67: Tubing head flange bolt circle (8 bolts)
+    // Item 67: Tubing head flange bolt circle (8 bolts) — hidden
     const flangeBoltGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.18, 8);
     for (let fb = 0; fb < 8; fb++) {
       const fbAngle = (fb / 8) * Math.PI * 2;
       const fbBolt = new THREE.Mesh(flangeBoltGeo, steelMat);
       fbBolt.position.set(Math.cos(fbAngle) * 0.88, 0.6, Math.sin(fbAngle) * 0.88);
+      fbBolt.visible = showProcedural;
       wellheadGroup.add(fbBolt);
     }
 
-    // Item 68: BOP side nozzle ports (bleed/kill line connections)
+    // Item 68: BOP side nozzle ports (bleed/kill line connections) — hidden
     const nozzleMat = new THREE.MeshStandardMaterial({ color: 0x374151, metalness: 0.7, roughness: 0.3 });
     const nozzleGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 12);
     [0, Math.PI].forEach((nAngle) => {
       const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
       nozzle.rotation.x = Math.PI / 2;
       nozzle.position.set(Math.cos(nAngle) * 0.85, 1.2, Math.sin(nAngle) * 0.85);
+      nozzle.visible = showProcedural;
       wellheadGroup.add(nozzle);
       // Valve handle on nozzle
       const nValve = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.04), nozzleMat);
       nValve.position.set(Math.cos(nAngle) * 1.12, 1.2, Math.sin(nAngle) * 1.12);
+      nValve.visible = showProcedural;
       wellheadGroup.add(nValve);
     });
 
-    // Stuffing Box Riser
+    // Stuffing Box Riser (hidden — the tall steel cylinder that clashed with the GLBs)
     const riser = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3.4, 24), steelMat);
     riser.position.y = 4.5;
+    riser.visible = showProcedural;
     wellheadGroup.add(riser);
 
-    // Item 72: Packing gland flange at riser bottom connection
+    // Item 72: Packing gland flange at riser bottom connection — hidden
     const packingGland = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.2, 24), steelMat);
     packingGland.position.y = 2.85;
+    packingGland.visible = showProcedural;
     wellheadGroup.add(packingGland);
 
     scene.add(wellheadGroup);
