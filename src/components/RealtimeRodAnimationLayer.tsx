@@ -506,26 +506,51 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
     ctx.strokeStyle = '#020617';
     ctx.strokeRect(injX + 25, injY + 160, 70, 30);
 
-    // Mechanical Clamps Attached
-    if (rod.mechanicalClampsInstalled >= 1) {
-      ctx.fillStyle = '#dc2626';
-      ctx.strokeStyle = '#f87171';
+    // Mechanical Rod Safety Clamps — drawn as amber jaw halves gripping the
+    // rod with bolt studs, stacked on the exposed rod above the wellhead.
+    const drawRodClamp = (cy: number, label: string) => {
+      const jawW = 18;
+      const jawH = 16;
+      const gap = 8; // rod passes through this gap
+      const leftX = rodPathX - gap / 2 - jawW;
+      const rightX = rodPathX + gap / 2;
+      // Jaw halves (amber housing)
+      ctx.fillStyle = '#f59e0b';
+      ctx.strokeStyle = '#92400e';
       ctx.lineWidth = 1.5;
-      ctx.fillRect(injX + 12, injY + 96, 96, 8);
-      ctx.strokeRect(injX + 12, injY + 96, 96, 8);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 6.5px monospace';
-      ctx.fillText('MECH CLAMP #1 (550 FT-LBS)', injX + 18, injY + 102);
+      ctx.fillRect(leftX, cy - jawH / 2, jawW, jawH);
+      ctx.strokeRect(leftX, cy - jawH / 2, jawW, jawH);
+      ctx.fillRect(rightX, cy - jawH / 2, jawW, jawH);
+      ctx.strokeRect(rightX, cy - jawH / 2, jawW, jawH);
+      // Bolt studs across the clamp (top & bottom)
+      ctx.fillStyle = '#cbd5e1';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1;
+      [cy - 4, cy + 4].forEach((by) => {
+        ctx.beginPath();
+        ctx.arc(leftX - 2, by, 2, 0, Math.PI * 2);
+        ctx.arc(rightX + jawW + 2, by, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Tie bar connecting the studs across
+        ctx.beginPath();
+        ctx.moveTo(leftX - 2, by);
+        ctx.lineTo(rightX + jawW + 2, by);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+      // Label
+      ctx.fillStyle = '#fde68a';
+      ctx.font = 'bold 6px monospace';
+      ctx.fillText(label, rightX + jawW + 6, cy + 2);
+    };
+
+    if (rod.mechanicalClampsInstalled >= 1) {
+      drawRodClamp(injY + 118, 'CLAMP #1 · 550 ft·lb');
     }
     if (rod.mechanicalClampsInstalled >= 2) {
-      ctx.fillStyle = '#dc2626';
-      ctx.strokeStyle = '#f87171';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(injX + 12, injY + 86, 96, 8);
-      ctx.strokeRect(injX + 12, injY + 86, 96, 8);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 6.5px monospace';
-      ctx.fillText('MECH CLAMP #2 (STACKED)', injX + 22, injY + 92);
+      drawRodClamp(injY + 96, 'CLAMP #2 · STACKED');
     }
   };
 

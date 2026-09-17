@@ -24,6 +24,7 @@ interface AuxiliaryPanelsProps {
   onUpdateOutriggers: (updates: Partial<SimulatorState['outriggers']>) => void;
   onUpdatePicker: (updates: Partial<SimulatorState['picker']>) => void;
   onUpdateHydraulics: (updates: Partial<SimulatorState['hydraulics']>) => void;
+  onSetClampCount?: (count: number) => void;
   onStrokeBopHandPump: () => void;
 }
 
@@ -34,6 +35,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
   onUpdateOutriggers,
   onUpdatePicker,
   onUpdateHydraulics,
+  onSetClampCount,
   onStrokeBopHandPump,
 }) => {
   const [activeAuxTab, setActiveAuxTab] = useState<'bop' | 'ytool' | 'outriggers' | 'picker' | 'thermal' | 'cab'>('bop');
@@ -70,6 +72,69 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 <span className="text-amber-300 font-black tabular-nums whitespace-nowrap">→ {row.load}</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ROD SAFETY CLAMPS — install/remove mechanical clamps on the string.
+            Always available (critical during emergency response). */}
+        <div
+          data-control-id="ctrl-install-clamp"
+          className="flex-1 min-w-[240px] bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-slate-700 rounded-md shadow-lg px-4 py-3"
+        >
+          <div className="text-[12px] font-black uppercase tracking-widest text-slate-100 text-center mb-2 font-mono border-b border-slate-700 pb-1">
+            Rod Safety Clamps
+          </div>
+          <div className="flex items-center justify-center gap-3 my-2">
+            {[0, 1].map((i) => {
+              const installed = state.rod.mechanicalClampsInstalled > i;
+              return (
+                <div
+                  key={i}
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 transition-all ${
+                    installed
+                      ? 'bg-amber-900/40 border-amber-500 text-amber-300'
+                      : 'bg-slate-800/50 border-slate-600 text-slate-500'
+                  }`}
+                >
+                  {/* Simple clamp icon: two jaws around a rod */}
+                  <div className="relative w-8 h-10 flex items-center justify-center">
+                    <div className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-1.5 rounded ${installed ? 'bg-slate-300' : 'bg-slate-600'}`} />
+                    <div className={`absolute top-3 left-0 w-3 h-4 rounded-l ${installed ? 'bg-amber-500' : 'bg-slate-600'}`} />
+                    <div className={`absolute top-3 right-0 w-3 h-4 rounded-r ${installed ? 'bg-amber-500' : 'bg-slate-600'}`} />
+                  </div>
+                  <span className="text-[9px] font-mono font-bold">
+                    CLAMP {i + 1} {installed ? '✓' : '—'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-center text-[10px] text-slate-400 font-mono mb-2">
+            {state.rod.mechanicalClampsInstalled} of 2 installed
+            {state.rod.mechanicalClampsInstalled > 0 &&
+              ` @ ${state.rod.clampTorqueFtLbs} ft-lbs`}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                onSetClampCount?.(Math.min(2, state.rod.mechanicalClampsInstalled + 1))
+              }
+              disabled={state.rod.mechanicalClampsInstalled >= 2}
+              className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase shadow active:scale-95"
+            >
+              + Install Clamp
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onSetClampCount?.(Math.max(0, state.rod.mechanicalClampsInstalled - 1))
+              }
+              disabled={state.rod.mechanicalClampsInstalled <= 0}
+              className="flex-1 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase shadow active:scale-95"
+            >
+              − Remove
+            </button>
           </div>
         </div>
       </div>

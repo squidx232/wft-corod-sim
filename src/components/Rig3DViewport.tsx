@@ -169,6 +169,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // RIH/POOH dynamic-motion effect refs
   const injectorGroupRef = useRef<THREE.Group | null>(null);
   const wellheadSprayRef = useRef<THREE.Mesh[]>([]);
+  const rodClampRefs = useRef<THREE.Group[]>([]);
 
   // Live 3D Needle Meshes on Console
   const needlesMapRef = useRef<Record<string, THREE.Mesh>>({});
@@ -549,6 +550,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           injectorGroupRef.current.position.x = THREE.MathUtils.lerp(injectorGroupRef.current.position.x, WELL_X, 0.2);
           injectorGroupRef.current.rotation.z = THREE.MathUtils.lerp(injectorGroupRef.current.rotation.z, 0, 0.2);
         }
+      }
+
+      // 4b2. Rod safety clamps — show one mesh per installed mechanical clamp
+      if (rodClampRefs.current.length > 0) {
+        const installed = liveState.rod.mechanicalClampsInstalled;
+        rodClampRefs.current.forEach((g, i) => {
+          g.visible = i < installed;
+        });
       }
 
       // 4c. Wellhead spray / dust puffs while the rod is moving fast
@@ -2347,6 +2356,46 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       scene.add(puff);
     }
     wellheadSprayRef.current = spray;
+
+    // --- Rod Safety Clamps (mechanical) on the exposed rod above the wellhead --
+    // Two clamps stack just above the BOP; visibility follows the installed count.
+    const clampGroups: THREE.Group[] = [];
+    const clampBodyMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      metalness: 0.6,
+      roughness: 0.4,
+    });
+    const clampBoltMat = new THREE.MeshStandardMaterial({
+      color: 0x9ca3af,
+      metalness: 0.9,
+      roughness: 0.3,
+    });
+    for (let i = 0; i < 2; i++) {
+      const g = new THREE.Group();
+      // Two jaw halves hugging the rod
+      const jawGeo = new THREE.BoxGeometry(0.28, 0.5, 0.55);
+      const jawL = new THREE.Mesh(jawGeo, clampBodyMat);
+      jawL.position.x = -0.2;
+      const jawR = new THREE.Mesh(jawGeo, clampBodyMat);
+      jawR.position.x = 0.2;
+      g.add(jawL, jawR);
+      // Bolt studs across the clamp
+      for (let b = -1; b <= 1; b += 2) {
+        const bolt = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8),
+          clampBoltMat,
+        );
+        bolt.rotation.x = Math.PI / 2;
+        bolt.position.set(0, b * 0.15, 0);
+        g.add(bolt);
+      }
+      // Stacked just above the wellhead / BOP top
+      g.position.set(WELL_X, 5.2 + i * 0.7, 0);
+      g.visible = false;
+      scene.add(g);
+      clampGroups.push(g);
+    }
+    rodClampRefs.current = clampGroups;
   }
 
   function buildWellheadBopStack(scene: THREE.Scene) {

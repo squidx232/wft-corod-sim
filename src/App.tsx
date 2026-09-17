@@ -767,6 +767,13 @@ export default function App() {
     setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
   };
 
+  // Air horn: play the sound AND record that the horn was sounded (so emergency
+  // response steps that require an air-horn blast are satisfied).
+  const handleAirHorn = (durationSec = 1.2) => {
+    soundManager.playAirHorn?.(durationSec);
+    setState((prev) => ({ ...prev, airHornSounded: true }));
+  };
+
   // Trip Mode handler: RIH (Run In Hole from surface), POOH (Pull Out Of Hole from bottom), or FREE (Mid-well)
   const handleSetTripMode = (mode: 'RIH' | 'POOH' | 'FREE') => {
     soundManager.playMetalTap();
@@ -1067,7 +1074,7 @@ export default function App() {
           onUpdateHydraulics={updateHydraulics}
           onUpdateBOP={updateBop}
           onUpdateJoystick={handleJoystickChange}
-          onSoundAirHorn={() => soundManager.playAirHorn(1.2)}
+          onSoundAirHorn={() => handleAirHorn(1.2)}
           onTriggerEmergencyStop={handleEmergencyShutdown}
           onResetEmergencyStop={handleResetEmergencyShutdown}
         />
@@ -1086,7 +1093,7 @@ export default function App() {
           onUpdateHydraulics={updateHydraulics}
           onUpdateBOP={updateBop}
           onUpdateJoystick={handleJoystickChange}
-          onSoundAirHorn={() => soundManager.playAirHorn(1.2)}
+          onSoundAirHorn={() => handleAirHorn(1.2)}
           onTriggerEmergencyStop={handleEmergencyShutdown}
           onResetEmergencyStop={handleResetEmergencyShutdown}
           embedded={true}
@@ -1325,7 +1332,7 @@ export default function App() {
               onUpdateHydraulics={updateHydraulics}
               onUpdateBOP={updateBop}
               onSetJoystick={handleJoystickChange}
-              onAirHorn={() => soundManager.playAirHorn?.()}
+              onAirHorn={() => handleAirHorn(1.2)}
               onEmergencyStop={handleEmergencyShutdown}
               onEmergencyReset={handleResetEmergencyShutdown}
             />
@@ -1341,7 +1348,7 @@ export default function App() {
               onUpdateHydraulics={updateHydraulics}
               onUpdateBOP={updateBop}
               onUpdateJoystick={handleJoystickChange}
-              onSoundAirHorn={() => soundManager.playAirHorn(1.5)}
+              onSoundAirHorn={() => handleAirHorn(1.5)}
               onTriggerEmergencyStop={handleEmergencyShutdown}
               onResetEmergencyStop={handleResetEmergencyShutdown}
               onSetTripMode={handleSetTripMode}
@@ -1487,7 +1494,7 @@ export default function App() {
               state={state}
               onUpdateHydraulics={updateHydraulics}
               onUpdateJoystick={handleJoystickChange}
-              onSoundAirHorn={() => soundManager.playAirHorn(1.5)}
+              onSoundAirHorn={() => handleAirHorn(1.5)}
               onTriggerEmergencyStop={handleEmergencyShutdown}
               onResetEmergencyStop={handleResetEmergencyShutdown}
               onInstallClamp={() => {
