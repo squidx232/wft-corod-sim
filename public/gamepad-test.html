@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gamepad Diagnostic</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0b1220; color:#e2e8f0; margin:0; padding:20px; }
+  h1 { font-size:18px; }
+  .status { font-size:14px; margin:8px 0; }
+  .ok { color:#34d399; } .bad { color:#f87171; }
+  .grid { display:flex; gap:24px; flex-wrap:wrap; margin-top:16px; }
+  .col { background:#111a2e; border:1px solid #223; border-radius:10px; padding:12px; min-width:240px; }
+  .btn { display:inline-block; margin:2px; padding:4px 8px; border-radius:6px; background:#1e293b; font-family:monospace; font-size:12px; }
+  .btn.on { background:#059669; color:#fff; }
+  .axis { font-family:monospace; font-size:12px; margin:2px 0; }
+  .bar { display:inline-block; height:8px; background:#334155; width:120px; border-radius:4px; vertical-align:middle; position:relative; }
+  .bar > i { position:absolute; top:0; bottom:0; width:3px; background:#38bdf8; border-radius:2px; }
+  code { background:#1e293b; padding:2px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+  <h1>🎮 Gamepad Diagnostic</h1>
+  <div class="status" id="apiStatus"></div>
+  <div class="status" id="connStatus" class="bad">No gamepad detected yet.</div>
+  <p class="status">👉 <b>Press any button on your controller now.</b> Browsers only reveal a gamepad after a button press while this page is focused.</p>
+  <div class="grid" id="pads"></div>
+
+<script>
+  document.getElementById('apiStatus').innerHTML =
+    ('getGamepads' in navigator)
+      ? '<span class="ok">✓ Gamepad API is available in this browser.</span>'
+      : '<span class="bad">✗ Gamepad API NOT available in this browser.</span>';
+
+  window.addEventListener('gamepadconnected', (e) => {
+    console.log('gamepadconnected', e.gamepad);
+  });
+  window.addEventListener('gamepaddisconnected', (e) => {
+    console.log('gamepaddisconnected', e.gamepad);
+  });
+
+  function render() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const active = [...pads].filter(Boolean);
+    const conn = document.getElementById('connStatus');
+    if (active.length) {
+      conn.className = 'status ok';
+      conn.textContent = '✓ ' + active.length + ' gamepad(s) connected.';
+    } else {
+      conn.className = 'status bad';
+      conn.textContent = 'No gamepad detected yet. Press a button on the controller.';
+    }
+    const wrap = document.getElementById('pads');
+    wrap.innerHTML = '';
+    active.forEach((p) => {
+      const col = document.createElement('div');
+      col.className = 'col';
+      let html = '<div><b>Index ' + p.index + '</b></div>';
+      html += '<div style="font-size:11px;color:#94a3b8;margin:4px 0;">' + p.id + '</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;">mapping: <code>' + (p.mapping || 'none') + '</code></div>';
+      html += '<div style="margin-top:8px;"><b>Buttons</b><br/>';
+      p.buttons.forEach((b, i) => {
+        html += '<span class="btn ' + (b.pressed ? 'on' : '') + '">' + i + (b.pressed ? '●' : '') + '</span>';
+      });
+      html += '</div><div style="margin-top:8px;"><b>Axes</b>';
+      p.axes.forEach((a, i) => {
+        const pct = ((a + 1) / 2) * 100;
+        html += '<div class="axis">ax' + i + ': ' + a.toFixed(2) +
+          ' <span class="bar"><i style="left:' + pct + '%"></i></span></div>';
+      });
+      html += '</div>';
+      col.innerHTML = html;
+      wrap.appendChild(col);
+    });
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+</script>
+</body>
+</html>

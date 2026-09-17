@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Dark theme scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0f172a;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+*::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Prevent body bounce/overscroll on mobile */
+html, body {
+  overscroll-behavior: none;
+}

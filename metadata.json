@@ -1,0 +1,6 @@
+{
+  "name": "COROD Mobile Gripper Operator Simulator",
+  "description": "Industrial wellsite training simulator for Weatherford COROD Mobile Gripper units with realistic hydraulic physics, authentic console controls, emergency stop procedures, adjustable difficulty, and performance analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
