@@ -558,7 +558,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildFieldWelder(scene, WELL_X + MAST_OFFSET_X + 14, 12);
     // Guide-storage rack on the FAR side of the MG unit (−Z, opposite the
     // camera-facing worksite). Quarter size and rotated 90°.
-    buildGuideRack(scene, MG_UNIT_X, -6, Math.PI / 2, 0.5);
+    buildGuideRack(scene, MG_UNIT_X, -6, Math.PI / 2, 0.375);
     buildGripperInjector(scene);
     buildWellheadBopStack(scene);
     buildSafetyCones(scene);
@@ -2665,6 +2665,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // and closer to the well. Sized so the coil sits above its trailer deck.
     reelGroup.position.set(REEL_X, 3.8, REEL_Z);
     reelGroup.scale.setScalar(1.15);
+    // Mount the whole reel assembly with a slight forward/downward inclination
+    // toward the front base (about the depth axis), as on a real transport reel.
+    reelGroup.rotation.x = 0.1;
 
     // Simple flatbed trailer under the reel (per the field diagram).
     const trailerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.4, roughness: 0.6 });
@@ -2686,8 +2689,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       reelGroup.add(w);
     });
 
-    // Reel A-Frame Heavy Support Cradle
-    const aFrameMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5 });
+    // Reel A-Frame Heavy Support Cradle (weathered dark structural steel).
+    const aFrameMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.5 });
     const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3.6, 8), aFrameMat);
     leftLeg.rotation.z = 0.32;
     leftLeg.position.set(-0.55, -1.1, 1.5);
@@ -2714,7 +2717,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     axle.rotation.x = Math.PI / 2;
     spool.add(axle);
 
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.5, roughness: 0.3 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.6, roughness: 0.4 });
     const rimLeft = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.08, 12, 48), rimMat);
     rimLeft.position.z = 1.25;
     spool.add(rimLeft);
@@ -2735,56 +2738,55 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       spool.add(spokeR);
     }
 
-    // --- Continuous Coiled Rod Pack -----------------------------------------
-    // A big FAT doughnut of tightly-packed steel rod that FILLS the whole drum
-    // width and builds a LARGE outer diameter (bigger than the rims, so the coil
-    // is the dominant mass). Modelled as a solid core banded, over its ENTIRE
-    // outer surface, with many closely-spaced torus "wraps" (each wrap = one turn
-    // of rod), plus concentric spiral rings on both end faces. Slight per-wrap
-    // colour jitter makes individual turns read instead of a plain cylinder.
-    const HUB_R = 0.5;          // inner radius (down to the axle)
-    const OUTER_R = 2.5;        // outer radius — LARGER than the 2.3 rims (coil dominates)
-    const ROD_R = 0.07;         // thicker rod so each wrap is clearly visible
-    const WRAP_GAP = ROD_R * 1.75;
-    const halfWidth = 1.3;      // fills the full drum width
+    // --- Continuous Coiled Rod Pack (UNIFORM DOUGHNUT) ----------------------
+    // Per spec: a thick, uniform doughnut of densely packed continuous steel rod
+    // filling the full drum width with a large outer radius. Rather than sparse
+    // individual wraps (which read as a hollow cylinder), the coil body is ONE
+    // smooth solid doughnut (a big flat-profile torus) in weathered gunmetal, and
+    // fine wrap grooves are added only as a light surface texture so the mass
+    // reads as a true bulk string.
+    const HUB_R = 0.55;                 // inner radius of the coil ring
+    const OUTER_R = 2.55;               // large outer radius — dominant mass
+    const halfWidth = 1.35;             // fills the full drum width
+    const meanR = (HUB_R + OUTER_R) / 2;      // torus centre-line radius
+    const tubeR = (OUTER_R - HUB_R) / 2;      // torus tube radius (radial thickness)
 
-    const coilColors = [0x14110f, 0x1c1815, 0x0e0c0a, 0x211c18]; // subtle turn-to-turn jitter
-    const coilMats = coilColors.map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.45, roughness: 0.55 }));
-    const coilMatFor = (i: number) => coilMats[i % coilMats.length];
+    const coilBodyMat = new THREE.MeshStandardMaterial({ color: 0x141210, metalness: 0.55, roughness: 0.5 });
 
-    // Solid filler drum just inside the wrap radius so no gaps show through.
+    // Main uniform doughnut body (thick, smooth). Scaled along the axis (z) so it
+    // fills the full drum width as a rounded barrel rather than a thin ring.
+    const coilBody = new THREE.Mesh(new THREE.TorusGeometry(meanR, tubeR, 20, 64), coilBodyMat);
+    coilBody.rotation.y = Math.PI / 2;                 // axis → z (spool axis)
+    coilBody.scale.z = halfWidth / tubeR;              // stretch across drum width
+    coilBody.castShadow = true;
+    coilBody.receiveShadow = true;
+    spool.add(coilBody);
+
+    // Solid inner filler so the hub area reads as packed rod (no see-through).
     const filler = new THREE.Mesh(
-      new THREE.CylinderGeometry(OUTER_R - ROD_R * 1.2, OUTER_R - ROD_R * 1.2, halfWidth * 2, 56),
-      coilMats[0],
+      new THREE.CylinderGeometry(OUTER_R - 0.02, OUTER_R - 0.02, halfWidth * 2 - 0.05, 64),
+      coilBodyMat,
     );
     filler.rotation.x = Math.PI / 2;
     filler.castShadow = true;
-    filler.receiveShadow = true;
     spool.add(filler);
 
-    // OUTER SURFACE: one torus per turn, packed tightly across the full width.
-    const outerWraps = Math.floor((halfWidth * 2) / WRAP_GAP);
-    for (let w = 0; w <= outerWraps; w++) {
-      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R, ROD_R, 8, 56), coilMatFor(w));
-      torus.rotation.y = Math.PI / 2;
-      torus.position.z = -halfWidth + w * WRAP_GAP;
-      torus.castShadow = true;
-      spool.add(torus);
+    // Fine wrap GROOVES on the outer cylindrical surface (subtle darker bands)
+    // to suggest tightly wound turns without a busy silhouette.
+    const grooveMat = new THREE.MeshStandardMaterial({ color: 0x0b0a09, metalness: 0.5, roughness: 0.6 });
+    const grooveCount = 26;
+    for (let w = 0; w <= grooveCount; w++) {
+      const groove = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R + 0.005, 0.028, 6, 64), grooveMat);
+      groove.rotation.y = Math.PI / 2;
+      groove.position.z = -halfWidth + (w / grooveCount) * (halfWidth * 2);
+      spool.add(groove);
     }
-    // A SECOND, slightly smaller layer of wraps offset half a gap → denser, no
-    // straight-cylinder look between turns.
-    for (let w = 0; w < outerWraps; w++) {
-      const torus = new THREE.Mesh(new THREE.TorusGeometry(OUTER_R - ROD_R * 2.1, ROD_R, 8, 56), coilMatFor(w + 1));
-      torus.rotation.y = Math.PI / 2;
-      torus.position.z = -halfWidth + (w + 0.5) * WRAP_GAP;
-      spool.add(torus);
-    }
-    // END FACES: concentric spiral rings hub→outer on both sides.
-    const radialLayers = Math.floor((OUTER_R - HUB_R) / WRAP_GAP);
-    [-halfWidth - ROD_R * 0.3, halfWidth + ROD_R * 0.3].forEach((zFace) => {
-      for (let l = 0; l <= radialLayers; l++) {
-        const r = HUB_R + l * WRAP_GAP;
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, ROD_R, 6, 56), coilMatFor(l));
+    // Faint concentric spiral hint on the two end faces.
+    const faceGrooveCount = 12;
+    [-halfWidth - 0.01, halfWidth + 0.01].forEach((zFace) => {
+      for (let l = 1; l <= faceGrooveCount; l++) {
+        const r = HUB_R + (l / faceGrooveCount) * (OUTER_R - HUB_R);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.02, 5, 64), grooveMat);
         ring.rotation.y = Math.PI / 2;
         ring.position.z = zFace;
         spool.add(ring);
@@ -2831,6 +2833,52 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     crossBrace.position.set(0, -0.3, 0); // mid-height of A-frame in local space
     crossBrace.rotation.x = Math.PI / 2;
     reelGroup.add(crossBrace);
+
+    // --- AUXILIARY EQUIPMENT at the FRONT BASE (−X, tongue side) --------------
+    // Heavy red structural skid, deployment hydraulic cylinders, and twin fire
+    // extinguishers mounted securely to the frame (per spec / field photo).
+    const redSteel = new THREE.MeshStandardMaterial({ color: 0xb01818, metalness: 0.45, roughness: 0.5 });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.25 });
+
+    // Red skid frame across the front of the trailer base.
+    const skidCross = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 3.2), redSteel);
+    skidCross.position.set(-2.6, -1.95, 0); skidCross.castShadow = true; reelGroup.add(skidCross);
+    [-1.3, 1.3].forEach((sz) => {
+      const skidRail = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 0.35), redSteel);
+      skidRail.position.set(-1.7, -1.95, sz); skidRail.castShadow = true; reelGroup.add(skidRail);
+    });
+
+    // Deployment hydraulic cylinders (angled) pushing up toward the A-frame.
+    [-1.0, 1.0].forEach((hz) => {
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.7, 14), redSteel);
+      cyl.position.set(-1.9, -1.2, hz);
+      cyl.rotation.z = 0.5; // angled toward the reel
+      cyl.castShadow = true; reelGroup.add(cyl);
+      // Chrome piston rod extending out of the cylinder.
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 10), chromeMat);
+      rod.position.set(-1.45, -0.45, hz);
+      rod.rotation.z = 0.5; reelGroup.add(rod);
+      // Base pivot pin.
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 10), crossBraceMat);
+      pin.rotation.x = Math.PI / 2; pin.position.set(-2.4, -1.85, hz); reelGroup.add(pin);
+    });
+
+    // Twin fire extinguishers mounted upright on the front skid.
+    [-0.55, 0.55].forEach((ez) => {
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.9, 16), redSteel);
+      bottle.position.set(-2.95, -1.35, ez); bottle.castShadow = true; reelGroup.add(bottle);
+      // Rounded top
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), redSteel);
+      dome.position.set(-2.95, -0.9, ez); reelGroup.add(dome);
+      // Black neck + handle
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), crossBraceMat);
+      neck.position.set(-2.95, -0.72, ez); reelGroup.add(neck);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.08), crossBraceMat);
+      handle.position.set(-3.02, -0.62, ez); reelGroup.add(handle);
+      // Mounting bracket strap to the skid.
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 6, 16), crossBraceMat);
+      strap.rotation.y = Math.PI / 2; strap.position.set(-2.95, -1.35, ez); reelGroup.add(strap);
+    });
 
     scene.add(reelGroup);
   }
@@ -3090,10 +3138,15 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     });
 
     // --- Stack of curved black guide beams cradled in the rack ---
-    const NUM = 6;
+    // Each stacked beam is itself split into 11 bolt-together SECTIONS of varying
+    // length (matching the live over-well guide), with yellow wear-pad stripes.
+    const NUM = 6;                       // number of stacked guides in the rack
+    const SECTIONS = 11;                 // sections per guide
+    const rawLens = [1.0, 0.7, 1.3, 0.85, 1.15, 0.6, 1.25, 0.9, 1.1, 0.75, 1.2];
+    const totalLen = rawLens.reduce((a, b) => a + b, 0);
     for (let i = 0; i < NUM; i++) {
       const y = 1.1 + i * 0.5;             // stacked up the towers
-      const sag = 1.1 - i * 0.06;          // varying curvature
+      const sag = 1.1 - i * 0.06;          // varying curvature per guide
       const half = RACK_W / 2 - 0.4;
       const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, y, -half),
@@ -3102,15 +3155,24 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         new THREE.Vector3(0, y + sag * 0.8, half * 0.4),
         new THREE.Vector3(0, y, half),
       ]);
-      const beam = new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.17, 8, false), guideMat);
-      beam.castShadow = true; g.add(beam);
-      // Yellow wear-pad stripes along the beam.
-      [0.2, 0.42, 0.58, 0.8].forEach((u) => {
-        const p = curve.getPoint(u);
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.5), padMat);
-        pad.position.copy(p); pad.position.y += 0.16; g.add(pad);
-      });
-      // End mounting heads (the chunky numbered lugs).
+      // Build the 11 varying-length sections along this curve.
+      let u0 = 0;
+      for (let s = 0; s < SECTIONS; s++) {
+        const u1 = u0 + rawLens[s] / totalLen;
+        const pts: THREE.Vector3[] = [];
+        for (let k = 0; k <= 6; k++) pts.push(curve.getPoint(u0 + (u1 - u0) * (k / 6)));
+        const seg = new THREE.CatmullRomCurve3(pts);
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(seg, 8, 0.16, 8, false), guideMat);
+        tube.castShadow = true; g.add(tube);
+        // Bolt plate at the section start joint.
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.06), guideMat);
+        plate.position.copy(curve.getPoint(u0)); g.add(plate);
+        // One yellow wear-pad mid-section.
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.42), padMat);
+        pad.position.copy(seg.getPoint(0.5)); pad.position.y += 0.15; g.add(pad);
+        u0 = u1;
+      }
+      // Chunky end mounting heads (the numbered lugs) at both ends.
       [-half, half].forEach((pz) => {
         const lug = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.4), guideMat);
         lug.position.set(0, y, pz); g.add(lug);
