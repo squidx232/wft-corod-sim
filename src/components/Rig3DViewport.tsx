@@ -678,17 +678,21 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const gSpeed = rodS.rodSpeedFtPerMin;
         const gSpeedRatio = Math.min(1, Math.abs(gSpeed) / 85); // 0..1 (matches rod)
         const gPulse = 0.5 + 0.5 * Math.sin(time * 0.02);       // SAME pulse as the rod
+        // The guide flashes with the SAME colours, frequency & pulse as the rod,
+        // but at 70% LOWER intensity (× 0.3) so it reads as a subtler sympathetic
+        // twitch rather than matching the rod's brightness.
+        const GUIDE_FACTOR = 0.3;                 // 70% lower than the rod
         let emissiveHex = 0x000000;
         let targetIntensity = 0;
         if (rodS.rodGripSlipping || clampOn) {
           emissiveHex = 0xdc2626;                 // red alert — slip/clamp
-          targetIntensity = 0.6 * gPulse + 0.3;   // strong, always-on pulse
+          targetIntensity = (0.6 * gPulse + 0.3) * GUIDE_FACTOR; // rod freefall × 0.3
         } else if (gSpeed < -0.1) {
           emissiveHex = 0x3b82f6;                 // RIH (running in / down) → blue
-          targetIntensity = gSpeedRatio * 0.6 * gPulse;
+          targetIntensity = gSpeedRatio * 0.5 * gPulse * GUIDE_FACTOR; // rod RIH × 0.3
         } else if (gSpeed > 0.1) {
           emissiveHex = 0x22c55e;                 // POOH (pulling out / up) → green
-          targetIntensity = gSpeedRatio * 0.6 * gPulse;
+          targetIntensity = gSpeedRatio * 0.5 * gPulse * GUIDE_FACTOR; // rod POOH × 0.3
         }
         for (const gm of injectorGuideMeshesRef.current) {
           const gmat = gm.material as THREE.MeshStandardMaterial;
@@ -719,10 +723,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const rodMat = rodStrandRef.current.material as THREE.MeshStandardMaterial;
         rodMat.map!.offset.y = rodTextureOffset.current;
 
-        // Dynamic Catenary Tension straightens under heavy weight
-        const stringWeight = liveState.rod.totalStringWeightLbs;
-        const sagFactor = Math.max(0.7, 1.0 - (stringWeight / 25000) * 0.3);
-        rodStrandRef.current.scale.set(1, sagFactor, 1);
+        // NOTE: previously the rod mesh was vertically SCALED by a weight-based
+        // "sag factor" (scale.set(1, sagFactor, 1)). Because the arched rod tube
+        // is built in world space about y=0, scaling Y squashed the whole arch
+        // downward as depth/string-weight grew — which pulled the rod visibly OUT
+        // of the guide at higher depths. The rod already follows the exact guide
+        // curve, so we keep it locked at scale 1 (no sag) so it always stays
+        // threaded inside the guide regardless of depth.
+        rodStrandRef.current.scale.set(1, 1, 1);
 
         // Directional emissive pulse: green when POOH (up), blue when RIH (down),
         // red when freefalling; intensity scales with speed.
