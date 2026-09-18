@@ -3851,12 +3851,18 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       const rodPoints: THREE.Vector3[] = [];
       // Emerge from the coil surface on the +X (well-facing) side, at coil centre
       // height. Tuck slightly INSIDE the surface (r − 0.1) so it reads as connected.
-      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z)); // emerge from coil surface
-      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.2, REEL_CENTER_Y + 0.05, REEL_Z));          // just off the coil surface
-      // Curve across toward the FRONT-LEFT-corner guide head, blending both X and Z
-      // so the rod smoothly reaches the relocated arm (no abrupt sideways jump).
-      rodPoints.push(new THREE.Vector3((REEL_X + r + 0.2 + GUIDE_HEAD.x) / 2, (REEL_CENTER_Y + GUIDE_HEAD.y) / 2, (REEL_Z + GUIDE_HEAD.z) / 2));
-      rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
+      // The rod must CURVE AROUND the OUTSIDE of the reel rims — never cut straight
+      // through them. The flanges sit at z = REEL_Z ± 1.25 with rim radius ≈2.3
+      // (world +X rim edge ≈ REEL_X+2.3). So the rod first swings OUT past the rim
+      // radius in +X (clearing the flange circle), then curves FORWARD (+Z) around
+      // the front rim edge, and only then comes IN to the front-corner guide head.
+      const RIM_CLEAR_X = REEL_X + COIL_MAX_OUTER_R + 0.9;  // out past the rim (world ≈ 7.95)
+      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z));   // emerge from coil surface
+      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.2, REEL_CENTER_Y + 0.05, REEL_Z));            // just off the coil surface
+      rodPoints.push(new THREE.Vector3(RIM_CLEAR_X, REEL_CENTER_Y, REEL_Z + 0.4));                  // swing OUT past the rim radius
+      rodPoints.push(new THREE.Vector3(RIM_CLEAR_X, GUIDE_HEAD.y, REEL_Z + 1.8));                   // curve FORWARD around the front rim
+      rodPoints.push(new THREE.Vector3((RIM_CLEAR_X + GUIDE_HEAD.x) / 2, GUIDE_HEAD.y, GUIDE_HEAD.z)); // come IN toward the head, clear of the rim
+      rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z));                  // through the guide head
       for (let i = 0; i <= ARC_SAMPLES; i++) {
         rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
       }
