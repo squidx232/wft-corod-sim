@@ -67,7 +67,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-6 rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-md text-slate-100 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col gap-6 rounded-xl bg-slate-900 border border-slate-800 p-6 shadow-md text-slate-100 max-w-7xl mx-auto w-full">
       {/* Sub Navigation */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 gap-3">
         <div className="flex items-center gap-3">
@@ -443,7 +443,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
       {activeSubTab === 'certificate' && (
         <div className="p-8 rounded-xl bg-slate-950 border-2 border-amber-600 text-center max-w-2xl mx-auto shadow-xl space-y-5">
           <div className="flex justify-center">
-            <div className="h-16 w-16 rounded-2xl bg-red-600 border-2 border-white flex items-center justify-center font-black text-3xl text-white shadow-xl">
+            <div className="h-16 w-16 rounded-xl bg-red-600 border-2 border-white flex items-center justify-center font-black text-3xl text-white shadow-xl">
               W
             </div>
           </div>

@@ -444,7 +444,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       {/* Each area has a maximize button to expand it to the full cab.           */}
       {layoutMode === 'cockpit' && (
         <div
-          className="relative w-full rounded-2xl overflow-hidden border-2 border-slate-950 shadow-2xl bg-black flex flex-row gap-1.5 p-1.5"
+          className="relative w-full rounded-xl overflow-hidden border-2 border-slate-950 shadow-2xl bg-black flex flex-row gap-1.5 p-1.5"
           style={{
             height: 'calc(100vh - 190px)',
             minHeight: '500px',

@@ -1493,7 +1493,7 @@ export default function App() {
         {/* TAB 3: EMERGENCY RESPONSE DRILLS */}
         {state.activeTab === 'drills' && (
           <div className="space-y-6">
-            <div className="p-6 rounded-2xl bg-slate-900 border-2 border-slate-700 shadow-2xl space-y-4">
+            <div className="p-6 rounded-xl bg-slate-900 border-2 border-slate-700 shadow-2xl space-y-4">
               <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
                 <div className="p-2 rounded-xl bg-red-600 text-white">
                   <ShieldAlert className="w-6 h-6" />

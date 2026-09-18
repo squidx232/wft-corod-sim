@@ -203,7 +203,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-600/50 shadow-2xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-600/50 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-700 bg-gradient-to-r from-amber-950/60 to-slate-900 sticky top-0 z-10">
           <div className="flex items-center gap-3">

@@ -66,7 +66,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
   }, [state.activeScenarioId, isReset]);
 
   return (
-    <div className="flex flex-col gap-6 rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-md text-slate-100 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col gap-6 rounded-xl bg-slate-900 border border-slate-800 p-6 shadow-md text-slate-100 max-w-7xl mx-auto w-full">
       {/* Top Scenario Bar */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 gap-3">
         <div className="flex items-center gap-3">

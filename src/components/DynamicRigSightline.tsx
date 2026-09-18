@@ -66,7 +66,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   const reelRpm = Math.abs(Math.round((rod.rodSpeedFtPerMin / 15) * 10) / 10);
 
   return (
-    <div className="rounded-2xl bg-slate-950 border border-slate-800 shadow-md relative overflow-hidden flex flex-col">
+    <div className="rounded-xl bg-slate-950 border border-slate-800 shadow-md relative overflow-hidden flex flex-col">
       {/* 1. Live Status & Depth Selector Header Bar (trip-mode buttons removed) */}
       <div className="p-3 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Live Vector Indicator */}
@@ -278,7 +278,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             onTriggerEmergencyStop={onTriggerEmergencyStop}
             onResetEmergencyStop={onResetEmergencyStop}
           />
-          <div className="h-[380px] sm:h-[420px] md:h-[460px] rounded-2xl overflow-hidden border border-slate-800">
+          <div className="h-[380px] sm:h-[420px] md:h-[460px] rounded-xl overflow-hidden border border-slate-800">
             <RealtimeRodAnimationLayer
               state={state}
               viewMode="full"

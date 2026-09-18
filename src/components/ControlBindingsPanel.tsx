@@ -100,7 +100,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="w-full max-w-3xl max-h-[88vh] flex flex-col bg-neutral-950 border-2 border-neutral-700 rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-3xl max-h-[88vh] flex flex-col bg-neutral-950 border-2 border-neutral-700 rounded-xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

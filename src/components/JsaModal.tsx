@@ -29,7 +29,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-slate-900 border-2 border-slate-700 shadow-2xl p-6 text-slate-100 max-h-[90vh] flex flex-col justify-between">
+      <div className="relative w-full max-w-3xl rounded-xl bg-slate-900 border-2 border-slate-700 shadow-2xl p-6 text-slate-100 max-h-[90vh] flex flex-col justify-between">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
