@@ -107,6 +107,29 @@ body {
   color: var(--color-ink);
 }
 
+/* =====================================================================
+   RTL / ARABIC SUPPORT
+   When <html dir="rtl"> (Arabic selected), use an Arabic-friendly font
+   and default right alignment for prose. Layout mirroring is handled by
+   the browser's native `dir` inheritance on flex/grid + logical spacing.
+   The 3D viewport and physical console keep LTR (see [dir] override).
+   ===================================================================== */
+html[dir='rtl'] body {
+  font-family: 'Segoe UI', 'Tahoma', 'Cairo', 'Noto Naskh Arabic', system-ui, sans-serif;
+}
+
+/* Numeric readouts and hardware stay LTR even inside RTL chrome. */
+.stat-value,
+[data-ltr='true'] {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Keep the 3D viewport / physical console hardware laid out LTR. */
+html[dir='rtl'] [data-hardware='true'] {
+  direction: ltr;
+}
+
 /* Light theme scrollbar styling */
 * {
   scrollbar-width: thin;

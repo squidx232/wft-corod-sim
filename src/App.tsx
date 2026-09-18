@@ -25,6 +25,7 @@ import { EmergencyResponseHud } from './components/EmergencyResponseHud';
 import { Rig3DViewport } from './components/Rig3DViewport';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
 import { Button, Badge, SegmentedControl, cx } from './components/ui';
+import { useT } from './i18n';
 
 import {
   Gauge,
@@ -38,6 +39,7 @@ import {
   HelpCircle,
   Boxes,
   Power,
+  Globe,
 } from 'lucide-react';
 
 const INITIAL_STATE: SimulatorState = {
@@ -268,6 +270,7 @@ function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' {
 }
 
 export default function App() {
+  const { t, lang, toggle: toggleLang } = useT();
   const [state, setState] = useState<SimulatorState>(INITIAL_STATE);
   const viewMode = useRef(getViewMode()).current;
   const isSecondary = viewMode !== 'full';
@@ -1156,12 +1159,12 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-semibold tracking-tight text-slate-800">
-                  COROD® Mobile Gripper™ Simulator
+                  {t('header.title')}
                 </h1>
-                <Badge tone="neutral">Rev 25</Badge>
+                <Badge tone="neutral">{t('header.rev')}</Badge>
               </div>
               <p className="text-2xs text-slate-500">
-                Weatherford Continuous Sucker Rod &amp; Wellsite Operations Trainer
+                {t('header.subtitle')}
               </p>
             </div>
           </div>
@@ -1170,7 +1173,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Difficulty Selector */}
             <SegmentedControl
-              label="Level"
+              label={t('header.level')}
               value={state.difficulty}
               onChange={(lvl) => {
                 soundManager.playMetalTap();
@@ -1178,9 +1181,20 @@ export default function App() {
               }}
               segments={(['trainee', 'operator', 'specialist'] as DifficultyLevel[]).map((lvl) => ({
                 id: lvl,
-                label: <span className="capitalize">{lvl}</span>,
+                label: <span>{t(`header.level.${lvl}`)}</span>,
               }))}
             />
+
+            {/* Language Switcher (Earth/Globe) — EN ⇄ Egyptian Arabic */}
+            <button
+              onClick={() => { soundManager.playMetalTap(); toggleLang(); }}
+              className="inline-flex items-center gap-1.5 p-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors font-semibold text-2xs"
+              title={t('lang.switch')}
+              aria-label={t('lang.switch')}
+            >
+              <Globe className="w-4 h-4 text-blue-700" />
+              <span>{lang === 'en' ? 'العربية' : 'English'}</span>
+            </button>
 
             {/* Sound Toggle */}
             <button
@@ -1191,8 +1205,8 @@ export default function App() {
                   ? 'bg-green-700 border-green-300 text-white'
                   : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50',
               )}
-              title="Toggle audio feedback"
-              aria-label={state.soundEnabled ? 'Mute audio' : 'Enable audio'}
+              title={state.soundEnabled ? t('header.sound.on') : t('header.sound.off')}
+              aria-label={state.soundEnabled ? t('header.sound.on') : t('header.sound.off')}
             >
               {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
@@ -1202,7 +1216,7 @@ export default function App() {
               icon={<FileText className="w-3.5 h-3.5 text-amber-600" />}
               onClick={() => setShowJsaModal(true)}
             >
-              Site JSA (4.12)
+              {t('header.jsa')}
             </Button>
 
             <Button
@@ -1210,16 +1224,16 @@ export default function App() {
               icon={<BookOpen className="w-3.5 h-3.5 text-blue-700" />}
               onClick={() => setShowManualModal(true)}
             >
-              Operations Manual
+              {t('header.manual')}
             </Button>
 
             <Button
               variant="ghost"
               icon={<HelpCircle className="w-3.5 h-3.5 text-blue-700" />}
               onClick={() => setShowGlossary(true)}
-              title="Look up any term in plain English"
+              title={t('header.glossary')}
             >
-              What do these mean?
+              {t('header.glossary')}
             </Button>
           </div>
         </div>
@@ -1227,10 +1241,10 @@ export default function App() {
         {/* Navigation Tabs */}
         <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-300">
           {[
-            { id: 'console', label: '3D View', icon: Boxes },
-            { id: 'scenarios', label: 'Step-by-Step Procedures', icon: BookOpen },
-            { id: 'drills', label: 'Emergency Practice', icon: ShieldAlert },
-            { id: 'logbook', label: 'Log & Scores', icon: Activity },
+            { id: 'console', label: t('tabs.3dview'), icon: Boxes },
+            { id: 'scenarios', label: t('tabs.procedures'), icon: BookOpen },
+            { id: 'drills', label: t('tabs.emergency'), icon: ShieldAlert },
+            { id: 'logbook', label: t('tabs.logbook'), icon: Activity },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = state.activeTab === tab.id;
