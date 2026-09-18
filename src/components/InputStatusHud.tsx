@@ -73,7 +73,7 @@ export const InputStatusHud: React.FC<Props> = ({ input, onOpenPanel }) => {
         type="button"
         onClick={onOpenPanel}
         title="Configure control bindings"
-        className="flex items-center gap-1 text-[11px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 border border-slate-600 hover:bg-slate-700"
+        className="flex items-center gap-1 text-[11px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-400 hover:bg-slate-300"
       >
         <Settings2 className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Bindings</span>

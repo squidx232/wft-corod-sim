@@ -315,10 +315,10 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
           />
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-100">3D Operator Station</span>
+              <span className="text-sm font-semibold ink">3D Operator Station</span>
               <Badge tone="brand" className="hidden sm:inline-flex">COROD™</Badge>
             </div>
-            <p className="text-2xs text-slate-400">
+            <p className="text-2xs ink-muted">
               {hydraulics.engineRunning ? 'Engine running' : 'Engine off'} · Depth{' '}
               {Math.round(rod.currentDepthFt).toLocaleString()} ft
             </p>
@@ -382,7 +382,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       {/* ========================================================================= */}
       {/* ZERO-SCROLL QUICK TELEMETRY & JOYSTICK DOCK (Always visible at top)      */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
+      <div className="surface border hairline rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
         {/* Real-time Telemetry Badges */}
         <div className="flex flex-wrap items-center gap-2">
           <StatBadge label="Depth" tone="success" value={`${Math.round(rod.currentDepthFt)} FT`} />
@@ -417,11 +417,11 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             value={`${Math.round(hydraulics.chainTensionPressure)} PSI`}
           />
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">CLAMP (V):</span>
+          <div className="px-2.5 py-1 rounded-lg surface-2 border hairline flex items-center gap-1.5">
+            <span className="eyebrow">CLAMP (V):</span>
             <span
               className={`font-bold ${
-                hydraulics.safetyClampLever === 'ON' ? 'text-emerald-400' : 'text-slate-400'
+                hydraulics.safetyClampLever === 'ON' ? 'text-green-700' : 'text-slate-500'
               }`}
             >
               {hydraulics.safetyClampLever}

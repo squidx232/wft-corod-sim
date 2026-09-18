@@ -10,25 +10,46 @@
    Radii:      three intentional corner sizes.
    ===================================================================== */
 @theme {
-  /* --- Type scale (label ramp + body) --- */
-  --text-2xs: 0.6875rem;   /* 11px — smallest legible label */
-  --text-2xs--line-height: 1rem;
-  --text-eyebrow: 0.625rem; /* 10px — tiny uppercase eyebrow labels only */
-  --text-eyebrow--line-height: 0.875rem;
+  /* --- Type scale (label ramp + body). Moderate size bump for daylight/glove
+         readability on a field trainer. --- */
+  --text-2xs: 0.75rem;     /* 12px — smallest legible label (was 11px) */
+  --text-2xs--line-height: 1.1rem;
+  --text-eyebrow: 0.6875rem; /* 11px — tiny uppercase eyebrow labels (was 10px) */
+  --text-eyebrow--line-height: 0.95rem;
 
-  /* --- Brand + surfaces --- */
-  --color-brand: #d97706;        /* amber-600 — the single primary action color */
-  --color-brand-strong: #b45309; /* amber-700 */
-  --color-surface: #0f172a;      /* slate-900 — panels */
-  --color-surface-2: #020617;    /* slate-950 — insets/wells */
-  --color-line: #1e293b;         /* slate-800 — borders */
-  --color-line-soft: #334155;    /* slate-700 */
+  /* ===================================================================
+     RUGGED INDUSTRIAL — LIGHT THEME
+     A warm "workshop / field-manual / equipment-placard" palette. High
+     daylight readability, dark ink on steel-gray surfaces, Weatherford
+     red + safety amber accents. (Hardware 3D console keeps its own dark
+     look — these tokens drive the surrounding CHROME only.)
+     =================================================================== */
 
-  /* --- Semantic status roles --- */
-  --color-success: #10b981;  /* emerald-500 */
-  --color-danger: #ef4444;   /* red-500 */
-  --color-info: #3b82f6;     /* blue-500 */
-  --color-warning: #f59e0b;  /* amber-500 */
+  /* Brand + safety accents */
+  --color-brand: #b91c1c;          /* Weatherford red-700 — primary action */
+  --color-brand-strong: #991b1b;   /* red-800 */
+  --color-safety: #f59e0b;         /* amber-500 — hazard/attention accent */
+  --color-safety-strong: #d97706;  /* amber-600 */
+
+  /* Chrome surfaces (light, warm steel) */
+  --color-app-bg: #e2e5e9;         /* page background — light steel */
+  --color-surface: #f4f5f7;        /* panels — near-white steel */
+  --color-surface-2: #e9ebef;      /* insets/wells */
+  --color-surface-3: #dcdfe4;      /* deeper wells / table stripes */
+  --color-header: #f8f9fb;         /* top bar */
+  --color-line: #c3c8d0;           /* borders — steel hairline */
+  --color-line-soft: #d3d7de;      /* softer border */
+
+  /* Ink (text) */
+  --color-ink: #1f2733;            /* primary text — near-black slate */
+  --color-ink-2: #43506a;          /* secondary text */
+  --color-ink-muted: #6b7688;      /* muted/labels */
+
+  /* --- Semantic status roles (slightly deepened for light bg contrast) --- */
+  --color-success: #15803d;  /* green-700 */
+  --color-danger: #b91c1c;   /* red-700 */
+  --color-info: #1d4ed8;     /* blue-700 */
+  --color-warning: #b45309;  /* amber-700 */
 }
 
 /* =====================================================================
@@ -37,15 +58,25 @@
    components instead of each one re-inventing spacing/type/color.
    ===================================================================== */
 @layer components {
-  /* Tiny uppercase section/field label. Replaces the ad-hoc
-     text-[10px] font-mono uppercase tracking-wider text-slate-400 combo. */
+  /* --- Semantic SURFACE utilities (light industrial chrome) --- */
+  .surface   { background-color: var(--color-surface); }
+  .surface-2 { background-color: var(--color-surface-2); }
+  .surface-3 { background-color: var(--color-surface-3); }
+  .hairline  { border-color: var(--color-line); }
+
+  /* --- Semantic INK (text) utilities --- */
+  .ink        { color: var(--color-ink); }
+  .ink-2      { color: var(--color-ink-2); }
+  .ink-muted  { color: var(--color-ink-muted); }
+
+  /* Tiny uppercase section/field label. */
   .eyebrow {
     font-size: var(--text-eyebrow);
     line-height: var(--text-eyebrow--line-height);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-weight: 600;
-    color: theme(--color-slate-400);
+    font-weight: 700;
+    color: var(--color-ink-muted);
   }
 
   /* Numeric readout — the ONLY place mono is appropriate. */
@@ -55,7 +86,7 @@
     font-weight: 700;
   }
 
-  /* Standard surface card. */
+  /* Standard surface card — steel panel with hairline border. */
   .ui-card {
     background-color: var(--color-surface);
     border: 1px solid var(--color-line);
@@ -70,24 +101,30 @@
   }
 }
 
-/* Dark theme scrollbar styling */
+/* Light industrial base: warm steel page + dark ink default text. */
+body {
+  background-color: var(--color-app-bg);
+  color: var(--color-ink);
+}
+
+/* Light theme scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 #0f172a;
+  scrollbar-color: #b0b6c0 #e2e5e9;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #e2e5e9;
 }
 *::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #b0b6c0;
   border-radius: 4px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #98a0ac;
 }
 
 /* Prevent body bounce/overscroll on mobile */

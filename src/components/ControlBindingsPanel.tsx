@@ -59,7 +59,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
           <div className="text-[12px] text-neutral-200 font-medium truncate">
             {c.label}
             {c.axisGroup && (
-              <span className={`ml-1.5 text-[8px] font-mono px-1 py-0.5 rounded ${c.axisGroup === 'movement' ? 'bg-orange-950 text-orange-300' : 'bg-cyan-950 text-cyan-300'}`}>
+              <span className={`ml-1.5 text-[8px] font-mono px-1 py-0.5 rounded ${c.axisGroup === 'movement' ? 'bg-orange-950 text-orange-700' : 'bg-cyan-950 text-cyan-700'}`}>
                 {c.axisGroup === 'movement' ? 'MOVE-AXIS' : 'VALUE-AXIS'}
               </span>
             )}
@@ -73,14 +73,14 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
               // shared value keys) after selecting. No per-control +/- to avoid
               // multiple knobs responding at once.
               <>
-                <span className="text-[9px] text-amber-400 font-mono" title="Tap this to make this knob the active target for the shared RT/LT (+/−)">SELECT</span>
+                <span className="text-[9px] text-amber-700 font-mono" title="Tap this to make this knob the active target for the shared RT/LT (+/−)">SELECT</span>
                 <Slot controlId={c.id} slot="selectorKey" kind="key" value={keyLabel(b.selectorKey)} />
                 <Slot controlId={c.id} slot="selectorButton" kind="pad" value={padButtonLabel(b.selectorButton)} />
                 <span className="text-[9px] text-neutral-500 ml-1 italic">then RT/LT</span>
               </>
             ) : (
               // Special analog (e.g. gripper drive) — driven directly, info only.
-              <span className="text-[10px] text-cyan-300 font-mono italic px-2">Right stick ↑POOH / ↓RIH</span>
+              <span className="text-[10px] text-cyan-700 font-mono italic px-2">Right stick ↑POOH / ↓RIH</span>
             )
           ) : (
             <>
@@ -106,11 +106,11 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900">
           <div className="flex items-center gap-2">
-            <Gamepad2 className="w-5 h-5 text-emerald-400" />
+            <Gamepad2 className="w-5 h-5 text-emerald-700" />
             <h2 className="text-sm font-black uppercase tracking-widest text-neutral-100">Control Bindings</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${status.gamepadConnected ? 'bg-emerald-950 text-emerald-300 border-emerald-700' : 'bg-neutral-900 text-neutral-500 border-neutral-700'}`}>
+            <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${status.gamepadConnected ? 'bg-emerald-950 text-emerald-700 border-emerald-700' : 'bg-neutral-900 text-neutral-500 border-neutral-700'}`}>
               {status.gamepadConnected ? '🎮 Connected' : '🎮 No gamepad'}
             </span>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-300"><X className="w-5 h-5" /></button>
@@ -134,7 +134,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
           </div>
           <button
             onClick={resetAll}
-            className="flex items-center gap-1.5 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-md bg-red-950 text-red-300 border border-red-800 hover:bg-red-900"
+            className="flex items-center gap-1.5 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-md bg-red-950 text-red-700 border border-red-800 hover:bg-red-900"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Reset defaults
           </button>
@@ -142,21 +142,21 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
 
         {/* Legend */}
         <div className="flex items-center gap-3 px-4 py-1.5 text-[10px] text-neutral-500 border-b border-neutral-800/60 flex-wrap">
-          <span className="flex items-center gap-1"><Keyboard className="w-3 h-3 text-sky-400" /> Key</span>
-          <span className="flex items-center gap-1"><Gamepad2 className="w-3 h-3 text-emerald-400" /> Pad button</span>
-          <span className="flex items-center gap-1"><span className="text-purple-400">◑</span> Analog axis</span>
+          <span className="flex items-center gap-1"><Keyboard className="w-3 h-3 text-sky-700" /> Key</span>
+          <span className="flex items-center gap-1"><Gamepad2 className="w-3 h-3 text-emerald-700" /> Pad button</span>
+          <span className="flex items-center gap-1"><span className="text-purple-700">◑</span> Analog axis</span>
           <span className="ml-auto italic">Click a slot to bind • Right-click to clear</span>
         </div>
 
         {/* Shared-axis selector scheme explainer + config */}
         <div className="px-4 py-2 border-b border-neutral-800/60 bg-neutral-900/40">
           <div className="text-[11px] text-neutral-300 mb-1.5">
-            <b className="text-amber-300">Selector + Shared Axis:</b> Tap a control's <span className="text-amber-400 font-mono">SEL</span> key/button to make it the
-            active target, then use a shared stick to change it. <span className="text-orange-300">MOVE-AXIS</span> drives movement controls; <span className="text-cyan-300">VALUE-AXIS</span> drives values (up = increase/ON, down = decrease/OFF).
+            <b className="text-amber-700">Selector + Shared Axis:</b> Tap a control's <span className="text-amber-700 font-mono">SEL</span> key/button to make it the
+            active target, then use a shared stick to change it. <span className="text-orange-700">MOVE-AXIS</span> drives movement controls; <span className="text-cyan-700">VALUE-AXIS</span> drives values (up = increase/ON, down = decrease/OFF).
           </div>
           <div className="flex items-center gap-3 flex-wrap text-[10px] font-mono">
             <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-900/50 rounded-md px-2 py-1 flex-wrap">
-              <span className="text-orange-300 font-bold">MOVE</span>
+              <span className="text-orange-700 font-bold">MOVE</span>
               <span className="text-neutral-500">axis</span>
               <button onClick={() => startCapture('__sharedMove', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-200 border border-purple-800">
                 {isCapturing('__sharedMove', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.movementAxis)}
@@ -175,7 +175,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
               <span className="text-neutral-400 ml-1">▶ <span className="text-orange-200">{activeMovementTarget ? (CONTROLS.find(c=>c.id===activeMovementTarget)?.label ?? activeMovementTarget) : '—'}</span></span>
             </div>
             <div className="flex items-center gap-1.5 bg-cyan-950/40 border border-cyan-900/50 rounded-md px-2 py-1 flex-wrap">
-              <span className="text-cyan-300 font-bold">VALUE</span>
+              <span className="text-cyan-700 font-bold">VALUE</span>
               <span className="text-neutral-500">axis</span>
               <button onClick={() => startCapture('__sharedValue', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-200 border border-purple-800">
                 {isCapturing('__sharedValue', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.valueAxis)}
@@ -203,7 +203,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
             if (!rows.length) return null;
             return (
               <div key={cat} className="mb-3">
-                <div className="sticky top-0 bg-neutral-950 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-400/80 border-b border-emerald-900/40 z-10">
+                <div className="sticky top-0 bg-neutral-950 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-700/80 border-b border-emerald-900/40 z-10">
                   {cat}
                 </div>
                 {rows.map((c) => <Row key={c.id} c={c} />)}

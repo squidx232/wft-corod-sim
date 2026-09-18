@@ -111,7 +111,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
       )}
 
       <div
-        className={`rounded-xl border-2 ${severityColor} bg-slate-950 shadow-xl overflow-hidden`}
+        className={`rounded-xl border-2 ${severityColor} bg-slate-100 shadow-xl overflow-hidden`}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-3 py-2 bg-black/40 border-b border-white/10">
@@ -125,7 +125,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
               <div className="text-[13px] font-semibold text-white truncate">
                 {scenario.title}
               </div>
-              <div className="text-eyebrow text-slate-400 font-mono truncate">
+              <div className="text-eyebrow text-slate-500 font-mono truncate">
                 {scenario.manualSection}
               </div>
             </div>
@@ -134,7 +134,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             <button
               type="button"
               onClick={() => setCollapsed((c) => !c)}
-              className="p-1 rounded hover:bg-white/10 text-slate-300"
+              className="p-1 rounded hover:bg-white/10 text-slate-600"
               title={collapsed ? 'Expand' : 'Collapse'}
             >
               {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -142,7 +142,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="p-1 rounded hover:bg-white/10 text-slate-300"
+              className="p-1 rounded hover:bg-white/10 text-slate-600"
               title="Abort drill"
             >
               <X className="w-4 h-4" />
@@ -153,7 +153,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
         {!collapsed && (
           <div className="p-3">
             {/* Progress */}
-            <div className="flex items-center justify-between text-eyebrow font-mono text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-eyebrow font-mono text-slate-500 mb-1">
               <span>
                 STEP {stepIndex + 1} / {total}
               </span>
@@ -168,7 +168,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                 </span>
               )}
             </div>
-            <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden mb-3">
+            <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mb-3">
               <div
                 className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
                 style={{ width: `${(stepIndex / total) * 100}%` }}
@@ -179,7 +179,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             {step && (
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 mb-3">
                 <div className="text-[13px] font-semibold text-white mb-1">{step.title}</div>
-                <p className="text-2xs text-slate-300 leading-snug">{step.instruction}</p>
+                <p className="text-2xs text-slate-600 leading-snug">{step.instruction}</p>
                 <div className="text-eyebrow text-amber-500/70 font-mono mt-1.5">{step.manualRef}</div>
 
                 {/* Toggle-able "Show me" control hint */}
@@ -191,7 +191,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-2xs font-semibold border transition-all ${
                         showHint
                           ? 'bg-cyan-600 border-cyan-400 text-white'
-                          : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+                          : 'bg-slate-200 border-slate-400 text-slate-600 hover:bg-slate-300'
                       }`}
                     >
                       {showHint ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}

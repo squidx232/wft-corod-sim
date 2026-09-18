@@ -60,18 +60,18 @@ export const GlossaryModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[88vh] flex flex-col bg-slate-900 border-2 border-slate-700 rounded-xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
+      <div className="w-full max-w-2xl max-h-[88vh] flex flex-col bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-300 bg-slate-100">
           <div className="flex items-center gap-2">
-            <BookMarked className="w-5 h-5 text-blue-400" />
-            <h2 className="text-sm font-semibold text-slate-100">Plain-English Glossary</h2>
+            <BookMarked className="w-5 h-5 text-blue-700" />
+            <h2 className="text-sm font-semibold text-slate-800">Plain-English Glossary</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600"><X className="w-5 h-5" /></button>
         </div>
-        <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-1 bg-slate-800 rounded-md px-2 py-1">
+        <div className="px-4 py-2 border-b border-slate-300 bg-slate-100/60">
+          <div className="flex items-center gap-1 bg-slate-200 rounded-md px-2 py-1">
             <Search className="w-3.5 h-3.5 text-slate-500" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a term (e.g. BOP, squeeze, PTO)…" className="bg-transparent outline-none text-2xs text-slate-200 w-full" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a term (e.g. BOP, squeeze, PTO)…" className="bg-transparent outline-none text-2xs text-slate-700 w-full" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-2">
@@ -80,12 +80,12 @@ export const GlossaryModal: React.FC<Props> = ({ onClose }) => {
             if (!rows.length) return null;
             return (
               <div key={cat} className="mb-3">
-                <div className="sticky top-0 bg-slate-900 py-1 text-eyebrow font-semibold text-blue-400/80 border-b border-slate-700 z-10">{cat}</div>
+                <div className="sticky top-0 bg-white py-1 text-eyebrow font-semibold text-blue-700/80 border-b border-slate-300 z-10">{cat}</div>
                 {rows.map((t) => (
-                  <div key={t.term} className="py-2 border-b border-slate-800/60">
-                    <div className="text-2xs font-semibold text-slate-100">{t.term}</div>
-                    <div className="text-2xs text-emerald-300">{t.short}</div>
-                    <div className="text-2xs text-slate-400 mt-0.5">{t.detail}</div>
+                  <div key={t.term} className="py-2 border-b border-slate-300/60">
+                    <div className="text-2xs font-semibold text-slate-800">{t.term}</div>
+                    <div className="text-2xs text-emerald-700">{t.short}</div>
+                    <div className="text-2xs text-slate-500 mt-0.5">{t.detail}</div>
                   </div>
                 ))}
               </div>

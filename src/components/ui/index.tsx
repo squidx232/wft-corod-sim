@@ -22,11 +22,11 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   flush?: boolean;
 }
 
-/** Standard surface card: slate-900 bg, slate-800 border, xl radius. */
+/** Standard steel panel: light surface, hairline border, xl radius. */
 export const Card: React.FC<CardProps> = ({ flush, className, children, ...rest }) => (
   <div
     className={cx(
-      'bg-slate-900 border border-slate-800 rounded-xl shadow-sm',
+      'surface border hairline rounded-xl shadow-sm',
       !flush && 'p-4',
       className,
     )}
@@ -55,10 +55,10 @@ export const PanelHeader: React.FC<PanelHeaderProps> = ({
 }) => (
   <div className={cx('flex flex-wrap items-center justify-between gap-3', className)}>
     <div className="flex items-center gap-3 min-w-0">
-      {icon && <div className="shrink-0 text-slate-400">{icon}</div>}
+      {icon && <div className="shrink-0 ink-muted">{icon}</div>}
       <div className="min-w-0">
-        <div className="text-sm font-semibold text-slate-100 truncate">{title}</div>
-        {subtitle && <div className="text-2xs text-slate-400 truncate">{subtitle}</div>}
+        <div className="text-sm font-semibold ink truncate">{title}</div>
+        {subtitle && <div className="text-2xs ink-muted truncate">{subtitle}</div>}
       </div>
     </div>
     {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -95,19 +95,22 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-1.5 font-semibold rounded-lg border transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500';
+  'inline-flex items-center justify-center gap-1.5 font-semibold rounded-lg border transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-amber-600 hover:bg-amber-500 border-amber-500 text-white',
-  secondary: 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-100',
-  ghost: 'bg-transparent hover:bg-slate-800 border-transparent text-slate-300 hover:text-white',
-  danger: 'bg-red-600 hover:bg-red-500 border-red-500 text-white',
-  success: 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500 text-white',
+  // Weatherford red primary action.
+  primary: 'bg-red-700 hover:bg-red-800 border-red-800 text-white shadow-sm',
+  // Steel secondary button on light chrome.
+  secondary: 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 shadow-sm',
+  // Quiet ghost for header/reference actions.
+  ghost: 'bg-transparent hover:bg-slate-200/70 border-transparent text-slate-700 hover:text-slate-900',
+  danger: 'bg-red-700 hover:bg-red-800 border-red-800 text-white shadow-sm',
+  success: 'bg-green-700 hover:bg-green-800 border-green-800 text-white shadow-sm',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'text-2xs px-2.5 py-1.5',
-  md: 'text-sm px-3.5 py-2',
+  sm: 'text-2xs px-3 py-1.5',
+  md: 'text-sm px-4 py-2',
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -136,12 +139,12 @@ export const Button: React.FC<ButtonProps> = ({
 type Tone = 'neutral' | 'success' | 'danger' | 'info' | 'warning' | 'brand';
 
 const TONE_TEXT: Record<Tone, string> = {
-  neutral: 'text-slate-200',
-  success: 'text-emerald-400',
-  danger: 'text-red-400',
-  info: 'text-blue-400',
-  warning: 'text-amber-400',
-  brand: 'text-amber-400',
+  neutral: 'text-slate-700',
+  success: 'text-green-700',
+  danger: 'text-red-700',
+  info: 'text-blue-700',
+  warning: 'text-amber-700',
+  brand: 'text-red-700',
 };
 
 interface StatBadgeProps {
@@ -155,7 +158,7 @@ interface StatBadgeProps {
 export const StatBadge: React.FC<StatBadgeProps> = ({ label, value, tone = 'neutral', className }) => (
   <div
     className={cx(
-      'px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5',
+      'px-2.5 py-1 rounded-lg surface-2 border hairline flex items-center gap-1.5',
       className,
     )}
   >
@@ -174,7 +177,7 @@ interface BadgeProps {
 export const Badge: React.FC<BadgeProps> = ({ tone = 'neutral', className, children }) => (
   <span
     className={cx(
-      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-slate-950 border border-slate-800',
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold surface-2 border hairline',
       TONE_TEXT[tone],
       className,
     )}
@@ -212,7 +215,7 @@ export function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   return (
-    <div className={cx('flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800', className)}>
+    <div className={cx('flex items-center gap-1 surface-2 p-1 rounded-lg border hairline', className)}>
       {label && <Eyebrow className="px-1.5">{label}</Eyebrow>}
       {segments.map((seg) => {
         const active = seg.id === value;
@@ -226,8 +229,8 @@ export function SegmentedControl<T extends string>({
             className={cx(
               'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors',
               active
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800',
+                ? 'bg-red-700 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white',
             )}
           >
             {seg.icon}

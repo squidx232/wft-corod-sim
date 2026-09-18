@@ -205,16 +205,16 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-600/50 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-700 bg-gradient-to-r from-amber-950/60 to-slate-900 sticky top-0 z-10">
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-300 bg-gradient-to-r from-amber-950/60 to-slate-900 sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-600/20 border border-amber-500/40 text-amber-400">
+            <div className="p-2 rounded-lg bg-amber-600/20 border border-amber-500/40 text-amber-700">
               <Power className="w-6 h-6" />
             </div>
             <div>
               <h2 className="text-lg font-black text-amber-100 uppercase tracking-wide font-mono">
                 Engine Start-Up Sequence
               </h2>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[11px] text-slate-500 font-mono">
                 Daily Procedure — Manual Section 5.2 (pp. 151-152)
               </p>
             </div>
@@ -225,7 +225,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg hover:bg-slate-300 text-slate-500 hover:text-slate-900 transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -242,13 +242,13 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
 
         {/* Progress bar */}
         <div className="px-5 pt-3">
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1">
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
             <span>Progress</span>
             <span>
               {completedCount} / {steps.length} steps
             </span>
           </div>
-          <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300"
               style={{ width: `${(completedCount / steps.length) * 100}%` }}
@@ -269,7 +269,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                     ? 'border-emerald-600/50 bg-emerald-950/30'
                     : isActive
                     ? 'border-amber-500/70 bg-amber-950/20 shadow-lg'
-                    : 'border-slate-700/50 bg-slate-900/40 opacity-60'
+                    : 'border-slate-300/50 bg-white/40 opacity-60'
                 }`}
               >
                 <div className="flex items-start gap-3">
@@ -277,10 +277,10 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                   <div
                     className={`flex-shrink-0 p-2 rounded-lg border ${
                       status === 'done'
-                        ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400'
+                        ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-700'
                         : status === 'running'
-                        ? 'bg-amber-600/20 border-amber-500/50 text-amber-400'
-                        : 'bg-slate-800 border-slate-600 text-slate-500'
+                        ? 'bg-amber-600/20 border-amber-500/50 text-amber-700'
+                        : 'bg-slate-200 border-slate-400 text-slate-500'
                     }`}
                   >
                     {status === 'done' ? (
@@ -297,23 +297,23 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                       <span className="text-eyebrow font-mono text-slate-500">
                         STEP {idx + 1}
                       </span>
-                      <h3 className="text-sm font-bold text-slate-100">{step.title}</h3>
+                      <h3 className="text-sm font-bold text-slate-800">{step.title}</h3>
                     </div>
-                    <p className="text-2xs text-slate-400 mt-1 leading-snug">
+                    <p className="text-2xs text-slate-500 mt-1 leading-snug">
                       {step.instruction}
                     </p>
                     <p className="text-eyebrow text-amber-500/70 font-mono mt-1">{step.manualRef}</p>
 
                     {/* Reference photo from the manual (shown for the active/running/done step) */}
                     {step.image && (status !== 'pending' || isActive) && (
-                      <div className="mt-2 rounded-lg overflow-hidden border border-slate-700 bg-black/40 max-w-[280px]">
+                      <div className="mt-2 rounded-lg overflow-hidden border border-slate-300 bg-black/40 max-w-[280px]">
                         <img
                           src={step.image}
                           alt={`Manual reference: ${step.title}`}
                           className="w-full h-auto object-cover"
                           loading="lazy"
                         />
-                        <div className="text-eyebrow text-slate-500 font-mono px-2 py-1 bg-slate-950/60 border-t border-slate-800">
+                        <div className="text-eyebrow text-slate-500 font-mono px-2 py-1 bg-slate-100/60 border-t border-slate-300">
                           Manual reference â€" {step.manualRef}
                         </div>
                       </div>
@@ -321,7 +321,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
 
                     {/* Running progress bar */}
                     {status === 'running' && (
-                      <div className="mt-2 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
                         <div
                           className="h-full bg-amber-500"
                           style={{ width: `${progress * 100}%` }}
@@ -341,7 +341,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                       </button>
                     )}
                     {status === 'done' && (
-                      <span className="mt-2 inline-flex items-center gap-1 text-eyebrow text-emerald-400 font-mono">
+                      <span className="mt-2 inline-flex items-center gap-1 text-eyebrow text-emerald-700 font-mono">
                         <CheckCircle className="w-3.5 h-3.5" /> COMPLETE
                       </span>
                     )}
@@ -364,7 +364,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
               Engine Ready — Begin Operation
             </button>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 text-[12px] font-mono">
+            <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-200/60 border border-slate-300 text-slate-500 text-[12px] font-mono">
               <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
               Complete each step in sequence to bring the engine online…
             </div>

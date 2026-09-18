@@ -1095,7 +1095,7 @@ export default function App() {
   // =========================================================================
   if (viewMode === '3d') {
     return (
-      <div className="h-screen w-screen bg-slate-950 overflow-hidden">
+      <div className="h-screen w-screen bg-slate-100 overflow-hidden">
         <Rig3DViewport
           state={state}
           fillHeight={true}
@@ -1106,7 +1106,7 @@ export default function App() {
 
   if (viewMode === 'console') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 overflow-auto">
+      <div className="min-h-screen bg-slate-100 text-slate-800 p-4 overflow-auto">
         <div className="text-center text-xs text-slate-500 mb-2 font-mono">
           COROD® MG CONTROL CONSOLE — SECONDARY MONITOR
         </div>
@@ -1125,7 +1125,7 @@ export default function App() {
 
   if (viewMode === 'gauges') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 overflow-auto">
+      <div className="min-h-screen bg-slate-100 text-slate-800 p-4 overflow-auto">
         <div className="text-center text-xs text-slate-500 mb-2 font-mono">
           COROD® MG GAUGE PANEL — SECONDARY MONITOR
         </div>
@@ -1144,9 +1144,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between font-sans selection:bg-red-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col justify-between font-sans selection:bg-red-600 selection:text-white">
       {/* Top Main App Header */}
-      <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 px-4 py-2.5 shadow-md">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-300 px-4 py-2.5 shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Logo & Manual Spec Title */}
           <div className="flex items-center gap-3">
@@ -1155,12 +1155,12 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-semibold tracking-tight text-slate-100">
+                <h1 className="text-base font-semibold tracking-tight text-slate-800">
                   COROD® Mobile Gripper™ Simulator
                 </h1>
                 <Badge tone="neutral">Rev 25</Badge>
               </div>
-              <p className="text-2xs text-slate-400">
+              <p className="text-2xs text-slate-500">
                 Weatherford Continuous Sucker Rod &amp; Wellsite Operations Trainer
               </p>
             </div>
@@ -1188,8 +1188,8 @@ export default function App() {
               className={cx(
                 'p-2 rounded-lg border transition-colors',
                 state.soundEnabled
-                  ? 'bg-slate-800 border-slate-700 text-emerald-400'
-                  : 'bg-slate-950 border-slate-800 text-slate-500',
+                  ? 'bg-green-700 border-green-800 text-white'
+                  : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50',
               )}
               title="Toggle audio feedback"
               aria-label={state.soundEnabled ? 'Mute audio' : 'Enable audio'}
@@ -1199,7 +1199,7 @@ export default function App() {
 
             <Button
               variant="ghost"
-              icon={<FileText className="w-3.5 h-3.5 text-amber-400" />}
+              icon={<FileText className="w-3.5 h-3.5 text-amber-600" />}
               onClick={() => setShowJsaModal(true)}
             >
               Site JSA (4.12)
@@ -1207,7 +1207,7 @@ export default function App() {
 
             <Button
               variant="ghost"
-              icon={<BookOpen className="w-3.5 h-3.5 text-cyan-400" />}
+              icon={<BookOpen className="w-3.5 h-3.5 text-blue-700" />}
               onClick={() => setShowManualModal(true)}
             >
               Operations Manual
@@ -1215,7 +1215,7 @@ export default function App() {
 
             <Button
               variant="ghost"
-              icon={<HelpCircle className="w-3.5 h-3.5 text-cyan-400" />}
+              icon={<HelpCircle className="w-3.5 h-3.5 text-blue-700" />}
               onClick={() => setShowGlossary(true)}
               title="Look up any term in plain English"
             >
@@ -1225,7 +1225,7 @@ export default function App() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-800">
+        <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-300">
           {[
             { id: 'console', label: '3D View', icon: Boxes },
             { id: 'scenarios', label: 'Step-by-Step Procedures', icon: BookOpen },
@@ -1249,7 +1249,7 @@ export default function App() {
                   'px-3.5 py-1.5 rounded-lg text-2xs font-semibold transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500',
                   isActive
                     ? 'bg-slate-100 text-slate-900 shadow-sm'
-                    : 'bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800',
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 border border-slate-300',
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -1493,16 +1493,16 @@ export default function App() {
         {/* TAB 3: EMERGENCY RESPONSE DRILLS */}
         {state.activeTab === 'drills' && (
           <div className="space-y-6">
-            <div className="p-6 rounded-xl bg-slate-900 border-2 border-slate-700 shadow-2xl space-y-4">
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+            <div className="p-6 rounded-xl bg-white border-2 border-slate-300 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 border-b border-slate-300 pb-3">
                 <div className="p-2 rounded-xl bg-red-600 text-white">
                   <ShieldAlert className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black uppercase text-slate-100">
+                  <h3 className="text-base font-black uppercase text-slate-800">
                     Interactive Emergency Response — Act on the Real Console
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     Inject a live fault, then perform the manual&apos;s response procedure on the actual console controls. Steps auto-validate; time-critical steps have consequences.
                   </p>
                 </div>
@@ -1532,7 +1532,7 @@ export default function App() {
                   return (
                     <div
                       key={emg.id}
-                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-3"
+                      className="p-4 rounded-xl bg-slate-100 border border-slate-300 flex flex-col justify-between space-y-3"
                     >
                       <div>
                         <span
@@ -1540,8 +1540,8 @@ export default function App() {
                         >
                           {emg.severity} • {emg.manualSection}
                         </span>
-                        <h4 className="text-sm font-bold text-slate-100 mt-2">{emg.title}</h4>
-                        <p className="text-xs text-slate-400 mt-1">{emg.cause}</p>
+                        <h4 className="text-sm font-bold text-slate-800 mt-2">{emg.title}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{emg.cause}</p>
                         <p className="text-[10px] text-slate-500 mt-1">
                           {emg.steps.length} response steps
                         </p>
@@ -1561,13 +1561,13 @@ export default function App() {
                 })}
 
                 {/* Random surprise drill */}
-                <div className="p-4 rounded-xl bg-slate-900 border-2 border-dashed border-slate-600 flex flex-col justify-between space-y-3">
+                <div className="p-4 rounded-xl bg-white border-2 border-dashed border-slate-400 flex flex-col justify-between space-y-3">
                   <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border bg-slate-800 text-slate-300 border-slate-600">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border bg-slate-200 text-slate-600 border-slate-400">
                       Surprise Drill
                     </span>
-                    <h4 className="text-sm font-bold text-slate-100 mt-2">Random Emergency</h4>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <h4 className="text-sm font-bold text-slate-800 mt-2">Random Emergency</h4>
+                    <p className="text-xs text-slate-500 mt-1">
                       Inject a random emergency without warning to test your reaction.
                     </p>
                   </div>
@@ -1579,7 +1579,7 @@ export default function App() {
                       triggerEmergencyScenario(pick.id);
                       setState((prev) => ({ ...prev, activeTab: 'console' }));
                     }}
-                    className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs uppercase shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full py-2 rounded-lg bg-slate-300 hover:bg-slate-600 text-white font-bold text-xs uppercase shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Random Drill
                   </button>
@@ -1604,7 +1604,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-950 border-t border-slate-800 px-4 py-3 text-center text-xs text-slate-500 font-mono">
+      <footer className="bg-slate-100 border-t border-slate-300 px-4 py-3 text-center text-xs text-slate-500 font-mono">
         Weatherford Enterprise Excellence • GL-PCP-OEPS-L4-11 • COROD® Mobile Gripper™ Operator Training System
       </footer>
 

@@ -66,18 +66,18 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
   }, [state.activeScenarioId, isReset]);
 
   return (
-    <div className="flex flex-col gap-6 rounded-xl bg-slate-900 border border-slate-800 p-6 shadow-md text-slate-100 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col gap-6 rounded-xl bg-white border border-slate-300 p-6 shadow-md text-slate-800 max-w-7xl mx-auto w-full">
       {/* Top Scenario Bar */}
-      <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 gap-3">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-4 gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-700/60 text-emerald-400">
+          <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-700/60 text-emerald-700">
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-100">
+            <h3 className="text-base font-semibold text-slate-800">
               Structured Wellsite Training Scenarios
             </h3>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p className="text-sm text-slate-500 mt-0.5">
               Interactive procedure modules aligned with Weatherford COROD Operations Manual
             </p>
           </div>
@@ -85,8 +85,8 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
 
         {activeScenario && (
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950 border border-slate-800 text-2xs font-mono">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 border border-slate-300 text-2xs font-mono">
+              <Clock className="w-3.5 h-3.5 text-amber-700" />
               <span>
                 {/* BUG FIX: Floor seconds before display (was showing floating point like "12.300000001") */}
                 {Math.floor(state.scenarioTimeElapsedSeconds / 60)}:
@@ -96,7 +96,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
 
             <button
               onClick={onResetScenario}
-              className="flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs text-slate-300 border border-slate-700"
+              className="flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 active:scale-95 text-xs text-slate-600 border border-slate-300"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Restart Module
@@ -113,29 +113,29 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
             return (
               <div
                 key={scen.id}
-                className="flex flex-col justify-between rounded-xl bg-slate-950/80 border border-slate-800 hover:border-slate-600 p-4 transition-all duration-200 shadow-md"
+                className="flex flex-col justify-between rounded-xl bg-slate-100/80 border border-slate-300 hover:border-slate-400 p-4 transition-all duration-200 shadow-md"
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-2">
                     <span
                       className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
                         scen.category === 'Emergency Drill'
-                          ? 'bg-red-950 text-red-400 border border-red-800'
+                          ? 'bg-red-950 text-red-700 border border-red-800'
                           : scen.category === 'Rig Up'
-                          ? 'bg-blue-950 text-blue-400 border border-blue-800'
-                          : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          ? 'bg-blue-950 text-blue-700 border border-blue-800'
+                          : 'bg-emerald-950 text-emerald-700 border border-emerald-800'
                       }`}
                     >
                       {scen.category}
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">~{scen.targetDurationMinutes} min</span>
+                    <span className="text-[10px] font-mono text-slate-500">~{scen.targetDurationMinutes} min</span>
                   </div>
 
-                  <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-snug">{scen.title}</h4>
-                  <p className="text-xs text-slate-400 line-clamp-3 mb-3">{scen.description}</p>
+                  <h4 className="text-sm font-semibold text-slate-800 mb-1 leading-snug">{scen.title}</h4>
+                  <p className="text-xs text-slate-500 line-clamp-3 mb-3">{scen.description}</p>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="pt-2 border-t border-slate-300/80 flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 font-mono">{scen.steps.length} Steps</span>
                   <button
                     id={`btn-start-${scen.id}`}
@@ -151,7 +151,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                   >
                     {isFinished ? (
                       <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                         Re-Train
                       </>
                     ) : (
@@ -170,19 +170,19 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
         /* Active Scenario Interactive Workflow Panel */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left: Active Step Card & Instructions */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-xl bg-slate-950 border border-slate-800 p-5">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-xl bg-slate-100 border border-slate-300 p-5">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase text-amber-400 tracking-wider">
+                <span className="text-xs font-bold uppercase text-amber-700 tracking-wider">
                   Active Module: {activeScenario.title}
                 </span>
-                <span className="text-xs font-mono font-bold text-slate-300">
+                <span className="text-xs font-mono font-bold text-slate-600">
                   Step {state.currentStepIndex + 1} of {activeScenario.steps.length}
                 </span>
               </div>
 
               {/* Progress Bar */}
-              <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mb-4">
+              <div className="w-full h-2 bg-white rounded-full overflow-hidden border border-slate-300 mb-4">
                 <div
                   style={{
                     width: `${((state.currentStepIndex + (state.scenarioCompleted ? 1 : 0)) / activeScenario.steps.length) * 100}%`,
@@ -197,24 +197,24 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                   className={`p-4 rounded-xl border-2 transition-all ${
                     currentStep.isCriticalSafetyStep
                       ? 'bg-red-950/40 border-red-600'
-                      : 'bg-slate-900 border-slate-700'
+                      : 'bg-white border-slate-300'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     {currentStep.isCriticalSafetyStep ? (
-                      <ShieldAlert className="w-5 h-5 text-red-400" />
+                      <ShieldAlert className="w-5 h-5 text-red-700" />
                     ) : (
-                      <Play className="w-4 h-4 text-emerald-400" />
+                      <Play className="w-4 h-4 text-emerald-700" />
                     )}
-                    <h4 className="text-sm font-semibold text-slate-100">{currentStep.title}</h4>
+                    <h4 className="text-sm font-semibold text-slate-800">{currentStep.title}</h4>
                   </div>
 
-                  <p className="text-xs text-slate-300 leading-relaxed my-2">{currentStep.instruction}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed my-2">{currentStep.instruction}</p>
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-800 text-[11px]">
-                    <span className="text-amber-400 font-mono font-semibold">Ref: {currentStep.manualSection}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-300 text-[11px]">
+                    <span className="text-amber-700 font-mono font-semibold">Ref: {currentStep.manualSection}</span>
                     {state.difficulty === 'trainee' && currentStep.hint && (
-                      <span className="text-blue-300 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800 flex items-center gap-1">
+                      <span className="text-blue-700 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800 flex items-center gap-1">
                         <HelpCircle className="w-3 h-3" />
                         Hint: {currentStep.hint}
                       </span>
@@ -223,12 +223,12 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                 </div>
               ) : (
                 /* Completed Card */
-                <div className="p-5 rounded-xl bg-slate-900 border border-emerald-600/70 text-center space-y-3 shadow-md">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-                  <h4 className="text-sm font-bold uppercase text-slate-100">
+                <div className="p-5 rounded-xl bg-white border border-emerald-600/70 text-center space-y-3 shadow-md">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-700 mx-auto" />
+                  <h4 className="text-sm font-bold uppercase text-slate-800">
                     Procedure Module Verified &amp; Completed
                   </h4>
-                  <p className="text-xs text-slate-300 max-w-md mx-auto">
+                  <p className="text-xs text-slate-600 max-w-md mx-auto">
                     All procedural and safety verification checkpoints have been satisfied per Weatherford COROD® Standard Operating Procedures.
                   </p>
                   <div className="pt-2 flex justify-center gap-3">
@@ -245,8 +245,8 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
 
             {/* Step Advance / Check Action */}
             {currentStep && !state.scenarioCompleted && (
-              <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-2xs text-slate-400">
+              <div className="mt-4 pt-3 border-t border-slate-300 flex items-center justify-between">
+                <span className="text-2xs text-slate-500">
                   Operate the console/rig controls according to the instruction above.
                 </span>
 
@@ -271,9 +271,9 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
           </div>
 
           {/* Right: Step Sequence Checklist */}
-          <div className="lg:col-span-5 rounded-xl bg-slate-950 border border-slate-800 p-4 flex flex-col justify-between">
+          <div className="lg:col-span-5 rounded-xl bg-slate-100 border border-slate-300 p-4 flex flex-col justify-between">
             <div>
-              <span className="text-xs font-semibold text-slate-300 block border-b border-slate-800 pb-2 mb-3">
+              <span className="text-xs font-semibold text-slate-600 block border-b border-slate-300 pb-2 mb-3">
                 Module Step Sequence
               </span>
 
@@ -287,15 +287,15 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                       key={step.id}
                       className={`p-2.5 rounded-lg border text-xs flex items-center justify-between transition-all ${
                         isDone
-                          ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                          ? 'bg-emerald-950/40 border-emerald-800 text-emerald-700'
                           : isCurrent
-                          ? 'bg-slate-800 border-amber-500 text-amber-200 font-bold shadow-sm'
-                          : 'bg-slate-900/60 border-slate-800 text-slate-400'
+                          ? 'bg-slate-200 border-amber-500 text-amber-200 font-bold shadow-sm'
+                          : 'bg-white/60 border-slate-300 text-slate-500'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         {isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                         ) : (
                           <Circle className="w-4 h-4 text-slate-600 shrink-0" />
                         )}
@@ -312,11 +312,11 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-eyebrow text-slate-400">
+            <div className="pt-3 border-t border-slate-300 flex justify-between items-center text-eyebrow text-slate-500">
               <span>Weatherford OEPS-L4-11</span>
               <button
                 onClick={() => onSelectScenario(null as unknown as TrainingScenario)}
-                className="text-blue-400 hover:underline font-semibold"
+                className="text-blue-700 hover:underline font-semibold"
               >
                 Change Module
               </button>

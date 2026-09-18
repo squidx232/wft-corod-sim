@@ -101,24 +101,24 @@ function assess(state: SimulatorState): Assessment {
 
 const STYLES: Record<Health, { border: string; bg: string; icon: React.ReactNode; chip: string; chipLabel: string }> = {
   good: {
-    border: 'border-emerald-800',
-    bg: 'bg-emerald-950/40',
-    icon: <CheckCircle2 className="w-6 h-6 text-emerald-400" />,
-    chip: 'bg-emerald-600 text-white',
+    border: 'border-green-300',
+    bg: 'bg-green-50',
+    icon: <CheckCircle2 className="w-6 h-6 text-green-700" />,
+    chip: 'bg-green-700 text-white',
     chipLabel: 'All good',
   },
   caution: {
-    border: 'border-amber-800',
-    bg: 'bg-amber-950/40',
-    icon: <AlertTriangle className="w-6 h-6 text-amber-400" />,
-    chip: 'bg-amber-500 text-black',
+    border: 'border-amber-300',
+    bg: 'bg-amber-50',
+    icon: <AlertTriangle className="w-6 h-6 text-amber-700" />,
+    chip: 'bg-amber-600 text-white',
     chipLabel: 'Caution',
   },
   danger: {
-    border: 'border-red-700',
-    bg: 'bg-red-950/50',
-    icon: <AlertOctagon className="w-6 h-6 text-red-400 animate-pulse" />,
-    chip: 'bg-red-600 text-white',
+    border: 'border-red-300',
+    bg: 'bg-red-50',
+    icon: <AlertOctagon className="w-6 h-6 text-red-700 animate-pulse" />,
+    chip: 'bg-red-700 text-white',
     chipLabel: 'Action needed',
   },
 };
@@ -138,13 +138,13 @@ export const StatusBanner: React.FC<Props> = ({ state }) => {
           <span className={`text-eyebrow font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${s.chip}`}>
             {s.chipLabel}
           </span>
-          <span className="text-sm sm:text-base font-semibold text-slate-100">{a.title}</span>
+          <span className="text-sm sm:text-base font-semibold text-slate-800">{a.title}</span>
         </div>
-        <div className="text-2xs text-slate-300 mt-0.5">{a.detail}</div>
+        <div className="text-2xs text-slate-600 mt-0.5">{a.detail}</div>
       </div>
       <div className="hidden md:flex items-center gap-2 shrink-0 max-w-[42%]">
-        <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
-        <div className="text-2xs text-slate-200">
+        <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
+        <div className="text-2xs text-slate-700">
           <span className="eyebrow block">Do this next</span>
           {a.nextAction}
         </div>

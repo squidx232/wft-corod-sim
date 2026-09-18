@@ -59,7 +59,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-xl bg-slate-900 border-4 border-red-600 shadow-xl p-6 text-slate-100 animate-in fade-in zoom-in-95">
+      <div className="relative w-full max-w-3xl rounded-xl bg-white border-4 border-red-600 shadow-xl p-6 text-slate-800 animate-in fade-in zoom-in-95">
         {/* Drill Header */}
         <div className="flex items-center justify-between border-b-2 border-red-600/60 pb-3 mb-4">
           <div className="flex items-center gap-3">
@@ -67,7 +67,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
               <ShieldAlert className="w-7 h-7" />
             </div>
             <div>
-              <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-700">
+              <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-950 text-red-700 border border-red-700">
                 HIGH-PRIORITY EMERGENCY DRILL
               </span>
               <h3 className="text-lg font-semibold text-white">
@@ -80,9 +80,9 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
           </div>
 
           {/* Reaction Timer */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 font-mono text-sm">
-            <Timer className="w-4 h-4 text-amber-400" />
-            <span className={drillCompleted ? 'text-emerald-400 font-bold' : 'text-amber-300 font-bold'}>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-300 font-mono text-sm">
+            <Timer className="w-4 h-4 text-amber-700" />
+            <span className={drillCompleted ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
               {(elapsedMs / 1000).toFixed(2)}s
             </span>
           </div>
@@ -140,8 +140,8 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step1Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300'
-                    : 'bg-slate-900 border-slate-700 hover:border-amber-500 active:scale-98'
+                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
+                    : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
                 }`}
               >
                 <div
@@ -152,13 +152,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                   {step1Done ? <CheckCircle className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
                 </div>
                 <div>
-                  <span className="text-xs font-bold block text-slate-100">
+                  <span className="text-xs font-bold block text-slate-800">
                     {drillType === 'freefall' && '1. Move Safety Lever DOWN (Engage Safety Clamp)'}
                     {drillType === 'blowout' && '1. Sound 1 Long Blast Rig Air Horn'}
                     {drillType === 'h2s' && '1. Sound 1 Long Air Horn Alert'}
                     {drillType === 'overheat' && '1. Apply Gripper Brake to Lock String'}
                   </span>
-                  <span className="text-eyebrow text-slate-400">
+                  <span className="text-eyebrow text-slate-500">
                     {step1Done ? '✓ Action Executed' : 'Click to perform immediate action'}
                   </span>
                 </div>
@@ -179,10 +179,10 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step2Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300'
+                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
                     : !step1Done
-                    ? 'opacity-50 cursor-not-allowed bg-slate-950 border-slate-800'
-                    : 'bg-slate-900 border-slate-700 hover:border-amber-500 active:scale-98'
+                    ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
+                    : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
                 }`}
               >
                 <div
@@ -193,13 +193,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                   {step2Done ? <CheckCircle className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </div>
                 <div>
-                  <span className="text-xs font-bold block text-slate-100">
+                  <span className="text-xs font-bold block text-slate-800">
                     {drillType === 'freefall' && '2. Sound Air Horn & Evacuate if Moving'}
                     {drillType === 'blowout' && '2. Turn Automatic BOP Pump ON (1250 PSI)'}
                     {drillType === 'h2s' && '2. Evacuate Upwind to Muster Point'}
                     {drillType === 'overheat' && '2. Turn Cooler Fan Bypass to MANUAL'}
                   </span>
-                  <span className="text-eyebrow text-slate-400">
+                  <span className="text-eyebrow text-slate-500">
                     {step2Done ? '✓ Action Executed' : 'Step 2'}
                   </span>
                 </div>
@@ -216,10 +216,10 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step3Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300'
+                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
                     : !step2Done
-                    ? 'opacity-50 cursor-not-allowed bg-slate-950 border-slate-800'
-                    : 'bg-slate-900 border-slate-700 hover:border-amber-500 active:scale-98'
+                    ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
+                    : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
                 }`}
               >
                 <div
@@ -230,13 +230,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                   {step3Done ? <CheckCircle className="w-5 h-5" /> : <Wrench className="w-5 h-5" />}
                 </div>
                 <div>
-                  <span className="text-xs font-bold block text-slate-100">
+                  <span className="text-xs font-bold block text-slate-800">
                     {drillType === 'freefall' && '3. Install Two 2-Bolt Mechanical Rod Clamps'}
                     {drillType === 'blowout' && '3. Install Mechanical Rod Clamp on BOP Plate'}
                     {drillType === 'h2s' && '3. Verify 100% Crew Headcount & Don SCBA'}
                     {drillType === 'overheat' && '3. Close Tank Heater & Allow Fluid to Circulate'}
                   </span>
-                  <span className="text-eyebrow text-slate-400">
+                  <span className="text-eyebrow text-slate-500">
                     {step3Done ? '✓ Action Executed' : 'Step 3'}
                   </span>
                 </div>
@@ -253,10 +253,10 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step4Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300'
+                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
                     : !step3Done
-                    ? 'opacity-50 cursor-not-allowed bg-slate-950 border-slate-800'
-                    : 'bg-slate-900 border-slate-700 hover:border-amber-500 active:scale-98'
+                    ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
+                    : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
                 }`}
               >
                 <div
@@ -267,13 +267,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                   {step4Done ? <CheckCircle className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
                 </div>
                 <div>
-                  <span className="text-xs font-bold block text-slate-100">
+                  <span className="text-xs font-bold block text-slate-800">
                     {drillType === 'freefall' && '4. Perform Mandatory 3-Tap Bump Test'}
                     {drillType === 'blowout' && '4. Perform 3-Tap Bump Test & Muster'}
                     {drillType === 'h2s' && '4. Execute Backward Arm Drag Rescue'}
                     {drillType === 'overheat' && '4. Hit Emergency Shut Down if Temp >70°C'}
                   </span>
-                  <span className="text-eyebrow text-slate-400">
+                  <span className="text-eyebrow text-slate-500">
                     {step4Done ? '✓ Action Executed' : 'Final Step'}
                   </span>
                 </div>
@@ -283,18 +283,18 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
         ) : (
           /* Completed Score Debrief */
           <div className="p-6 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-center space-y-4">
-            <Award className="w-14 h-14 text-emerald-400 mx-auto animate-bounce" />
+            <Award className="w-14 h-14 text-emerald-700 mx-auto animate-bounce" />
             <div>
               <h4 className="text-lg font-semibold text-emerald-200">
                 Drill Passed with Excellence!
               </h4>
-              <p className="text-xs text-emerald-300 font-mono mt-1">
+              <p className="text-xs text-emerald-700 font-mono mt-1">
                 Reaction Time: {(elapsedMs / 1000).toFixed(2)}s • Safety Compliance: 100%
               </p>
             </div>
 
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 max-w-md mx-auto">
-              <span className="font-bold text-amber-400 block mb-1">Key Operational Takeaway:</span>
+            <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600 max-w-md mx-auto">
+              <span className="font-bold text-amber-700 block mb-1">Key Operational Takeaway:</span>
               {drillType === 'freefall' && 'The Safety Accumulator only maintains holding pressure for a few minutes. Immediate installation of 2 mechanical rod clamps with 500 ft-lb torque is required.'}
               {drillType === 'blowout' && 'Regan BOP was successfully closed within the strict 1-minute EUB regulatory shut-in threshold.'}
               {drillType === 'h2s' && 'Never attempt rescue without SCBA. Always drag victims backward under arms, never by the feet.'}
@@ -311,9 +311,9 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-2xs text-slate-400">
+        <div className="mt-4 pt-3 border-t border-slate-300 flex items-center justify-between text-2xs text-slate-500">
           <span>Weatherford Global Safety Manual (Form GL-PCP-OEPS-L4-11)</span>
-          <button onClick={onClose} className="hover:text-slate-200">
+          <button onClick={onClose} className="hover:text-slate-700">
             Cancel Drill
           </button>
         </div>
