@@ -176,7 +176,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               </div>
 
               {/* Warning Banner */}
-              <div className="p-3 rounded-lg bg-red-950/60 border border-red-800 text-xs text-red-200">
+              <div className="p-3 rounded-lg bg-red-50 border border-red-300 text-xs text-red-200">
                 <strong>WARNING (Figure 248):</strong> NEVER MOVE COROD WITH LESS THAN 400 PSI SQUEEZE PRESSURE.
                 Max standard injector dynamic load: 13,000 lbs (up to 15,000 lbs with 3-part sling upgrade).
               </div>

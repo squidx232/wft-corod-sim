@@ -203,7 +203,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-600/50 shadow-2xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-400/50 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-300 bg-gradient-to-r from-amber-950/60 to-slate-900 sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -266,9 +266,9 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                 key={step.id}
                 className={`rounded-xl border p-4 transition-all ${
                   status === 'done'
-                    ? 'border-emerald-600/50 bg-emerald-950/30'
+                    ? 'border-emerald-400/50 bg-emerald-50'
                     : isActive
-                    ? 'border-amber-500/70 bg-amber-950/20 shadow-lg'
+                    ? 'border-amber-500/70 bg-amber-50 shadow-lg'
                     : 'border-slate-300/50 bg-white/40 opacity-60'
                 }`}
               >

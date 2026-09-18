@@ -70,7 +70,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
       {/* Top Scenario Bar */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-4 gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-700/60 text-emerald-700">
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300/60 text-emerald-700">
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
@@ -120,10 +120,10 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     <span
                       className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
                         scen.category === 'Emergency Drill'
-                          ? 'bg-red-950 text-red-700 border border-red-800'
+                          ? 'bg-red-50 text-red-700 border border-red-300'
                           : scen.category === 'Rig Up'
-                          ? 'bg-blue-950 text-blue-700 border border-blue-800'
-                          : 'bg-emerald-950 text-emerald-700 border border-emerald-800'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-300'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                       }`}
                     >
                       {scen.category}
@@ -145,7 +145,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     }}
                     className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all flex items-center gap-1 ${
                       isFinished
-                        ? 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700'
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-200 border border-emerald-300'
                         : 'bg-red-600 hover:bg-red-500 text-white shadow-md'
                     }`}
                   >
@@ -196,7 +196,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                 <div
                   className={`p-4 rounded-xl border-2 transition-all ${
                     currentStep.isCriticalSafetyStep
-                      ? 'bg-red-950/40 border-red-600'
+                      ? 'bg-red-50 border-red-400'
                       : 'bg-white border-slate-300'
                   }`}
                 >
@@ -214,7 +214,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                   <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-300 text-[11px]">
                     <span className="text-amber-700 font-mono font-semibold">Ref: {currentStep.manualSection}</span>
                     {state.difficulty === 'trainee' && currentStep.hint && (
-                      <span className="text-blue-700 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800 flex items-center gap-1">
+                      <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-300 flex items-center gap-1">
                         <HelpCircle className="w-3 h-3" />
                         Hint: {currentStep.hint}
                       </span>
@@ -223,7 +223,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                 </div>
               ) : (
                 /* Completed Card */
-                <div className="p-5 rounded-xl bg-white border border-emerald-600/70 text-center space-y-3 shadow-md">
+                <div className="p-5 rounded-xl bg-white border border-emerald-400/70 text-center space-y-3 shadow-md">
                   <CheckCircle2 className="w-10 h-10 text-emerald-700 mx-auto" />
                   <h4 className="text-sm font-bold uppercase text-slate-800">
                     Procedure Module Verified &amp; Completed
@@ -234,7 +234,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                   <div className="pt-2 flex justify-center gap-3">
                     <button
                       onClick={() => onSelectScenario(null as unknown as TrainingScenario)}
-                      className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-2xs border border-emerald-600 shadow-sm"
+                      className="px-4 py-2 rounded-lg bg-emerald-100 hover:bg-emerald-700 text-white font-semibold text-2xs border border-emerald-400 shadow-sm"
                     >
                       Return to Scenario Library
                     </button>
@@ -287,7 +287,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                       key={step.id}
                       className={`p-2.5 rounded-lg border text-xs flex items-center justify-between transition-all ${
                         isDone
-                          ? 'bg-emerald-950/40 border-emerald-800 text-emerald-700'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                           : isCurrent
                           ? 'bg-slate-200 border-amber-500 text-amber-200 font-bold shadow-sm'
                           : 'bg-white/60 border-slate-300 text-slate-500'

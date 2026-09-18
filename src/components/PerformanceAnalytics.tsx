@@ -71,7 +71,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
       {/* Sub Navigation */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-4 gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-red-950/80 border border-red-700/60 text-red-700">
+          <div className="p-3 rounded-xl bg-red-50 border border-red-300/60 text-red-700">
             <Activity className="w-6 h-6" />
           </div>
           <div>
@@ -305,7 +305,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           <div className="p-5 rounded-xl bg-slate-100 border border-slate-300">
             <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-3 gap-2">
               <div>
-                <span className="eyebrow px-2 py-0.5 rounded bg-red-950 text-red-700 border border-red-800">
+                <span className="eyebrow px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-300">
                   FORM NUMBER: GL-PCP-OEPS-L4-11
                 </span>
                 <h4 className="text-base font-semibold text-slate-800 mt-1">
@@ -423,11 +423,11 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded bg-emerald-950 border border-emerald-700 text-emerald-700 font-black font-mono">
+                  <span className="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 font-black font-mono">
                     SAFETY SCORE: {entry.safetyScore}%
                   </span>
                   {entry.certifiedStamp && (
-                    <div className="px-2 py-1 rounded bg-red-950 border border-red-700 text-red-700 font-semibold eyebrow flex items-center gap-1">
+                    <div className="px-2 py-1 rounded bg-red-50 border border-red-300 text-red-700 font-semibold eyebrow flex items-center gap-1">
                       <Stamp className="w-3 h-3" />
                       WFT AUDITED
                     </div>
@@ -441,7 +441,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
 
       {/* TAB 3: OPERATOR CERTIFICATION BADGE */}
       {activeSubTab === 'certificate' && (
-        <div className="p-8 rounded-xl bg-slate-100 border-2 border-amber-600 text-center max-w-2xl mx-auto shadow-xl space-y-5">
+        <div className="p-8 rounded-xl bg-slate-100 border-2 border-amber-400 text-center max-w-2xl mx-auto shadow-xl space-y-5">
           <div className="flex justify-center">
             <div className="h-16 w-16 rounded-xl bg-red-600 border-2 border-white flex items-center justify-center font-black text-3xl text-white shadow-xl">
               W

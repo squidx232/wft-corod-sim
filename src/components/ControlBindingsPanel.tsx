@@ -41,10 +41,10 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
             : value === '—'
               ? 'bg-neutral-900 text-neutral-500 border-neutral-700 hover:border-neutral-500'
               : kind === 'key'
-                ? 'bg-sky-950 text-sky-200 border-sky-800 hover:border-sky-500'
+                ? 'bg-sky-50 text-sky-200 border-sky-300 hover:border-sky-500'
                 : kind === 'axis'
-                  ? 'bg-purple-950 text-purple-200 border-purple-800 hover:border-purple-500'
-                  : 'bg-emerald-950 text-emerald-200 border-emerald-800 hover:border-emerald-500'}`}
+                  ? 'bg-purple-50 text-purple-200 border-purple-300 hover:border-purple-500'
+                  : 'bg-emerald-50 text-emerald-200 border-emerald-300 hover:border-emerald-500'}`}
       >
         {capturing ? 'Press…' : value}
       </button>
@@ -59,7 +59,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
           <div className="text-[12px] text-neutral-200 font-medium truncate">
             {c.label}
             {c.axisGroup && (
-              <span className={`ml-1.5 text-[8px] font-mono px-1 py-0.5 rounded ${c.axisGroup === 'movement' ? 'bg-orange-950 text-orange-700' : 'bg-cyan-950 text-cyan-700'}`}>
+              <span className={`ml-1.5 text-[8px] font-mono px-1 py-0.5 rounded ${c.axisGroup === 'movement' ? 'bg-orange-50 text-orange-700' : 'bg-cyan-50 text-cyan-700'}`}>
                 {c.axisGroup === 'movement' ? 'MOVE-AXIS' : 'VALUE-AXIS'}
               </span>
             )}
@@ -110,7 +110,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
             <h2 className="text-sm font-black uppercase tracking-widest text-neutral-100">Control Bindings</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${status.gamepadConnected ? 'bg-emerald-950 text-emerald-700 border-emerald-700' : 'bg-neutral-900 text-neutral-500 border-neutral-700'}`}>
+            <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${status.gamepadConnected ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-neutral-900 text-neutral-500 border-neutral-700'}`}>
               {status.gamepadConnected ? '🎮 Connected' : '🎮 No gamepad'}
             </span>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-300"><X className="w-5 h-5" /></button>
@@ -134,7 +134,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
           </div>
           <button
             onClick={resetAll}
-            className="flex items-center gap-1.5 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-md bg-red-950 text-red-700 border border-red-800 hover:bg-red-900"
+            className="flex items-center gap-1.5 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-md bg-red-50 text-red-700 border border-red-300 hover:bg-red-50"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Reset defaults
           </button>
@@ -155,40 +155,40 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
             active target, then use a shared stick to change it. <span className="text-orange-700">MOVE-AXIS</span> drives movement controls; <span className="text-cyan-700">VALUE-AXIS</span> drives values (up = increase/ON, down = decrease/OFF).
           </div>
           <div className="flex items-center gap-3 flex-wrap text-[10px] font-mono">
-            <div className="flex items-center gap-1.5 bg-orange-950/40 border border-orange-900/50 rounded-md px-2 py-1 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-900/50 rounded-md px-2 py-1 flex-wrap">
               <span className="text-orange-700 font-bold">MOVE</span>
               <span className="text-neutral-500">axis</span>
-              <button onClick={() => startCapture('__sharedMove', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-200 border border-purple-800">
+              <button onClick={() => startCapture('__sharedMove', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-200 border border-purple-300">
                 {isCapturing('__sharedMove', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.movementAxis)}
               </button>
               <button onClick={() => setSharedAxes({ ...sharedAxes, movementInvert: !sharedAxes.movementInvert })} className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-600" title="Invert axis">
                 {sharedAxes.movementInvert ? 'Inv ✓' : 'Inv ✗'}
               </button>
               <span className="text-neutral-500 ml-1">−</span>
-              <button onClick={() => startCapture('__sharedMoveDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 border border-emerald-800" title="Button that DECREASES the selected movement target">
+              <button onClick={() => startCapture('__sharedMoveDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-200 border border-emerald-300" title="Button that DECREASES the selected movement target">
                 {isCapturing('__sharedMoveDec', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.movementDecButton)}
               </button>
               <span className="text-neutral-500">＋</span>
-              <button onClick={() => startCapture('__sharedMoveInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 border border-emerald-800" title="Button that INCREASES the selected movement target">
+              <button onClick={() => startCapture('__sharedMoveInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-200 border border-emerald-300" title="Button that INCREASES the selected movement target">
                 {isCapturing('__sharedMoveInc', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.movementIncButton)}
               </button>
               <span className="text-neutral-400 ml-1">▶ <span className="text-orange-200">{activeMovementTarget ? (CONTROLS.find(c=>c.id===activeMovementTarget)?.label ?? activeMovementTarget) : '—'}</span></span>
             </div>
-            <div className="flex items-center gap-1.5 bg-cyan-950/40 border border-cyan-900/50 rounded-md px-2 py-1 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-cyan-50 border border-cyan-900/50 rounded-md px-2 py-1 flex-wrap">
               <span className="text-cyan-700 font-bold">VALUE</span>
               <span className="text-neutral-500">axis</span>
-              <button onClick={() => startCapture('__sharedValue', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-200 border border-purple-800">
+              <button onClick={() => startCapture('__sharedValue', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-200 border border-purple-300">
                 {isCapturing('__sharedValue', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.valueAxis)}
               </button>
               <button onClick={() => setSharedAxes({ ...sharedAxes, valueInvert: !sharedAxes.valueInvert })} className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-600" title="Invert axis">
                 {sharedAxes.valueInvert ? 'Inv ✓' : 'Inv ✗'}
               </button>
               <span className="text-neutral-500 ml-1">− (LT)</span>
-              <button onClick={() => startCapture('__sharedValueDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 border border-emerald-800" title="Button that DECREASES the selected value (e.g. LT)">
+              <button onClick={() => startCapture('__sharedValueDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-200 border border-emerald-300" title="Button that DECREASES the selected value (e.g. LT)">
                 {isCapturing('__sharedValueDec', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.valueDecButton)}
               </button>
               <span className="text-neutral-500">＋ (RT)</span>
-              <button onClick={() => startCapture('__sharedValueInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-200 border border-emerald-800" title="Button that INCREASES the selected value (e.g. RT)">
+              <button onClick={() => startCapture('__sharedValueInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-200 border border-emerald-300" title="Button that INCREASES the selected value (e.g. RT)">
                 {isCapturing('__sharedValueInc', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.valueIncButton)}
               </button>
               <span className="text-neutral-400 ml-1">▶ <span className="text-cyan-200">{activeValueTarget ? (CONTROLS.find(c=>c.id===activeValueTarget)?.label ?? activeValueTarget) : '—'}</span></span>

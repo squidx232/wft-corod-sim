@@ -94,7 +94,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   key={i}
                   className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 transition-all ${
                     installed
-                      ? 'bg-amber-900/40 border-amber-500 text-amber-300'
+                      ? 'bg-amber-50 border-amber-500 text-amber-700'
                       : 'bg-slate-200/50 border-slate-400 text-slate-500'
                   }`}
                 >
@@ -152,7 +152,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               onClick={() => onEmergencyAction?.('evacuate')}
               className={`w-full py-2.5 rounded-lg font-bold text-xs uppercase shadow active:scale-95 border transition-all ${
                 state.evacuatedToMuster
-                  ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
+                  ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
                   : 'bg-amber-700 hover:bg-amber-600 border-amber-500 text-white'
               }`}
             >
@@ -164,8 +164,8 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               onClick={() => onEmergencyAction?.('scba')}
               className={`w-full py-2.5 rounded-lg font-bold text-xs uppercase shadow active:scale-95 border transition-all ${
                 state.scbaEquipped
-                  ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
-                  : 'bg-cyan-800 hover:bg-cyan-700 border-cyan-500 text-white'
+                  ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                  : 'bg-cyan-100 hover:bg-cyan-700 border-cyan-500 text-white'
               }`}
             >
               {state.scbaEquipped ? '✓ SCBA Equipped' : 'Equip SCBA Gear'}
@@ -180,7 +180,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
       {/* Tab Navigation Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-4 gap-3">
         <div className="flex items-center gap-3">
-          <Settings className="w-6 h-6 text-amber-400" />
+          <Settings className="w-6 h-6 text-amber-700" />
           <h3 className="text-base font-semibold text-slate-800">
             Auxiliary Wellsite Systems & Sub-Panels
           </h3>
@@ -267,7 +267,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           {/* BOP Status & Gauges */}
           <div className="space-y-4 rounded-lg bg-white border border-slate-300 p-4">
             <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-              <span className="text-xs font-semibold text-amber-400">
+              <span className="text-xs font-semibold text-amber-700">
                 BOP Pneumatic/Hydraulic Telemetry
               </span>
               <span className="text-eyebrow text-slate-500 font-mono">Fig 19 / Sec 3.6.6</span>
@@ -276,14 +276,14 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="p-3 rounded-lg bg-slate-100 border border-slate-300">
                 <span className="text-eyebrow uppercase text-slate-500 block">Truck Air Supply</span>
-                <span className="text-xl font-mono font-semibold text-cyan-400">{bop.airSupplyPsi} PSI</span>
+                <span className="text-xl font-mono font-semibold text-cyan-700">{bop.airSupplyPsi} PSI</span>
                 <span className="text-eyebrow text-slate-500 block">Nominal: 120 PSI</span>
               </div>
               <div className="p-3 rounded-lg bg-slate-100 border border-slate-300">
                 <span className="text-eyebrow uppercase text-slate-500 block">BOP Inflation Pressure</span>
                 <span
                   className={`text-xl font-mono font-semibold ${
-                    hydraulics.bopPressure >= 1000 ? 'text-emerald-400' : 'text-amber-400'
+                    hydraulics.bopPressure >= 1000 ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
                   {Math.round(hydraulics.bopPressure)} PSI
@@ -295,13 +295,13 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             <div className="p-3 rounded-lg bg-slate-100/60 border border-slate-300 text-xs space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-slate-500">Regan BOP Bag Status:</span>
-                <span className={`font-bold ${bop.reganBopClosed ? 'text-red-400' : 'text-emerald-400'}`}>
+                <span className={`font-bold ${bop.reganBopClosed ? 'text-red-700' : 'text-emerald-700'}`}>
                   {bop.reganBopClosed ? 'CLOSED / SEALED' : 'OPEN / FULL BORE'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Wellbore Annulus:</span>
-                <span className={`font-bold ${bop.reganBopClosed ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <span className={`font-bold ${bop.reganBopClosed ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {bop.reganBopClosed ? 'CONTAINED' : 'UNCONTAINED'}
                 </span>
               </div>
@@ -345,7 +345,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-bold">
                 <span className="text-slate-600">Air Pressure Regulator</span>
-                <span className="text-cyan-400 font-mono">{bop.bopRegulatorPsi} PSI</span>
+                <span className="text-cyan-700 font-mono">{bop.bopRegulatorPsi} PSI</span>
               </div>
               <input
                 id="slider-bop-regulator"
@@ -398,7 +398,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
             <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-between">
               <span className="text-xs text-slate-500">Total Manual Strokes:</span>
-              <span className="font-mono font-bold text-amber-400">{bop.handPumpStrokes}</span>
+              <span className="font-mono font-bold text-amber-700">{bop.handPumpStrokes}</span>
             </div>
 
             <button
@@ -420,10 +420,10 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
       {activeAuxTab === 'ytool' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 rounded-xl bg-slate-100/70 border border-slate-300">
           {/* Y-Tool Red Pelican Display Console */}
-          <div className="lg:col-span-7 rounded-xl bg-gradient-to-b from-red-700 via-red-800 to-red-900 border-4 border-red-950 p-5 shadow-xl flex flex-col justify-between text-slate-900">
+          <div className="lg:col-span-7 rounded-xl bg-gradient-to-b from-red-700 via-red-800 to-red-900 border-4 border-red-950 p-5 shadow-xl flex flex-col justify-between text-white">
             {/* Console Faceplate Header */}
             <div className="flex items-center justify-between border-b-2 border-red-950/40 pb-2">
-              <span className="font-semibold text-xs uppercase tracking-widest text-slate-800">
+              <span className="font-semibold text-xs uppercase tracking-widest text-white">
                 Weatherford COROD® Y-Tool Calibrator
               </span>
               <div className="flex items-center gap-2">
@@ -441,8 +441,8 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               </div>
             </div>
 
-            {/* LCD Screen Display (2-Line Authentic Display) */}
-            <div className="my-4 p-4 rounded-xl bg-emerald-950 border-4 border-slate-300 shadow-inner font-mono text-emerald-300">
+            {/* LCD Screen Display (2-Line Authentic Display) — dark LCD, light text */}
+            <div className="my-4 p-4 rounded-xl bg-emerald-950 border-4 border-black shadow-inner font-mono text-emerald-300">
               {yTool.poweredOn ? (
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-sm md:text-base font-bold tracking-wider">
@@ -457,12 +457,12 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                         <>HYD TEMP: {Math.round(hydraulics.hydraulicFluidTempC)}°C</>
                       )}
                     </span>
-                    <span className="text-eyebrow px-1.5 py-0.5 rounded bg-emerald-900 text-emerald-200">
+                    <span className="text-eyebrow px-1.5 py-0.5 rounded bg-emerald-900 text-emerald-300">
                       {yTool.unitSystem.toUpperCase()}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center text-xs md:text-sm text-emerald-400/90 border-t border-emerald-800/60 pt-1.5">
+                  <div className="flex justify-between items-center text-xs md:text-sm text-emerald-300/90 border-t border-emerald-700/60 pt-1.5">
                     <span>
                       DEPTH: {yTool.unitSystem === 'imperial' ? `${Math.round(state.rod.currentDepthFt)} FT` : `${Math.round(state.rod.currentDepthFt * 0.3048)} M`}
                     </span>
@@ -472,7 +472,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-4 text-emerald-900 text-xs font-bold uppercase">
+                <div className="text-center py-4 text-emerald-500 text-xs font-bold uppercase">
                   [ Y-TOOL POWER OFF • ACTIVATE ON MAIN ELECTRICAL PANEL ]
                 </div>
               )}
@@ -536,7 +536,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           {/* Nitrogen Regulator & 2-Point Calibration Bar Tool */}
           <div className="lg:col-span-5 space-y-4 rounded-xl bg-white border border-slate-300 p-4 flex flex-col justify-between">
             <div>
-              <span className="text-xs font-bold uppercase text-amber-400 tracking-wider block border-b border-slate-300 pb-2">
+              <span className="text-xs font-bold uppercase text-amber-700 tracking-wider block border-b border-slate-300 pb-2">
                 Nitrogen Gas & Calibrator Head (4.27.11.4)
               </span>
 
@@ -544,7 +544,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="my-3 p-3 rounded-lg bg-slate-100 border border-slate-300">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-slate-500">Nitrogen Regulator:</span>
-                  <span className="font-mono font-bold text-cyan-400">{yTool.nitrogenPressurePsi} PSI</span>
+                  <span className="font-mono font-bold text-cyan-700">{yTool.nitrogenPressurePsi} PSI</span>
                 </div>
                 <input
                   type="range"
@@ -566,17 +566,17 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   </p>
                 )}
                 {calibStage === 1 && (
-                  <p className="text-2xs text-amber-300">
+                  <p className="text-2xs text-amber-700">
                     Step 1: Clamped 0.750" Small End into Y-Tool head. Press Key 1 to calibrate low offset.
                   </p>
                 )}
                 {calibStage === 2 && (
-                  <p className="text-2xs text-amber-300">
+                  <p className="text-2xs text-amber-700">
                     Step 2: Clamped 1.160" Large End into Y-Tool head. Press Key 1 to calibrate span.
                   </p>
                 )}
                 {calibStage === 3 && (
-                  <p className="text-2xs text-emerald-400 font-bold">
+                  <p className="text-2xs text-emerald-700 font-bold">
                     ✓ Calibration Complete! Go/No-Go verified at 0.900" limit.
                   </p>
                 )}
@@ -626,7 +626,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-xl bg-slate-100/70 border border-slate-300">
           {/* Outrigger 6-Spool Directional Levers */}
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4">
-            <span className="text-xs font-bold uppercase text-amber-400 tracking-wider block border-b border-slate-300 pb-2">
+            <span className="text-xs font-bold uppercase text-amber-700 tracking-wider block border-b border-slate-300 pb-2">
               Outrigger Directional Valve Bank (3.6.1)
             </span>
 
@@ -754,7 +754,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   }}
                   className={`p-2 rounded border text-left font-bold ${
                     outriggers.woodenPadsUnderLeft && outriggers.woodenPadsUnderRight
-                      ? 'bg-emerald-950 border-emerald-600 text-emerald-300'
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
                       : 'bg-slate-100 border-slate-300 text-slate-500'
                   }`}
                 >
@@ -769,7 +769,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   }}
                   className={`p-2 rounded border text-left font-bold ${
                     outriggers.wheelChocksPlaced
-                      ? 'bg-emerald-950 border-emerald-600 text-emerald-300'
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
                       : 'bg-slate-100 border-slate-300 text-slate-500'
                   }`}
                 >
@@ -807,7 +807,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-xl bg-slate-100/70 border border-slate-300">
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4">
             <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-              <span className="text-xs font-bold uppercase text-amber-400 tracking-wider">
+              <span className="text-xs font-bold uppercase text-amber-700 tracking-wider">
                 Fassi F150A Knuckle Crane Controls
               </span>
               <span className="text-eyebrow text-slate-500 font-mono">4.5 Metric Tonne</span>
@@ -840,7 +840,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-600">1. Telescope Reach</span>
-                  <span className="text-cyan-400 font-mono">{picker.telescopeLengthFt.toFixed(1)} FT</span>
+                  <span className="text-cyan-700 font-mono">{picker.telescopeLengthFt.toFixed(1)} FT</span>
                 </div>
                 <input
                   type="range"
@@ -856,7 +856,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-600">2 & 3. Knuckle Boom Articulation</span>
-                  <span className="text-cyan-400 font-mono">{picker.angleDegrees}°</span>
+                  <span className="text-cyan-700 font-mono">{picker.angleDegrees}°</span>
                 </div>
                 <input
                   type="range"
@@ -871,7 +871,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-600">4. Base Rotation (360°)</span>
-                  <span className="text-cyan-400 font-mono">{picker.rotationDegrees}°</span>
+                  <span className="text-cyan-700 font-mono">{picker.rotationDegrees}°</span>
                 </div>
                 <input
                   type="range"
@@ -895,19 +895,19 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="my-3 space-y-2 font-mono text-xs">
                 <div className="p-2.5 rounded bg-slate-100 border border-slate-300 flex justify-between">
                   <span className="text-slate-500">Current Lift Load:</span>
-                  <span className="font-bold text-amber-400">{picker.currentLiftWeightLbs} LBS</span>
+                  <span className="font-bold text-amber-700">{picker.currentLiftWeightLbs} LBS</span>
                 </div>
                 <div className="p-2.5 rounded bg-slate-100 border border-slate-300 flex justify-between">
                   <span className="text-slate-500">Capacity @ {picker.telescopeLengthFt.toFixed(0)} FT Reach:</span>
-                  <span className="font-bold text-emerald-400">
+                  <span className="font-bold text-emerald-700">
                     {picker.telescopeLengthFt <= 14 ? '4993 LBS (SAFE)' : '2381 LBS (OVERLOAD!)'}
                   </span>
                 </div>
               </div>
 
               {picker.telescopeLengthFt > 14.5 && (
-                <div className="p-3 rounded-lg bg-red-950/80 border border-red-500 text-red-300 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                <div className="p-3 rounded-lg bg-red-50 border border-red-500 text-red-700 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
                   <span>
                     WARNING: Injector weighs ~4200 lbs! Lifting beyond 14'1" exceeds crane capacity chart!
                   </span>
@@ -926,7 +926,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
       {activeAuxTab === 'thermal' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-xl bg-slate-100/70 border border-slate-300">
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4">
-            <span className="text-xs font-bold uppercase text-amber-400 tracking-wider block border-b border-slate-300 pb-2">
+            <span className="text-xs font-bold uppercase text-amber-700 tracking-wider block border-b border-slate-300 pb-2">
               ProHeat / Engine Coolant Heater (3.6.8)
             </span>
 
@@ -1003,10 +1003,10 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 <span
                   className={`font-mono font-bold ${
                     hydraulics.hydraulicFluidTempC > 70
-                      ? 'text-red-400 font-semibold animate-pulse'
+                      ? 'text-red-700 font-semibold animate-pulse'
                       : hydraulics.hydraulicFluidTempC < 0
-                      ? 'text-cyan-400'
-                      : 'text-emerald-400'
+                      ? 'text-cyan-700'
+                      : 'text-emerald-700'
                   }`}
                 >
                   {Math.round(hydraulics.hydraulicFluidTempC)}°C ({Math.round((hydraulics.hydraulicFluidTempC * 9) / 5 + 32)}°F)
@@ -1025,7 +1025,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
       {activeAuxTab === 'cab' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-xl bg-slate-100/70 border border-slate-300">
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4">
-            <span className="text-xs font-bold uppercase text-amber-400 tracking-wider block border-b border-slate-300 pb-2">
+            <span className="text-xs font-bold uppercase text-amber-700 tracking-wider block border-b border-slate-300 pb-2">
               Transfer Case & PTO Engagement (3.6.10 / 5.4)
             </span>
 
@@ -1081,7 +1081,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-600">Engine Speed (Cruise Control)</span>
-                  <span className="text-emerald-400 font-mono">{hydraulics.engineRpm} RPM</span>
+                  <span className="text-emerald-700 font-mono">{hydraulics.engineRpm} RPM</span>
                 </div>
                 <input
                   type="range"
@@ -1108,7 +1108,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               <div className="my-3 space-y-2">
                 <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 flex justify-between items-center text-xs">
                   <span className="text-slate-500">Roda Intake Valve:</span>
-                  <span className={`font-bold ${hydraulics.rodaValveClosed ? 'text-red-400' : 'text-emerald-400'}`}>
+                  <span className={`font-bold ${hydraulics.rodaValveClosed ? 'text-red-700' : 'text-emerald-700'}`}>
                     {hydraulics.rodaValveClosed ? 'CHOKED / CLOSED' : 'OPEN / OPERATIONAL'}
                   </span>
                 </div>

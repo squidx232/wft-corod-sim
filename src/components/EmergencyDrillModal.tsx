@@ -59,15 +59,15 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-xl bg-white border-4 border-red-600 shadow-xl p-6 text-slate-800 animate-in fade-in zoom-in-95">
+      <div className="relative w-full max-w-3xl rounded-xl bg-white border-4 border-red-400 shadow-xl p-6 text-slate-800 animate-in fade-in zoom-in-95">
         {/* Drill Header */}
-        <div className="flex items-center justify-between border-b-2 border-red-600/60 pb-3 mb-4">
+        <div className="flex items-center justify-between border-b-2 border-red-400/60 pb-3 mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-red-600 text-white animate-pulse">
               <ShieldAlert className="w-7 h-7" />
             </div>
             <div>
-              <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-950 text-red-700 border border-red-700">
+              <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-300">
                 HIGH-PRIORITY EMERGENCY DRILL
               </span>
               <h3 className="text-lg font-semibold text-white">
@@ -91,7 +91,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
         {/* Drill Content based on Type */}
         {!drillCompleted ? (
           <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-red-950/40 border border-red-800 text-xs text-red-200">
+            <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-200">
               {drillType === 'freefall' && (
                 <p>
                   <strong>INCIDENT:</strong> Main charge pump pressure dropped below 250 psi! Gripper motors are freewheeling.
@@ -140,7 +140,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step1Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                     : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
                 }`}
               >
@@ -179,7 +179,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step2Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                     : !step1Done
                     ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
                     : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
@@ -216,7 +216,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step3Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                     : !step2Done
                     ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
                     : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
@@ -253,7 +253,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 }}
                 className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
                   step4Done
-                    ? 'bg-emerald-950/50 border-emerald-700 text-emerald-700'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                     : !step3Done
                     ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300'
                     : 'bg-white border-slate-300 hover:border-amber-500 active:scale-98'
@@ -282,7 +282,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
           </div>
         ) : (
           /* Completed Score Debrief */
-          <div className="p-6 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-center space-y-4">
+          <div className="p-6 rounded-xl bg-emerald-50 border-2 border-emerald-500 text-center space-y-4">
             <Award className="w-14 h-14 text-emerald-700 mx-auto animate-bounce" />
             <div>
               <h4 className="text-lg font-semibold text-emerald-200">

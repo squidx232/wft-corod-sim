@@ -1188,7 +1188,7 @@ export default function App() {
               className={cx(
                 'p-2 rounded-lg border transition-colors',
                 state.soundEnabled
-                  ? 'bg-green-700 border-green-800 text-white'
+                  ? 'bg-green-700 border-green-300 text-white'
                   : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50',
               )}
               title="Toggle audio feedback"
@@ -1509,7 +1509,7 @@ export default function App() {
               </div>
 
               {state.emergencyScenarioId && (
-                <div className="rounded-xl bg-red-950/60 border border-red-700 p-3 text-sm text-red-100 flex items-center gap-2">
+                <div className="rounded-xl bg-red-50 border border-red-300 p-3 text-sm text-red-100 flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
                   A live emergency is in progress — respond on the console using the floating Response HUD.
                 </div>
@@ -1519,9 +1519,9 @@ export default function App() {
                 {EMERGENCY_SCENARIOS.map((emg) => {
                   const sevStyle =
                     emg.severity === 'critical'
-                      ? 'bg-red-950 text-red-400 border-red-800'
+                      ? 'bg-red-50 text-red-400 border-red-300'
                       : emg.severity === 'high'
-                      ? 'bg-amber-950 text-amber-400 border-amber-800'
+                      ? 'bg-amber-50 text-amber-400 border-amber-300'
                       : 'bg-yellow-900 text-yellow-300 border-yellow-700';
                   const btnStyle =
                     emg.severity === 'critical'
