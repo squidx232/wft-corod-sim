@@ -5,6 +5,7 @@ import { WeatherfordControlConsole } from './WeatherfordControlConsole';
 import { OperatorHandsOverlay } from './OperatorHandsOverlay';
 import { SimulatorState } from '../types';
 import { soundManager } from '../utils/audio';
+import { Card, Button, Badge, StatBadge, SegmentedControl, cx } from './ui';
 import {
   ShieldAlert,
   Power,
@@ -302,115 +303,79 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   return (
     <div className="flex flex-col gap-4 w-full relative pb-12">
       {/* ========================================================================= */}
-      {/* 1. MASTER HEADER: Engine Status, Layout Selector, Hands & Sound          */}
+      {/* 1. MASTER HEADER: Engine status, layout selector, engine power           */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3">
+      <Card className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div
-            className={`w-3.5 h-3.5 rounded-full shrink-0 ${
-              hydraulics.engineRunning
-                ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]'
-                : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
-            }`}
+          <span
+            className={cx(
+              'w-3 h-3 rounded-full shrink-0',
+              hydraulics.engineRunning ? 'bg-emerald-500' : 'bg-red-500',
+            )}
           />
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-100 font-mono">
-                3D Operator Station
-              </span>
-              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
-                COROD™
-              </span>
+              <span className="text-sm font-semibold text-slate-100">3D Operator Station</span>
+              <Badge tone="brand" className="hidden sm:inline-flex">COROD™</Badge>
             </div>
-            <p className="text-[11px] text-slate-400">
-              {hydraulics.engineRunning ? 'Engine running' : 'Engine off'} · Depth {Math.round(rod.currentDepthFt).toLocaleString()} ft
+            <p className="text-2xs text-slate-400">
+              {hydraulics.engineRunning ? 'Engine running' : 'Engine off'} · Depth{' '}
+              {Math.round(rod.currentDepthFt).toLocaleString()} ft
             </p>
           </div>
         </div>
 
-        {/* Layout Modes & Quick Settings */}
+        {/* Layout selector + engine power */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* LAYOUT SELECTOR (Eliminates Scrolling) */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <span className="text-[9px] font-mono text-slate-400 px-1.5 uppercase font-bold hidden md:inline">
-              VIEW:
-            </span>
-            {[
-              // 'Operator Cab' (cockpit) view retired — Side-by-Side Split is default.
-              { id: 'split' as const, label: 'Side-by-Side Split', icon: Columns },
-              { id: 'rig-focus' as const, label: '3D Windshield Focus', icon: Maximize2 },
-              { id: 'console-focus' as const, label: 'Console Focus', icon: Sliders },
-            ].map((mode) => {
-              const Icon = mode.icon;
-              const isActive = layoutMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  type="button"
-                  onClick={() => setLayoutMode(mode.id)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                  title={mode.label}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden lg:inline">{mode.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label="View"
+            value={layoutMode}
+            onChange={setLayoutMode}
+            segments={[
+              { id: 'split', label: <span className="hidden lg:inline">Side-by-Side</span>, icon: <Columns className="w-3.5 h-3.5" />, title: 'Side-by-Side Split' },
+              { id: 'rig-focus', label: <span className="hidden lg:inline">Windshield</span>, icon: <Maximize2 className="w-3.5 h-3.5" />, title: '3D Windshield Focus' },
+              { id: 'console-focus', label: <span className="hidden lg:inline">Console</span>, icon: <Sliders className="w-3.5 h-3.5" />, title: 'Console Focus' },
+            ]}
+          />
 
-          {/* Operator hands toggle removed to declutter the station header. */}
-
-          {/* Engine Power Switch — shows RUNNING only after the FULL start-up
-              sequence has been completed (not mid-sequence). */}
-          <button
-            type="button"
+          {/* Engine power switch — RUNNING only after the full start-up sequence. */}
+          <Button
+            variant={state.engineStartSequenceComplete ? 'success' : 'primary'}
+            icon={<Power className="w-3.5 h-3.5" />}
             onClick={() => {
               if (state.engineStartSequenceComplete) {
-                // Shut the engine down (also resets the start-sequence gate)
                 soundManager.stopEngineLoop();
                 onShutdownEngine?.();
               } else {
-                // Open the guided engine start-up sequence modal (Manual §5.2)
                 onStartEngine?.();
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider border transition-all ${
-              state.engineStartSequenceComplete
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700 hover:bg-emerald-900'
-                : 'bg-amber-600 text-white border-amber-400 hover:bg-amber-500 animate-pulse'
-            }`}
           >
-            <Power className="w-3.5 h-3.5" />
-            <span>{state.engineStartSequenceComplete ? 'RUNNING' : 'START'}</span>
-          </button>
+            {state.engineStartSequenceComplete ? 'Running' : 'Start'}
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      {/* Charge Pressure Critical Warning */}
+      {/* Charge Pressure Critical Warning — the ONE place a pulse is warranted. */}
       {isChargePressureCritical && (
-        <div className="rounded-xl bg-red-950/90 border-2 border-red-500 p-3 flex flex-wrap items-center justify-between gap-3 text-red-100 shadow-xl animate-pulse">
+        <div className="rounded-xl bg-red-950/90 border border-red-500 p-3 flex flex-wrap items-center justify-between gap-3 text-red-100 shadow-md animate-pulse">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
             <div>
-              <span className="font-bold text-xs block text-red-200">
-                CRITICAL WARNING: CHARGE PRESSURE &lt; 250 PSI
+              <span className="font-semibold text-sm block text-red-200">
+                Critical: charge pressure below 250 PSI
               </span>
-              <p className="text-[11px] text-red-300">
-                Engage Rod Safety Clamp (V) immediately to lock rod string.
+              <p className="text-2xs text-red-300">
+                Engage the rod safety clamp (V) immediately to lock the rod string.
               </p>
             </div>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="danger"
             onClick={() => handleUpdateHydraulics({ safetyClampLever: 'ON' })}
-            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg"
           >
-            ENGAGE SAFETY CLAMP (V)
-          </button>
+            Engage Safety Clamp (V)
+          </Button>
         </div>
       )}
 
@@ -419,53 +384,38 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       {/* ========================================================================= */}
       <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
         {/* Real-time Telemetry Badges */}
-        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">DEPTH:</span>
-            <span className="font-bold text-emerald-400 text-sm">
-              {Math.round(rod.currentDepthFt)} FT
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatBadge label="Depth" tone="success" value={`${Math.round(rod.currentDepthFt)} FT`} />
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">SPEED:</span>
-            <span
-              className={`font-bold text-sm ${
-                rod.rodSpeedFtPerMin > 0
-                  ? 'text-emerald-400'
-                  : rod.rodSpeedFtPerMin < 0
-                  ? 'text-blue-400'
-                  : 'text-slate-300'
-              }`}
-            >
-              {rod.rodSpeedFtPerMin > 0.05
+          <StatBadge
+            label="Speed"
+            tone={rod.rodSpeedFtPerMin > 0.05 ? 'success' : rod.rodSpeedFtPerMin < -0.05 ? 'info' : 'neutral'}
+            value={
+              rod.rodSpeedFtPerMin > 0.05
                 ? `${rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN (POOH ↑)`
                 : rod.rodSpeedFtPerMin < -0.05
                 ? `${Math.abs(rod.rodSpeedFtPerMin).toFixed(1)} FT/MIN (RIH ↓)`
-                : '0.0 FT/MIN'}
-            </span>
-          </div>
+                : '0.0 FT/MIN'
+            }
+          />
 
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">WEIGHT:</span>
-            <span className="font-bold text-amber-400 text-sm">
-              {Math.round(rod.totalStringWeightLbs).toLocaleString()} LBS
-            </span>
-          </div>
+          <StatBadge
+            label="Weight"
+            tone="warning"
+            value={`${Math.round(rod.totalStringWeightLbs).toLocaleString()} LBS`}
+          />
 
-          <div className="hidden sm:flex px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">SQUEEZE:</span>
-            <span className="font-bold text-slate-200">
-              {Math.round(hydraulics.squeezePressure)} PSI
-            </span>
-          </div>
+          <StatBadge
+            label="Squeeze"
+            className="hidden sm:flex"
+            value={`${Math.round(hydraulics.squeezePressure)} PSI`}
+          />
 
-          <div className="hidden md:flex px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 items-center gap-1.5">
-            <span className="text-slate-400 text-[10px]">CHAIN TENSION:</span>
-            <span className="font-bold text-slate-200">
-              {Math.round(hydraulics.chainTensionPressure)} PSI
-            </span>
-          </div>
+          <StatBadge
+            label="Chain Tension"
+            className="hidden md:flex"
+            value={`${Math.round(hydraulics.chainTensionPressure)} PSI`}
+          />
 
           <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
             <span className="text-slate-400 text-[10px]">CLAMP (V):</span>
