@@ -97,7 +97,17 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // runs continuously coil edge → arm guide head → guide arch → injector.
 // Placed WELL OUTBOARD of the reel rims (flange radius 2.3) on the +X side, at a
 // low/side height (not above the reel), matching the field layout.
-const GUIDE_HEAD = { x: REEL_X + 4.2, y: 3.4, z: REEL_Z };
+const GUIDE_HEAD = { x: REEL_X + 2.9, y: 3.2, z: REEL_Z };
+// Reel coil geometry proxy (must match buildServiceReel's coil params) so the rod
+// can dynamically connect to the coil's CURRENT outer radius as it shrinks.
+const COIL_BARREL_R = 0.42;            // barrel radius the first wrap sits on
+const COIL_MAX_OUTER_R = 2.05;         // outer radius at a FULL reel
+const REEL_CENTER_Y = 3.1;             // world Y of the reel/coil centre (= reelGroup Y)
+// Current coil outer radius for a given fill fraction (1 = full, 0 = empty).
+function coilOuterRadius(fill: number): number {
+  const f = Math.max(0, Math.min(1, fill));
+  return COIL_BARREL_R + f * (COIL_MAX_OUTER_R - COIL_BARREL_R);
+}
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -660,6 +670,18 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
             coilTubeRef.current.geometry.dispose();
             coilTubeRef.current.geometry = newGeo ?? new THREE.BufferGeometry();
             coilTubeRef.current.visible = newGeo != null;
+          }
+          // Rebuild the ROD STRAND too so its coil-connection point tracks the
+          // shrinking coil radius (rod stays glued to the wraps at any depth).
+          if (rodStrandRef.current) {
+            const rodBuilder = (rodStrandRef.current.userData as {
+              buildRodStrandGeometry?: (f: number) => THREE.TubeGeometry;
+            }).buildRodStrandGeometry;
+            if (rodBuilder) {
+              const newRodGeo = rodBuilder(eased);
+              rodStrandRef.current.geometry.dispose();
+              rodStrandRef.current.geometry = newRodGeo;
+            }
           }
           coilFillRef.current = eased;
         }
@@ -3155,8 +3177,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // The arch is stretched/re-anchored to start there instead of floating off the
     // top of the coil, so the guide physically connects to the containment arm.
     return new THREE.CatmullRomCurve3([
-      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),      // AT the arm's guide head (outboard, low)
-      new THREE.Vector3(GUIDE_HEAD.x + 1.0, GUIDE_HEAD.y + 3.0, REEL_Z * 0.75), // rising away from the reel toward the well
+      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),      // AT the arm's guide head (near reel, low)
+      new THREE.Vector3(GUIDE_HEAD.x + 1.6, GUIDE_HEAD.y + 3.4, REEL_Z * 0.6), // rising away from the reel toward the well
       new THREE.Vector3(WELL_X - 2.2, INJECTOR_TOP_Y + 1.6, 0),    // approaching the arch (reel side)
       new THREE.Vector3(WELL_X - 0.4, apexY, 0),                   // near the apex
       new THREE.Vector3(WELL_X, apexY - 0.05, 0),                  // over the apex
@@ -3804,30 +3826,33 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // the guide (relocation only; guide width unchanged).
     const guideCurve = getRodGuideCurve();
     const ARC_SAMPLES = 80;
-    const rodPoints: THREE.Vector3[] = [];
-    // Lead-in: rod pays off the OUTER SIDE of the reel coil (+X / well-facing
-    // edge), runs OUTWARD and slightly down/along to the containment arm's guide
-    // head (GUIDE_HEAD), THEN follows the guide arch. It never goes over the top
-    // and never dips toward the reel centre (which would clash with the spinning
-    // coil) — matching the field routing: coil edge → arm head → arch → injector.
-    // Start point is TUCKED INTO the coil's outer wrap surface (reel centre is at
-    // world (REEL_X, 3.1, REEL_Z); the wound coil's outer radius ≈ 2.05). Starting
-    // at radius ≈ 1.85 on the +X side (world x ≈ REEL_X+1.85, y = 3.1) makes the
-    // rod visibly EMERGE FROM / connect to the wraps instead of reading as a
-    // separate floating stub, then it runs outward to the guide head.
-    rodPoints.push(new THREE.Vector3(REEL_X + 1.85, 3.1, REEL_Z));           // tucked into the coil wraps
-    rodPoints.push(new THREE.Vector3(REEL_X + 2.6, 3.15, REEL_Z));           // leaving the coil surface
-    rodPoints.push(new THREE.Vector3(REEL_X + 3.4, 3.25, REEL_Z));           // running outward, clear of rims
-    rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
-    for (let i = 0; i <= ARC_SAMPLES; i++) {
-      rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
-    }
-    // Continue straight down the well line from the guide's exit point.
-    rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0));   // into injector head centre
-    rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_BASE_Y, 0));  // through the injector
-    rodPoints.push(new THREE.Vector3(WELL_X, BOP_TOP_Y - 2.0, 0));  // through the BOP
-    rodPoints.push(new THREE.Vector3(WELL_X, 0.0, 0));              // into the wellhead
-    const rodCurve = new THREE.CatmullRomCurve3(rodPoints);
+
+    // DYNAMIC rod-strand geometry builder, parameterised by the reel FILL fraction
+    // (1 = full reel, 0 = empty). The rod's start point rides on the coil's CURRENT
+    // outer radius via coilOuterRadius(fill), so as the coil SHRINKS during RIH the
+    // connection point tracks inward and the rod stays glued to the wraps (never a
+    // floating stub). From the coil edge it runs OUTWARD (never over the top / never
+    // toward the reel centre) through the containment guide head, into the arch,
+    // then down the well line. Rebuilt in the render loop whenever fill changes.
+    const buildRodStrandGeometry = (fill: number): THREE.TubeGeometry => {
+      const r = coilOuterRadius(fill);                 // current coil outer radius
+      const rodPoints: THREE.Vector3[] = [];
+      // Emerge from the coil surface on the +X (well-facing) side, at coil centre
+      // height. Tuck slightly INSIDE the surface (r − 0.1) so it reads as connected.
+      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z));
+      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.25, REEL_CENTER_Y + 0.05, REEL_Z)); // just off the surface
+      rodPoints.push(new THREE.Vector3((REEL_X + r + 0.25 + GUIDE_HEAD.x) / 2, (REEL_CENTER_Y + GUIDE_HEAD.y) / 2, REEL_Z)); // outward toward the arm
+      rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
+      for (let i = 0; i <= ARC_SAMPLES; i++) {
+        rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
+      }
+      rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_TOP_Y, 0));   // into injector head centre
+      rodPoints.push(new THREE.Vector3(WELL_X, INJECTOR_BASE_Y, 0));  // through the injector
+      rodPoints.push(new THREE.Vector3(WELL_X, BOP_TOP_Y - 2.0, 0));  // through the BOP
+      rodPoints.push(new THREE.Vector3(WELL_X, 0.0, 0));              // into the wellhead
+      const rodCurve = new THREE.CatmullRomCurve3(rodPoints);
+      return new THREE.TubeGeometry(rodCurve, 96, 0.045, 16, false);
+    };
 
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -3851,11 +3876,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       roughness: 0.2,
     });
 
-    // Thin CoRod string (≈1" continuous rod) — kept slim so the wellhead/BOP
-    // read as the dominant equipment rather than the rod.
-    const rodGeo = new THREE.TubeGeometry(rodCurve, 64, 0.045, 16, false);
-    const rodMesh = new THREE.Mesh(rodGeo, rodMat);
+    // Thin CoRod string (â‰ˆ1" continuous rod). Built at FULL fill initially; the
+    // render loop rebuilds it as the reel pays off so the connection point tracks
+    // the shrinking coil.
+    const rodMesh = new THREE.Mesh(buildRodStrandGeometry(1), rodMat);
     rodMesh.castShadow = true;
+    // Expose the builder so the render loop can regenerate the strand on fill change.
+    (rodMesh as THREE.Mesh & { userData: { buildRodStrandGeometry: (f: number) => THREE.TubeGeometry } })
+      .userData.buildRodStrandGeometry = buildRodStrandGeometry;
     scene.add(rodMesh);
     rodStrandRef.current = rodMesh;
   }
