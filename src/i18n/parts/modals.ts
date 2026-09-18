@@ -152,7 +152,7 @@ export const modals: TranslationPart = {
     'bindings.valueAxisLabel': 'axis',
     'bindings.valueDecButtonHint': 'Button that DECREASES the selected value (e.g. LT)',
     'bindings.valueIncButtonHint': 'Button that INCREASES the selected value (e.g. RT)',
-    'bindings.sharedExplain': 'Selector + Shared Axis: Tap a control\'s SEL key/button to make it the active target, then use a shared stick to change it. MOVE-AXIS drives movement controls; VALUE-AXIS drives values (up = increase/ON, down = decrease/OFF).',
+    'bindings.sharedExplain': "Selector + Shared Axis: Tap a control's SEL key/button to make it the active target, then use a shared stick to change it. MOVE-AXIS drives movement controls; VALUE-AXIS drives values (up = increase/ON, down = decrease/OFF).",
     'bindings.capture': 'Press a key or gamepad input to bind… (Esc to cancel)',
     'bindings.moveAxisGroup': 'MOVE-AXIS',
     'bindings.valueAxisGroup': 'VALUE-AXIS',

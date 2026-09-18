@@ -161,15 +161,15 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
                 <div className="grid grid-cols-3 gap-3 mt-4 text-center font-mono">
                   <div className="p-2.5 rounded bg-white border border-slate-300">
-                    <span className="text-eyebrow text-slate-500 block">Total String Weight</span>
+                    <span className="text-eyebrow text-slate-500 block">{t('manual.squeeze.stringWeight')}</span>
                     <span className="text-lg font-bold text-amber-700">{Math.round(stringWeight).toLocaleString()} lbs</span>
                   </div>
                   <div className="p-2.5 rounded bg-white border border-slate-300">
-                    <span className="text-eyebrow text-slate-500 block">Min Squeeze Required</span>
+                    <span className="text-eyebrow text-slate-500 block">{t('manual.squeeze.minSqueeze')}</span>
                     <span className="text-lg font-bold text-emerald-700">{matchedCurve.minSqueezePsi} psi</span>
                   </div>
                   <div className="p-2.5 rounded bg-white border border-slate-300">
-                    <span className="text-eyebrow text-slate-500 block">Recommended Clamp</span>
+                    <span className="text-eyebrow text-slate-500 block">{t('manual.squeeze.recommendedClamp')}</span>
                     <span className="text-2xs font-semibold text-blue-700 truncate block mt-1">
                       {recommendedClamp.type}
                     </span>
@@ -190,7 +190,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             <div className="space-y-3">
               <div className="p-4 rounded-lg bg-slate-100 border border-slate-300">
                 <span className="text-xs font-semibold text-slate-700 block mb-2">
-                  Table 9 & 10: Rod Clamp Selection Guidelines
+                  {t('manual.clamps.title')}
                 </span>
                 <div className="text-xs text-slate-600 space-y-2">
                   <p>
@@ -215,7 +215,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             <div className="space-y-3">
               <div className="p-4 rounded-lg bg-slate-100 border border-slate-300 overflow-x-auto">
                 <span className="text-xs font-semibold text-slate-700 block mb-3">
-                  Table 11: Rod Straightening Pressures for Round COROD (psi)
+                  {t('manual.straightener.title')}
                 </span>
                 <table className="w-full text-left text-xs font-mono">
                   <thead>
@@ -248,7 +248,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             <div className="space-y-3">
               <div className="p-4 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600 space-y-2">
                 <span className="text-xs font-semibold text-slate-700 block mb-2">
-                  Extreme Weather & Thermal Management (Section 4.23 & 4.24)
+                  {t('manual.weather.title')}
                 </span>
                 <p>
                   • <strong>Cold Weather Limit:</strong> Never operate hydraulics until fluid is at least 0°C (32°F). Maintain between 0°C and 50°C.
@@ -269,7 +269,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {activeTab === 'tools' && (
             <div className="p-4 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600 space-y-2">
               <span className="text-xs font-semibold text-slate-700 block mb-2">
-                Table 14: Mobile Gripper Standard Tool Chest
+                {t('manual.tools.title')}
               </span>
               <p>• 18", 24", and 36" Rigid Pipe Wrenches (Never use snipes on aluminum wrenches!)</p>
               <p>• Trico Sucker Rod Wrenches (3/4", 7/8", 1", 1-1/8")</p>
@@ -284,7 +284,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {activeTab === 'glossary' && (
             <div className="p-4 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600 space-y-2">
               <span className="text-xs font-semibold text-slate-700 block mb-2">
-                Appendix J: Glossary of Terms
+                {t('manual.glossary.title')}
               </span>
               <p><strong>BOP:</strong> Blow Out Preventer used to control well pressure during servicing.</p>
               <p><strong>COROD:</strong> Continuous sucker rod with no couplings manufactured by Weatherford.</p>
@@ -302,7 +302,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             onClick={onClose}
             className="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-white font-semibold text-xs"
           >
-            Close Manual
+            {t('manual.close')}
           </button>
         </div>
       </div>

@@ -308,10 +308,10 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             <div className="flex flex-wrap items-center justify-between border-b border-slate-300 pb-3 gap-2">
               <div>
                 <span className="eyebrow px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-300">
-                  FORM NUMBER: GL-PCP-OEPS-L4-11
+                  {t('analytics.logbook.form')}
                 </span>
                 <h4 className="text-base font-semibold text-slate-800 mt-1">
-                  Weatherford COROD® MG Operations Logbook (Daily Sheet)
+                  {t('analytics.logbook.title')}
                 </h4>
               </div>
               <button
@@ -319,7 +319,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-2xs flex items-center gap-1.5 shadow-md active:scale-95"
               >
                 <Stamp className="w-4 h-4" />
-                Sign & Certify Daily Sheet
+                {t('analytics.logbook.btn.sign')}
               </button>
             </div>
 
@@ -327,7 +327,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
               <div>
                 <label className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                  Wellsite Location
+                  {t('analytics.logbook.field.well')}
                 </label>
                 <input
                   type="text"
@@ -339,7 +339,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
 
               <div>
                 <label className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                  Mobile Gripper Unit #
+                  {t('analytics.logbook.field.unit')}
                 </label>
                 <input
                   type="text"
@@ -351,7 +351,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
 
               <div>
                 <label className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                  Operator Name / Badge #
+                  {t('analytics.logbook.field.operator')}
                 </label>
                 <input
                   type="text"
@@ -365,7 +365,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             {/* Level I Daily Inspection Checklist (Table 13 / Section 5.2.3) */}
             <div className="space-y-2 pt-2 border-t border-slate-300">
               <span className="text-xs font-semibold text-amber-700 block mb-2">
-                Mandatory Level I Daily Inspection Checklist (Table 13)
+                {t('analytics.logbook.checklist.title')}
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -403,7 +403,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           {/* Past Log Entries */}
           <div className="space-y-3">
             <span className="text-xs font-semibold text-slate-600 block">
-              Certified Operations Logbook History
+              {t('analytics.logbook.history')}
             </span>
 
             {logbook.map((entry) => (
@@ -452,35 +452,35 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
 
           <div>
             <span className="eyebrow font-semibold text-amber-700">
-              CERTIFICATE OF OPERATIONAL COMPETENCY
+              {t('analytics.cert.title')}
             </span>
             <h3 className="text-2xl font-semibold text-slate-800 mt-1">
-              Weatherford COROD® Mobile Gripper Operator
+              {t('analytics.cert.subtitle')}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Awarded under standard operating protocol GL-PCP-OEPS-L4-11 (Rev 25)
+              {t('analytics.cert.protocol')}
             </p>
           </div>
 
           <div className="p-4 rounded-xl bg-white/80 border border-slate-300 text-left space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-slate-500">Certified Operator:</span>
+              <span className="text-slate-500">{t('analytics.cert.operator')}:</span>
               <span className="font-semibold text-slate-800">{operatorName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Rating:</span>
+              <span className="text-slate-500">{t('analytics.cert.rating')}:</span>
               <span className="font-semibold text-emerald-700">
-                Continuous Sucker Rod & 4.5T Knuckle Picker Level II
+                {t('analytics.cert.rating.level')}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Safety & Emergency Reaction:</span>
+              <span className="text-slate-500">{t('analytics.cert.safety')}:</span>
               <span className="font-semibold text-amber-700 font-mono">
                 {performance.safetyScore}% ({performance.emergencyReactionTimeMs} ms)
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Date of Validation:</span>
+              <span className="text-slate-500">{t('analytics.cert.date')}:</span>
               <span className="font-mono text-slate-600">{new Date().toLocaleDateString()}</span>
             </div>
           </div>
@@ -491,7 +491,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
               className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-2xs flex items-center gap-1.5 shadow-md active:scale-95"
             >
               <Printer className="w-4 h-4" />
-              Print Certificate
+              {t('analytics.btn.print')}
             </button>
           </div>
         </div>

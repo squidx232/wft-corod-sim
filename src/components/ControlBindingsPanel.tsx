@@ -9,6 +9,7 @@ import { X, Keyboard, Gamepad2, RotateCcw, Search } from 'lucide-react';
 import { CONTROLS, CONTROL_CATEGORIES, ControlDef } from '../input/controlRegistry';
 import { keyLabel, padButtonLabel, padAxisLabel } from '../input/bindings';
 import { UseInputSystem, CaptureSlot } from '../input/useInputSystem';
+import { useT } from '../i18n';
 
 interface Props {
   input: UseInputSystem;
@@ -20,6 +21,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
     bindings, capture, startCapture, clearBindingSlot, resetAll, enabled, setEnabled, status,
     sharedAxes, setSharedAxes, activeMovementTarget, activeValueTarget,
   } = input;
+  const { t } = useT();
   const [query, setQuery] = useState('');
 
   const isCapturing = (id: string, slot: CaptureSlot) =>
@@ -34,7 +36,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
         type="button"
         onClick={() => startCapture(controlId, slot)}
         onContextMenu={(e) => { e.preventDefault(); clearBindingSlot(controlId, slot); }}
-        title="Click to bind • Right-click to clear"
+        title={t('bindings.legend.hint')}
         className={`min-w-[68px] px-2 py-1 rounded-md text-[11px] font-mono font-bold border transition-all
           ${capturing
             ? 'bg-amber-500 text-black border-amber-300 animate-pulse'
@@ -73,14 +75,14 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
               // shared value keys) after selecting. No per-control +/- to avoid
               // multiple knobs responding at once.
               <>
-                <span className="text-[9px] text-amber-700 font-mono" title="Tap this to make this knob the active target for the shared RT/LT (+/−)">SELECT</span>
+                <span className="text-[9px] text-amber-700 font-mono" title={t('bindings.selectorHint')}>{t('bindings.selector')}</span>
                 <Slot controlId={c.id} slot="selectorKey" kind="key" value={keyLabel(b.selectorKey)} />
                 <Slot controlId={c.id} slot="selectorButton" kind="pad" value={padButtonLabel(b.selectorButton)} />
-                <span className="text-[9px] text-slate-500 ml-1 italic">then RT/LT</span>
+                <span className="text-[9px] text-slate-500 ml-1 italic">{t('bindings.thenShared')}</span>
               </>
             ) : (
               // Special analog (e.g. gripper drive) — driven directly, info only.
-              <span className="text-[10px] text-cyan-700 font-mono italic px-2">Right stick ↑POOH / ↓RIH</span>
+              <span className="text-[10px] text-cyan-700 font-mono italic px-2">{t('bindings.specialAnalog')}</span>
             )
           ) : (
             <>
@@ -107,11 +109,11 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-300 bg-slate-100">
           <div className="flex items-center gap-2">
             <Gamepad2 className="w-5 h-5 text-emerald-700" />
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Control Bindings</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">{t('bindings.title')}</h2>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-mono px-2 py-1 rounded-full border ${status.gamepadConnected ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-500 border-slate-300'}`}>
-              {status.gamepadConnected ? '🎮 Connected' : '🎮 No gamepad'}
+              {status.gamepadConnected ? t('bindings.connected') : t('bindings.disconnected')}
             </span>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"><X className="w-5 h-5" /></button>
           </div>
@@ -121,14 +123,14 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
         <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-300 bg-slate-50 flex-wrap">
           <label className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="accent-emerald-500" />
-            Input enabled
+            {t('bindings.inputEnabled')}
           </label>
           <div className="flex items-center gap-1 bg-slate-100 rounded-md px-2 py-1 flex-1 min-w-[140px]">
             <Search className="w-3.5 h-3.5 text-slate-500" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search controls…"
+              placeholder={t('bindings.searchPlaceholder')}
               className="bg-transparent outline-none text-[12px] text-slate-700 w-full"
             />
           </div>
@@ -136,59 +138,58 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
             onClick={resetAll}
             className="flex items-center gap-1.5 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-md bg-red-50 text-red-700 border border-red-300 hover:bg-red-50"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> Reset defaults
+            <RotateCcw className="w-3.5 h-3.5" /> {t('bindings.resetBtn')}
           </button>
         </div>
 
         {/* Legend */}
         <div className="flex items-center gap-3 px-4 py-1.5 text-[10px] text-slate-500 border-b border-slate-200 flex-wrap">
-          <span className="flex items-center gap-1"><Keyboard className="w-3 h-3 text-sky-700" /> Key</span>
-          <span className="flex items-center gap-1"><Gamepad2 className="w-3 h-3 text-emerald-700" /> Pad button</span>
-          <span className="flex items-center gap-1"><span className="text-purple-700">◑</span> Analog axis</span>
-          <span className="ml-auto italic">Click a slot to bind • Right-click to clear</span>
+          <span className="flex items-center gap-1"><Keyboard className="w-3 h-3 text-sky-700" /> {t('bindings.legend.key')}</span>
+          <span className="flex items-center gap-1"><Gamepad2 className="w-3 h-3 text-emerald-700" /> {t('bindings.legend.pad')}</span>
+          <span className="flex items-center gap-1"><span className="text-purple-700">◑</span> {t('bindings.legend.axis')}</span>
+          <span className="ml-auto italic">{t('bindings.legend.hint')}</span>
         </div>
 
         {/* Shared-axis selector scheme explainer + config */}
         <div className="px-4 py-2 border-b border-slate-200 bg-slate-50">
           <div className="text-[11px] text-slate-600 mb-1.5">
-            <b className="text-amber-700">Selector + Shared Axis:</b> Tap a control's <span className="text-amber-700 font-mono">SEL</span> key/button to make it the
-            active target, then use a shared stick to change it. <span className="text-orange-700">MOVE-AXIS</span> drives movement controls; <span className="text-cyan-700">VALUE-AXIS</span> drives values (up = increase/ON, down = decrease/OFF).
+            {t('bindings.sharedExplain')}
           </div>
           <div className="flex items-center gap-3 flex-wrap text-[10px] font-mono">
             <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-300 rounded-md px-2 py-1 flex-wrap">
-              <span className="text-orange-700 font-bold">MOVE</span>
-              <span className="text-slate-500">axis</span>
+              <span className="text-orange-700 font-bold">{t('bindings.moveAxis')}</span>
+              <span className="text-slate-500">{t('bindings.moveAxisLabel')}</span>
               <button onClick={() => startCapture('__sharedMove', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-300">
                 {isCapturing('__sharedMove', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.movementAxis)}
               </button>
-              <button onClick={() => setSharedAxes({ ...sharedAxes, movementInvert: !sharedAxes.movementInvert })} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-400" title="Invert axis">
+              <button onClick={() => setSharedAxes({ ...sharedAxes, movementInvert: !sharedAxes.movementInvert })} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-400" title={t('bindings.invHint')}>
                 {sharedAxes.movementInvert ? 'Inv ✓' : 'Inv ✗'}
               </button>
-              <span className="text-slate-500 ml-1">−</span>
-              <button onClick={() => startCapture('__sharedMoveDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title="Button that DECREASES the selected movement target">
+              <span className="text-slate-500 ml-1">{t('bindings.decButton')}</span>
+              <button onClick={() => startCapture('__sharedMoveDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title={t('bindings.decButtonHint')}>
                 {isCapturing('__sharedMoveDec', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.movementDecButton)}
               </button>
-              <span className="text-slate-500">＋</span>
-              <button onClick={() => startCapture('__sharedMoveInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title="Button that INCREASES the selected movement target">
+              <span className="text-slate-500">{t('bindings.incButton')}</span>
+              <button onClick={() => startCapture('__sharedMoveInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title={t('bindings.incButtonHint')}>
                 {isCapturing('__sharedMoveInc', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.movementIncButton)}
               </button>
               <span className="text-slate-500 ml-1">▶ <span className="text-orange-700">{activeMovementTarget ? (CONTROLS.find(c=>c.id===activeMovementTarget)?.label ?? activeMovementTarget) : '—'}</span></span>
             </div>
             <div className="flex items-center gap-1.5 bg-cyan-50 border border-cyan-300 rounded-md px-2 py-1 flex-wrap">
-              <span className="text-cyan-700 font-bold">VALUE</span>
-              <span className="text-slate-500">axis</span>
+              <span className="text-cyan-700 font-bold">{t('bindings.valueAxis')}</span>
+              <span className="text-slate-500">{t('bindings.valueAxisLabel')}</span>
               <button onClick={() => startCapture('__sharedValue', 'gamepadAxis')} className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-300">
                 {isCapturing('__sharedValue', 'gamepadAxis') ? 'Move…' : padAxisLabel(sharedAxes.valueAxis)}
               </button>
-              <button onClick={() => setSharedAxes({ ...sharedAxes, valueInvert: !sharedAxes.valueInvert })} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-400" title="Invert axis">
+              <button onClick={() => setSharedAxes({ ...sharedAxes, valueInvert: !sharedAxes.valueInvert })} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-400" title={t('bindings.invHint')}>
                 {sharedAxes.valueInvert ? 'Inv ✓' : 'Inv ✗'}
               </button>
-              <span className="text-slate-500 ml-1">− (LT)</span>
-              <button onClick={() => startCapture('__sharedValueDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title="Button that DECREASES the selected value (e.g. LT)">
+              <span className="text-slate-500 ml-1">{t('bindings.decButton')} (LT)</span>
+              <button onClick={() => startCapture('__sharedValueDec', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title={t('bindings.valueDecButtonHint')}>
                 {isCapturing('__sharedValueDec', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.valueDecButton)}
               </button>
-              <span className="text-slate-500">＋ (RT)</span>
-              <button onClick={() => startCapture('__sharedValueInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title="Button that INCREASES the selected value (e.g. RT)">
+              <span className="text-slate-500">{t('bindings.incButton')} (RT)</span>
+              <button onClick={() => startCapture('__sharedValueInc', 'gamepadButton')} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300" title={t('bindings.valueIncButtonHint')}>
                 {isCapturing('__sharedValueInc', 'gamepadButton') ? '…' : padButtonLabel(sharedAxes.valueIncButton)}
               </button>
               <span className="text-slate-500 ml-1">▶ <span className="text-cyan-700">{activeValueTarget ? (CONTROLS.find(c=>c.id===activeValueTarget)?.label ?? activeValueTarget) : '—'}</span></span>
@@ -215,7 +216,7 @@ export const ControlBindingsPanel: React.FC<Props> = ({ input, onClose }) => {
         {/* Capture hint footer */}
         {capture && (
           <div className="px-4 py-2 bg-amber-500 text-black text-[12px] font-bold text-center">
-            Press a key or gamepad input to bind… (Esc to cancel)
+            {t('bindings.capture')}
           </div>
         )}
       </div>
