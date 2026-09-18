@@ -97,12 +97,13 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // runs continuously coil edge → arm guide head → guide arch → injector.
 // Placed WELL OUTBOARD of the reel rims (flange radius 2.3) on the +X side, at a
 // low/side height (not above the reel), matching the field layout.
-// The arm/guide stands on the GROUND BESIDE the reel on the WELLHEAD (+X) side.
-// The reel centre is at world (REEL_X=5, ·, REEL_Z=-11) with rim radius ≈2.3, so
-// its +X rim edge is at world x≈7.3. Placing the head at x≈8.2 puts the arm just
-// PAST the rim (≈2 ft beside it), between the reel and the wellhead (x=9), NOT on
-// or behind the reel. Height is low (side level).
-const GUIDE_HEAD = { x: REEL_X + 3.2, y: 3.2, z: REEL_Z };
+// The arm/guide stands on the GROUND at the reel's FRONT-LEFT corner (toward the
+// MG/pulling unit). The reel centre is world (REEL_X=5, ·, REEL_Z=-11) with rim
+// radius ≈2.3. We place the head to the LEFT (−? no) / FRONT of the reel in +Z
+// (toward the MG/camera, clear of the +Z rim edge at z≈-8.7) and only slightly
+// toward the well in +X — so the arm sits at the front-left corner beside the
+// reel, in the direction the guide arch travels toward the mast/injector.
+const GUIDE_HEAD = { x: REEL_X + 1.4, y: 3.2, z: REEL_Z + 3.0 };
 // Reel coil geometry proxy (must match buildServiceReel's coil params) so the rod
 // can dynamically connect to the coil's CURRENT outer radius as it shrinks.
 const COIL_BARREL_R = 0.42;            // barrel radius the first wrap sits on
@@ -3177,13 +3178,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // rod threads continuously: reel coil → arm guide head → this arch → injector.
     // The arch is stretched/re-anchored to start there instead of floating off the
     // top of the coil, so the guide physically connects to the containment arm.
+    // The rod must leave the guide head HORIZONTALLY (out the END of the arm, like
+    // the manual) and only THEN curve up into the arch — not shoot straight up off
+    // the head. So the first control points stay at the head's HEIGHT and extend in
+    // the travel direction (toward the well/mast, +X and +Z toward z=0), giving a
+    // long horizontal lead-out; the arch then sweeps up with a WIDER curve.
+    const dirX = WELL_X - GUIDE_HEAD.x;          // horizontal travel toward the well
+    const dirZ = 0 - GUIDE_HEAD.z;               // and toward the well's z=0 line
+    const dirLen = Math.hypot(dirX, dirZ) || 1;
+    const ux = dirX / dirLen, uz = dirZ / dirLen; // unit horizontal travel direction
     return new THREE.CatmullRomCurve3([
-      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),      // AT the arm's guide head (near reel, low)
-      new THREE.Vector3(GUIDE_HEAD.x + 1.6, GUIDE_HEAD.y + 3.4, REEL_Z * 0.6), // rising away from the reel toward the well
-      new THREE.Vector3(WELL_X - 2.2, INJECTOR_TOP_Y + 1.6, 0),    // approaching the arch (reel side)
-      new THREE.Vector3(WELL_X - 0.4, apexY, 0),                   // near the apex
-      new THREE.Vector3(WELL_X, apexY - 0.05, 0),                  // over the apex
-      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.4, 0),          // down into the injector head top
+      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),                       // AT the guide head
+      new THREE.Vector3(GUIDE_HEAD.x + ux * 1.4, GUIDE_HEAD.y, GUIDE_HEAD.z + uz * 1.4), // HORIZONTAL lead-out (same height)
+      new THREE.Vector3(GUIDE_HEAD.x + ux * 2.8, GUIDE_HEAD.y + 0.4, GUIDE_HEAD.z + uz * 2.8), // still low, just beginning to rise
+      new THREE.Vector3(WELL_X - 2.6, INJECTOR_TOP_Y - 0.5, GUIDE_HEAD.z * 0.35),        // wide sweep rising toward the well
+      new THREE.Vector3(WELL_X - 1.0, apexY - 0.6, 0),                                   // approaching the apex
+      new THREE.Vector3(WELL_X, apexY - 0.05, 0),                                        // over the apex
+      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.4, 0),                                // down into the injector head top
     ]);
   }
 
@@ -3840,9 +3851,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       const rodPoints: THREE.Vector3[] = [];
       // Emerge from the coil surface on the +X (well-facing) side, at coil centre
       // height. Tuck slightly INSIDE the surface (r − 0.1) so it reads as connected.
-      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z));
-      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.25, REEL_CENTER_Y + 0.05, REEL_Z)); // just off the surface
-      rodPoints.push(new THREE.Vector3((REEL_X + r + 0.25 + GUIDE_HEAD.x) / 2, (REEL_CENTER_Y + GUIDE_HEAD.y) / 2, REEL_Z)); // outward toward the arm
+      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z)); // emerge from coil surface
+      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.2, REEL_CENTER_Y + 0.05, REEL_Z));          // just off the coil surface
+      // Curve across toward the FRONT-LEFT-corner guide head, blending both X and Z
+      // so the rod smoothly reaches the relocated arm (no abrupt sideways jump).
+      rodPoints.push(new THREE.Vector3((REEL_X + r + 0.2 + GUIDE_HEAD.x) / 2, (REEL_CENTER_Y + GUIDE_HEAD.y) / 2, (REEL_Z + GUIDE_HEAD.z) / 2));
       rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
       for (let i = 0; i <= ARC_SAMPLES; i++) {
         rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
