@@ -12,7 +12,6 @@ import { ControlBindingsPanel } from './components/ControlBindingsPanel';
 import { InputStatusHud } from './components/InputStatusHud';
 import { StatusBanner } from './components/StatusBanner';
 import { GlossaryModal } from './components/GlossaryModal';
-import { ControlDashboard } from './components/ControlDashboard';
 import { soundManager } from './utils/audio';
 import { OperatorStationView } from './components/OperatorStationView';
 import { AuxiliaryPanels } from './components/AuxiliaryPanels';
@@ -148,7 +147,7 @@ const INITIAL_STATE: SimulatorState = {
     depthReadingFt: 0,
   },
   joystickPosition: 0,
-  activeTab: 'simulator',
+  activeTab: 'console',
   difficulty: 'operator',
   activeScenarioId: 'scenario-4-install',
   currentStepIndex: 0,
@@ -1090,10 +1089,6 @@ export default function App() {
 
   const input = useInputSystem(dispatchControl, getAnalogValue);
 
-  // Trip mode detection: use actual rod movement direction, not hardcoded depth thresholds
-  const isRihActive = state.rod.rodSpeedFtPerMin < -0.5;
-  const isPoohActive = state.rod.rodSpeedFtPerMin > 0.5;
-
   // =========================================================================
   // SECONDARY WINDOW RENDERING — pop-out views for multi-monitor setup
   // =========================================================================
@@ -1172,51 +1167,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Trip Mode & Controls Bar */}
+          {/* App-level Controls Bar (reference, help, global settings) */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Quick Trip Mode Buttons in Header */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-              <span className="text-[10px] font-mono uppercase font-bold text-slate-400 px-1.5">
-                TRIP:
-              </span>
-              <button
-                id="btn-header-rih"
-                onClick={() => handleSetTripMode('RIH')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono uppercase transition-all flex items-center gap-1 ${
-                  isRihActive
-                    ? 'bg-emerald-600 text-white shadow'
-                    : 'text-emerald-400 hover:text-white hover:bg-emerald-950/60'
-                }`}
-                title="Run In Hole (RIH): lower the rods DOWN into the well. Starts at surface (0 ft)."
-              >
-                <span>↓ Lower In (RIH)</span>
-              </button>
-              <button
-                id="btn-header-pooh"
-                onClick={() => handleSetTripMode('POOH')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono uppercase transition-all flex items-center gap-1 ${
-                  isPoohActive
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'text-blue-400 hover:text-white hover:bg-blue-950/60'
-                }`}
-                title="Pull Out Of Hole (POOH): pull the rods UP out of the well. Starts at bottom (4,500 ft)."
-              >
-                <span>↑ Pull Out (POOH)</span>
-              </button>
-              <button
-                id="btn-header-free"
-                onClick={() => handleSetTripMode('FREE')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-bold font-mono uppercase transition-all ${
-                  !isRihActive && !isPoohActive
-                    ? 'bg-purple-600 text-white shadow'
-                    : 'text-purple-400 hover:text-white hover:bg-purple-950/60'
-                }`}
-                title="Free Trip: start mid-well (2,250 ft)."
-              >
-                <span>↕ Mid-Well (Free)</span>
-              </button>
-            </div>
-
             {/* Difficulty Selector */}
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
               <span className="text-[10px] font-semibold uppercase text-slate-400 px-2">Level:</span>
@@ -1251,47 +1203,6 @@ export default function App() {
               aria-label={state.soundEnabled ? 'Mute audio' : 'Enable audio'}
             >
               {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-
-            {/* Multi-Screen Pop-Out Buttons */}
-            {viewMode === 'full' && (
-              <div className="hidden lg:flex items-center gap-1 ml-2 pl-2 border-l border-slate-800">
-                {[
-                  { view: '3d', label: '3D View', icon: '🖥️' },
-                  { view: 'console', label: 'Console', icon: '🎛️' },
-                  { view: 'gauges', label: 'Gauges', icon: '⏱️' },
-                ].map((item) => (
-                  <button
-                    key={item.view}
-                    onClick={() => {
-                      window.open(
-                        `${window.location.pathname}?view=${item.view}`,
-                        `corod-${item.view}`,
-                        'width=1200,height=900,menubar=no,toolbar=no'
-                      );
-                    }}
-                    className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-all"
-                    title={`Pop out ${item.label} to a new window (for second monitor)`}
-                  >
-                    {item.icon} ↗
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Engine Start Sequence Trigger */}
-            <button
-              id="btn-start-engine"
-              onClick={() => setShowEngineStartModal(true)}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 active:scale-95 shadow-sm transition-all ${
-                state.engineStartSequenceComplete
-                  ? 'bg-emerald-950 hover:bg-emerald-900 border-emerald-700 text-emerald-300'
-                  : 'bg-amber-600 hover:bg-amber-500 border-amber-400 text-white animate-pulse'
-              }`}
-              title="Run the daily engine start-up sequence (Manual §5.2)"
-            >
-              <Power className="w-3.5 h-3.5" />
-              {state.engineStartSequenceComplete ? 'Engine Running' : 'Start Engine'}
             </button>
 
             {/* Pre-Job JSA Modal Trigger */}
@@ -1330,8 +1241,7 @@ export default function App() {
         {/* Navigation Tabs */}
         <div className="max-w-7xl mx-auto flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-800">
           {[
-            { id: 'simulator', label: 'Run the Machine', icon: Gauge },
-            { id: 'console', label: '3D View (Advanced)', icon: Boxes },
+            { id: 'console', label: '3D View', icon: Boxes },
             { id: 'scenarios', label: 'Step-by-Step Procedures', icon: BookOpen },
             { id: 'drills', label: 'Emergency Practice', icon: ShieldAlert },
             { id: 'logbook', label: 'Log & Scores', icon: Activity },
@@ -1365,26 +1275,7 @@ export default function App() {
 
       {/* Main App Body */}
       <main className="flex-1 p-4 md:p-6 space-y-6 w-full">
-        {/* TAB 1: INTEGRATED SIMULATOR & CONTROLS */}
-        {state.activeTab === 'simulator' && (
-          <div className="space-y-4">
-            {/* Plain-English "what's happening / what to do next" banner */}
-            <StatusBanner state={state} />
-
-            {/* Clean, organized main control dashboard (everything, tidy) */}
-            <ControlDashboard
-              state={state}
-              onUpdateHydraulics={updateHydraulics}
-              onUpdateBOP={updateBop}
-              onSetJoystick={handleJoystickChange}
-              onAirHorn={() => handleAirHorn(1.2)}
-              onEmergencyStop={handleEmergencyShutdown}
-              onEmergencyReset={handleResetEmergencyShutdown}
-            />
-          </div>
-        )}
-
-        {/* TAB: 3D VIEW (ADVANCED) — photoreal operator station + aux panels */}
+        {/* TAB: 3D VIEW — photoreal operator station + aux panels */}
         {state.activeTab === 'console' && (
           <div className="space-y-4">
             <StatusBanner state={state} />
@@ -1444,9 +1335,6 @@ export default function App() {
                   rod: { ...prev.rod, reelSafetyForksInPlace: !prev.rod.reelSafetyForksInPlace },
                 }));
               }}
-              onToggleSound={() =>
-                setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }))
-              }
               onStartEngine={() => setShowEngineStartModal(true)}
               onShutdownEngine={() =>
                 setState((prev) => ({
@@ -1587,9 +1475,6 @@ export default function App() {
                   rod: { ...prev.rod, reelSafetyForksInPlace: !prev.rod.reelSafetyForksInPlace },
                 }));
               }}
-              onToggleSound={() =>
-                setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }))
-              }
               onStartEngine={() => setShowEngineStartModal(true)}
               onShutdownEngine={() =>
                 setState((prev) => ({

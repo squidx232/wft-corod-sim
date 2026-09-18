@@ -87,7 +87,15 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
       actionLabel: 'Crank & Idle @ 1050 RPM',
       durationSec: 2.5,
       apply: { engineRunning: true, engineRpm: 1050 },
-      sound: () => soundManager.playEngineStart?.() ?? soundManager.playMetalTap(),
+      sound: () => {
+        // Play the layered car-start (one-shot crank + engine idle loop). If the
+        // build somehow lacks the method, fall back to a metal tap.
+        if (typeof soundManager.playEngineStart === 'function') {
+          soundManager.playEngineStart();
+        } else {
+          soundManager.playMetalTap();
+        }
+      },
     },
     {
       id: 'warmup',

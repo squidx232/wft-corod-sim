@@ -65,69 +65,10 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   const isSlipping = rod.rodGripSlipping;
   const reelRpm = Math.abs(Math.round((rod.rodSpeedFtPerMin / 15) * 10) / 10);
 
-  // Active Trip Mode detection
-  const isRihMode = rod.currentDepthFt < 500 && (!isSurfacing || isInjecting);
-  const isPoohMode = rod.currentDepthFt > 4000 && (!isInjecting || isSurfacing);
-
   return (
     <div className="rounded-2xl bg-slate-950 border border-slate-800 shadow-md relative overflow-hidden flex flex-col">
-      {/* 1. Trip Mode & Depth Selector Header Bar */}
+      {/* 1. Live Status & Depth Selector Header Bar (trip-mode buttons removed) */}
       <div className="p-3 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Trip Mode Switcher */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-            TRIP MODE:
-          </span>
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shadow-inner">
-            {/* RIH Button */}
-            <button
-              id="btn-mode-rih"
-              type="button"
-              onClick={() => onSetTripMode && onSetTripMode('RIH')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono uppercase transition-all ${
-                isRihMode
-                  ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                  : 'text-emerald-400 hover:text-white hover:bg-emerald-950/60'
-              }`}
-              title="Run In Hole: Start at surface (0 ft) and inject rod downhole"
-            >
-              <ArrowDown className="w-3.5 h-3.5" />
-              <span>RIH (Tripping In)</span>
-            </button>
-
-            {/* POOH Button */}
-            <button
-              id="btn-mode-pooh"
-              type="button"
-              onClick={() => onSetTripMode && onSetTripMode('POOH')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono uppercase transition-all ${
-                isPoohMode
-                  ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.4)]'
-                  : 'text-blue-400 hover:text-white hover:bg-blue-950/60'
-              }`}
-              title="Pull Out Of Hole: Start at well bottom (4,500 ft) and pull rod to surface"
-            >
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>POOH (Tripping Out)</span>
-            </button>
-
-            {/* Free / Mid-Well Button */}
-            <button
-              id="btn-mode-free"
-              type="button"
-              onClick={() => onSetTripMode && onSetTripMode('FREE')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono uppercase transition-all ${
-                !isRihMode && !isPoohMode
-                  ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(147,51,234,0.4)]'
-                  : 'text-purple-400 hover:text-white hover:bg-purple-950/60'
-              }`}
-              title="Continuous Free Trip: Position at mid-depth (2,250 ft) to test both RIH and POOH"
-            >
-              <span>↕ Free Trip (Mid-Well)</span>
-            </button>
-          </div>
-        </div>
-
         {/* Live Vector Indicator */}
         <div className="flex items-center gap-2">
           {isInjecting && (

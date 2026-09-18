@@ -6,20 +6,14 @@ import { OperatorHandsOverlay } from './OperatorHandsOverlay';
 import { SimulatorState } from '../types';
 import { soundManager } from '../utils/audio';
 import {
-  Volume2,
-  VolumeX,
   ShieldAlert,
   Power,
-  Hand,
   Columns,
   Maximize2,
   Minimize2,
   Activity,
   Gauge,
   Sliders,
-  ArrowUp,
-  ArrowDown,
-  Pause,
   RotateCcw,
   Sparkles,
   Layers,
@@ -40,7 +34,6 @@ interface OperatorStationViewProps {
   onTapTest: () => void;
   onAttachContainment: () => void;
   onToggleReelSafetyFork: () => void;
-  onToggleSound: () => void;
   onStartEngine?: () => void;
   onShutdownEngine?: () => void;
   onToggleBopClosed: () => void;
@@ -66,7 +59,6 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   onTapTest,
   onAttachContainment,
   onToggleReelSafetyFork,
-  onToggleSound,
   onStartEngine,
   onShutdownEngine,
   onToggleBopClosed,
@@ -370,59 +362,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             })}
           </div>
 
-          {/* Operator Hands Toggle & Glove Style Switcher */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setShowHands(!showHands)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                showHands
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Toggle Interactive Operator Gloved Hands"
-            >
-              <Hand className="w-3.5 h-3.5" />
-              <span>{showHands ? 'Hands: ON' : 'Hands: OFF'}</span>
-            </button>
-
-            {showHands && (
-              <div className="flex items-center gap-1 pl-1 border-l border-slate-800">
-                {[
-                  { id: 'hivis' as const, label: 'Hi-Vis' },
-                  { id: 'leather' as const, label: 'Leather' },
-                  { id: 'tactical' as const, label: 'Carbon' },
-                ].map((style) => (
-                  <button
-                    key={style.id}
-                    type="button"
-                    onClick={() => setGloveStyle(style.id)}
-                    className={`px-1.5 py-1 rounded text-[10px] font-mono font-semibold transition-all ${
-                      gloveStyle === style.id
-                        ? 'bg-slate-700 text-amber-300 font-bold'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    {style.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sound Mute/Unmute */}
-          <button
-            type="button"
-            onClick={onToggleSound}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 transition-all min-w-[38px] min-h-[38px] flex items-center justify-center"
-            title={soundManager.isAudioMuted() ? 'Unmute Sound FX' : 'Mute Sound FX'}
-          >
-            {soundManager.isAudioMuted() ? (
-              <VolumeX className="w-4 h-4 text-red-400" />
-            ) : (
-              <Volume2 className="w-4 h-4 text-emerald-400" />
-            )}
-          </button>
+          {/* Operator hands toggle removed to declutter the station header. */}
 
           {/* Engine Power Switch — shows RUNNING only after the FULL start-up
               sequence has been completed (not mid-sequence). */}
@@ -498,10 +438,10 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
                   : 'text-slate-300'
               }`}
             >
-              {rod.rodSpeedFtPerMin > 0
-                ? `+${rod.rodSpeedFtPerMin.toFixed(1)} (POOH)`
-                : rod.rodSpeedFtPerMin < 0
-                ? `${rod.rodSpeedFtPerMin.toFixed(1)} (RIH)`
+              {rod.rodSpeedFtPerMin > 0.05
+                ? `${rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN (POOH ↑)`
+                : rod.rodSpeedFtPerMin < -0.05
+                ? `${Math.abs(rod.rodSpeedFtPerMin).toFixed(1)} FT/MIN (RIH ↓)`
                 : '0.0 FT/MIN'}
             </span>
           </div>
@@ -539,64 +479,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
           </div>
         </div>
 
-        {/* Quick Snaps for Driving without Scrolling */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playMetalTap();
-              onUpdateJoystick(Math.min(1.0, state.joystickPosition + 0.35));
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 border border-emerald-600 text-emerald-200 font-mono font-bold text-xs active:scale-95 transition-all shadow"
-            title="Pull Up (POOH)"
-          >
-            <ArrowUp className="w-3.5 h-3.5" />
-            <span>PULL (POOH)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playMetalTap();
-              onUpdateJoystick(0);
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-mono font-bold text-xs active:scale-95 transition-all shadow"
-            title="Neutral Stop"
-          >
-            <Pause className="w-3.5 h-3.5" />
-            <span>STOP</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playMetalTap();
-              onUpdateJoystick(Math.max(-1.0, state.joystickPosition - 0.35));
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-900/80 hover:bg-blue-800 border border-blue-600 text-blue-200 font-mono font-bold text-xs active:scale-95 transition-all shadow"
-            title="Run Down (RIH)"
-          >
-            <ArrowDown className="w-3.5 h-3.5" />
-            <span>RUN (RIH)</span>
-          </button>
-
-          {/* Quick Safety Clamp Toggle */}
-          <button
-            type="button"
-            onClick={() =>
-              handleUpdateHydraulics({
-                safetyClampLever: hydraulics.safetyClampLever === 'ON' ? 'OFF' : 'ON',
-              })
-            }
-            className={`px-3 py-1.5 rounded-lg font-mono font-bold text-xs uppercase border active:scale-95 transition-all ${
-              hydraulics.safetyClampLever === 'ON'
-                ? 'bg-amber-600 text-white border-amber-500 shadow-md'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
-            }`}
-          >
-            CLAMP (V)
-          </button>
-        </div>
+        {/* Quick-drive buttons removed — driving is done via the joystick/console. */}
       </div>
 
       {/* ========================================================================= */}

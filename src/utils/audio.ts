@@ -16,27 +16,158 @@ class SoundSynthesizer {
 
   // Real recorded engine-noise loop (MP3). Preferred over the synthesized
   // oscillator when available; falls back to the oscillator if it can't load.
-  private engineAudioEl: HTMLAudioElement | null = null;
+  //
+  // IMPORTANT: We decode the MP3 into an AudioBuffer and play it through an
+  // AudioBufferSourceNode with `loop = true`. This loops sample-accurately and
+  // GAPLESSLY. Using an <audio loop> element instead produces an audible cut /
+  // silence on every repeat because MP3 files carry encoder padding (priming
+  // samples at the start and remainder padding at the end), which the media
+  // element does not trim.
+  private engineBuffer: AudioBuffer | null = null;
+  private engineSource: AudioBufferSourceNode | null = null;
+  private engineLoopGain: GainNode | null = null;
+  private enginePlaybackStarted = false;
   private engineAudioReady = false;
   private engineAudioFailed = false;
+  private engineDecoding = false;
+  private readonly ENGINE_LOOP_URL = '/sounds/engine-loop.mp3';
 
-  private ensureEngineAudio(): HTMLAudioElement | null {
-    if (this.engineAudioFailed) return null;
-    if (this.engineAudioEl) return this.engineAudioEl;
-    if (typeof Audio === 'undefined') return null;
+  // One-shot "car starting" clip (played once, NOT looped) layered on top of
+  // the looping engine sound when the engine is cranked.
+  private engineStartBuffer: AudioBuffer | null = null;
+  private engineStartFailed = false;
+  private engineStartDecoding = false;
+  private readonly ENGINE_START_URL =
+    '/sounds/freesound_community-car-engine-starting-43705.mp3';
+
+  /**
+   * Fetch + decode the engine loop into an AudioBuffer (once). Safe to call
+   * repeatedly; it is a no-op while decoding, decoded, or after a failure.
+   */
+  private ensureEngineBuffer(): void {
+    if (this.engineBuffer || this.engineAudioFailed || this.engineDecoding) return;
+    if (!this.ctx) return;
+    this.engineDecoding = true;
+    fetch(this.ENGINE_LOOP_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => {
+        if (!this.ctx) throw new Error('no audio context');
+        return this.ctx.decodeAudioData(data);
+      })
+      .then((buffer) => {
+        this.engineBuffer = buffer;
+        this.engineAudioReady = true;
+        this.engineDecoding = false;
+      })
+      .catch(() => {
+        this.engineAudioFailed = true;
+        this.engineDecoding = false;
+      });
+  }
+
+  /**
+   * Create (once) and start the looping buffer source + its gain node.
+   *
+   * The source is started ONCE and left running forever (looping), controlled
+   * purely via `engineLoopGain`. This is deliberate: recreating the source on
+   * every start/stop caused the loop to restart from the beginning and produced
+   * the "cuts out then repeats" artifact. A single persistent looping source
+   * loops seamlessly; we simply ramp the gain to 0 to "turn the engine off".
+   */
+  private ensureEngineSourcePlaying(): boolean {
+    if (!this.ctx || !this.engineBuffer) return false;
+    if (this.enginePlaybackStarted && this.engineSource && this.engineLoopGain) return true;
     try {
-      const el = new Audio('/sounds/engine-loop.mp3');
-      el.loop = true;
-      el.preload = 'auto';
-      el.volume = 0;
-      el.addEventListener('canplaythrough', () => { this.engineAudioReady = true; });
-      el.addEventListener('error', () => { this.engineAudioFailed = true; });
-      this.engineAudioEl = el;
-      return el;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.engineBuffer;
+      src.loop = true;
+
+      // Trim a few milliseconds off each edge of the loop region so that any
+      // near-silent encoder padding baked into the MP3 is skipped, hiding any
+      // residual click/gap at the loop boundary.
+      const dur = this.engineBuffer.duration;
+      const edge = Math.min(0.04, dur * 0.02); // up to 40ms, capped at 2% of clip
+      if (dur > edge * 2 + 0.05) {
+        src.loopStart = edge;
+        src.loopEnd = dur - edge;
+      }
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+
+      src.connect(gain);
+      gain.connect(this.ctx.destination);
+      // Start playback from the loop start offset; it will loop indefinitely.
+      src.start(0, src.loopStart || 0);
+
+      this.engineSource = src;
+      this.engineLoopGain = gain;
+      this.enginePlaybackStarted = true;
+      return true;
     } catch {
-      this.engineAudioFailed = true;
-      return null;
+      return false;
     }
+  }
+
+  /**
+   * Fade the looping engine gain to silence WITHOUT tearing down the source, so
+   * the loop keeps running seamlessly in the background and can be brought back
+   * instantly. Full teardown only happens on mute()/stopAll().
+   */
+  private silenceEngineLoop() {
+    if (this.engineLoopGain && this.ctx) {
+      try {
+        this.engineLoopGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+      } catch { /* noop */ }
+    }
+  }
+
+  /** Completely stop and discard the looping source (mute / shutdown). */
+  private stopEngineBufferSource() {
+    try {
+      if (this.engineLoopGain && this.ctx) {
+        this.engineLoopGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+      }
+      if (this.engineSource) {
+        const src = this.engineSource;
+        setTimeout(() => {
+          try { src.stop(); } catch { /* noop */ }
+          try { src.disconnect(); } catch { /* noop */ }
+        }, 250);
+      }
+      this.engineSource = null;
+      this.engineLoopGain = null;
+      this.enginePlaybackStarted = false;
+    } catch {
+      // Safe catch
+    }
+  }
+
+  /** Fetch + decode the one-shot engine-start clip (once). */
+  private ensureEngineStartBuffer(): void {
+    if (this.engineStartBuffer || this.engineStartFailed || this.engineStartDecoding) return;
+    if (!this.ctx) return;
+    this.engineStartDecoding = true;
+    fetch(this.ENGINE_START_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => {
+        if (!this.ctx) throw new Error('no audio context');
+        return this.ctx.decodeAudioData(data);
+      })
+      .then((buffer) => {
+        this.engineStartBuffer = buffer;
+        this.engineStartDecoding = false;
+      })
+      .catch(() => {
+        this.engineStartFailed = true;
+        this.engineStartDecoding = false;
+      });
   }
 
   private initContext(): boolean {
@@ -61,10 +192,8 @@ class SoundSynthesizer {
   public setMuted(muted: boolean) {
     this.isMuted = muted;
     if (muted) {
-      // Pause the recorded engine loop and silence synth nodes.
-      if (this.engineAudioEl && !this.engineAudioEl.paused) {
-        try { this.engineAudioEl.pause(); } catch { /* noop */ }
-      }
+      // Stop the recorded engine loop and silence synth nodes.
+      this.stopEngineBufferSource();
       if (this.ctx) {
         try {
           if (this.engineGain) this.engineGain.gain.setValueAtTime(0, this.ctx.currentTime);
@@ -81,30 +210,35 @@ class SoundSynthesizer {
   public updateEngineSound(running: boolean, rpm: number, ptoEngaged: boolean) {
     if (this.isMuted) return;
 
-    // Prefer the real recorded engine loop (MP3).
-    const el = this.ensureEngineAudio();
-    if (el && !this.engineAudioFailed) {
+    // The Web Audio buffer path requires a live AudioContext.
+    if (!this.initContext() || !this.ctx) return;
+
+    // Prefer the real recorded engine loop, played as a gapless AudioBuffer.
+    this.ensureEngineBuffer();
+    if (this.engineBuffer && !this.engineAudioFailed) {
       try {
         if (!running) {
-          // Fade out then pause.
-          el.volume = 0;
-          if (!el.paused) el.pause();
+          // Fade to silence but KEEP the loop source alive so it never restarts
+          // from the top (which caused the "cut out then repeat" artifact).
+          this.silenceEngineLoop();
           return;
         }
-        // Louder under load (PTO engaged); pitch/speed rises with rpm.
-        const targetVol = ptoEngaged ? 0.55 : 0.4;
-        el.volume = Math.max(0, Math.min(1, targetVol));
-        el.playbackRate = Math.max(0.7, Math.min(1.6, 0.75 + (rpm / 1300) * 0.6));
-        if (el.paused) {
-          el.play().catch(() => {
-            // Autoplay may be blocked until a user gesture; will retry next tick.
-          });
+        if (this.ensureEngineSourcePlaying() && this.engineLoopGain && this.engineSource) {
+          // Louder under load (PTO engaged); pitch/speed rises with rpm.
+          const targetVol = ptoEngaged ? 0.55 : 0.4;
+          const rate = Math.max(0.7, Math.min(1.6, 0.75 + (rpm / 1300) * 0.6));
+          this.engineLoopGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.15);
+          this.engineSource.playbackRate.setTargetAtTime(rate, this.ctx.currentTime, 0.15);
         }
         return;
       } catch {
         // fall through to synthesized fallback
       }
     }
+
+    // While the buffer is still decoding, do nothing this tick (avoid starting
+    // the synth fallback which would double up once the buffer is ready).
+    if (this.engineDecoding && !this.engineAudioFailed) return;
 
     // ---- Fallback: synthesized oscillator engine ----
     if (!this.isInitialized) return;
@@ -340,9 +474,93 @@ class SoundSynthesizer {
     this.updateEngineSound(false, 0, false);
   }
 
+  /**
+   * Play the one-shot "car engine starting" clip a SINGLE time (never looped)
+   * and, at the same moment, bring the continuous engine LOOP up to idle. The
+   * two layered together sound like a real engine cranking then settling into
+   * a steady idle. Safe to call on the "Start the Rig Engine" step.
+   */
+  public playEngineStart(idleRpm: number = 1050) {
+    if (this.isMuted) return;
+    if (!this.initContext() || !this.ctx) return;
+
+    // Kick off the continuous loop simultaneously so the idle is audible the
+    // instant the crank sound plays. This uses the persistent looping source.
+    this.ensureEngineBuffer();
+    if (this.engineBuffer && this.ensureEngineSourcePlaying() && this.engineLoopGain) {
+      // Slight fade-in so the idle emerges under the crank clip.
+      this.engineLoopGain.gain.setTargetAtTime(0.4, this.ctx.currentTime, 0.4);
+      if (this.engineSource) {
+        const rate = Math.max(0.7, Math.min(1.6, 0.75 + (idleRpm / 1300) * 0.6));
+        this.engineSource.playbackRate.setTargetAtTime(rate, this.ctx.currentTime, 0.3);
+      }
+    }
+
+    // Play the one-shot crank clip. We use a plain HTMLAudioElement here (rather
+    // than a decoded AudioBuffer) because it plays a single time with zero decode
+    // race — the click that triggers this is a valid user gesture, so autoplay is
+    // permitted. Looping quality is irrelevant for a one-shot, so no MP3-gap
+    // concern applies. This guarantees the crank sound fires immediately.
+    try {
+      if (typeof Audio !== 'undefined') {
+        const crank = new Audio(this.ENGINE_START_URL);
+        crank.loop = false;
+        crank.volume = 0.9;
+        crank.play().catch(() => {
+          // As a last resort fall back to the decoded-buffer path.
+          this.playEngineStartViaBuffer();
+        });
+        return;
+      }
+    } catch {
+      // fall through to buffer path
+    }
+    this.playEngineStartViaBuffer();
+  }
+
+  /** Decoded-buffer fallback for the one-shot crank clip. */
+  private playEngineStartViaBuffer() {
+    this.ensureEngineStartBuffer();
+    const playOneShot = () => {
+      if (!this.ctx || !this.engineStartBuffer) return;
+      try {
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.engineStartBuffer;
+        src.loop = false; // one-time only
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+        src.connect(gain);
+        gain.connect(this.ctx.destination);
+        src.start();
+        src.onended = () => {
+          try { src.disconnect(); } catch { /* noop */ }
+          try { gain.disconnect(); } catch { /* noop */ }
+        };
+      } catch {
+        // Safe catch
+      }
+    };
+
+    if (this.engineStartBuffer) {
+      playOneShot();
+    } else if (!this.engineStartFailed) {
+      // Buffer still decoding: poll briefly so the crank still plays once ready.
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts += 1;
+        if (this.engineStartBuffer) {
+          clearInterval(timer);
+          playOneShot();
+        } else if (this.engineStartFailed || attempts > 40) {
+          clearInterval(timer);
+        }
+      }, 50);
+    }
+  }
+
   public stopAll() {
     try {
-      if (this.engineAudioEl && !this.engineAudioEl.paused) this.engineAudioEl.pause();
+      this.stopEngineBufferSource();
       if (this.engineGain && this.ctx) this.engineGain.gain.setValueAtTime(0, this.ctx.currentTime);
       if (this.hydraulicGain && this.ctx) this.hydraulicGain.gain.setValueAtTime(0, this.ctx.currentTime);
     } catch {
