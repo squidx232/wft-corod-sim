@@ -260,12 +260,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const truckVibrationGroupRef = useRef<THREE.Group | null>(null);
   const reelSpoolRef = useRef<THREE.Group | null>(null);
   const levelWindRef = useRef<THREE.Mesh | null>(null);
+  // Wound rod coil on the reel + the last fill fraction we (re)built it at. As we
+  // RIH, rod pays off the reel: the coil is rebuilt with fewer wraps so it visibly
+  // SHRINKS in radius (rope pulled off a spool). We only rebuild when the fill
+  // changes past a small threshold so we're not regenerating tube geometry every frame.
+  const coilTubeRef = useRef<THREE.Mesh | null>(null);
+  const coilMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const coilFillRef = useRef<number>(-1);
   const rodStrandRef = useRef<THREE.Mesh | null>(null);
   const gripperChainLeftRef = useRef<THREE.Group | null>(null);
   const gripperChainRightRef = useRef<THREE.Group | null>(null);
   const squeezePlatesRef = useRef<THREE.Group | null>(null);
   const safetyClampJawsRef = useRef<THREE.Group | null>(null);
   const bopRamsRef = useRef<THREE.Group | null>(null);
+  // Holder group for the BOP GLB — shaken slightly during operation so the BOP
+  // vibrates in sympathy with the injector head (rod running under load).
+  const bopModelHolderRef = useRef<THREE.Group | null>(null);
+  const bopHolderRestXRef = useRef<number>(0);
   const joyShaftMeshRef = useRef<THREE.Mesh | null>(null);
   const exhaustParticlesRef = useRef<THREE.Mesh[]>([]);
   const floodLightRef = useRef<THREE.SpotLight | null>(null);
@@ -616,6 +627,35 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         }
       }
 
+      // 2a. Wound-rod coil SHRINKS as rod pays off the reel during RIH -----------
+      // Fill = how much rod is still on the reel = 1 − (currentDepth / totalDepth).
+      // As we RIH, currentDepthFt rises → fill drops → the coil is rebuilt with
+      // fewer wraps, so it visibly gets smaller in radius (rope pulled off a spool).
+      // The whole spool is already spinning, so the wraps also rotate away as they
+      // unwind. We only rebuild the (relatively costly) tube geometry when the fill
+      // changes past a small threshold, and lerp toward the target so it eases.
+      if (coilTubeRef.current) {
+        const rodS = stateRef.current.rod;
+        const total = rodS.totalWellDepthFt > 0 ? rodS.totalWellDepthFt : 1;
+        const targetFill = THREE.MathUtils.clamp(1 - rodS.currentDepthFt / total, 0, 1);
+        // Ease the displayed fill toward the target so depth jumps don't pop.
+        const shown = coilFillRef.current < 0 ? targetFill : coilFillRef.current;
+        const eased = THREE.MathUtils.damp(shown, targetFill, 6, delta);
+        // Rebuild only when the change is visually meaningful (~2%).
+        if (Math.abs(eased - coilFillRef.current) > 0.02) {
+          const builder = (coilTubeRef.current.userData as {
+            buildCoilGeometry?: (f: number) => THREE.TubeGeometry | null;
+          }).buildCoilGeometry;
+          if (builder) {
+            const newGeo = builder(eased);
+            coilTubeRef.current.geometry.dispose();
+            coilTubeRef.current.geometry = newGeo ?? new THREE.BufferGeometry();
+            coilTubeRef.current.visible = newGeo != null;
+          }
+          coilFillRef.current = eased;
+        }
+      }
+
       // 2b. Background pumpjacks — continuously nodding (independent of the rig).
       // The crank rotates steadily; the walking beam nods with a phase offset so
       // the horsehead rises and falls, driven by a sine of the crank angle.
@@ -626,21 +666,36 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         pj.walkingBeam.rotation.z = Math.sin(ang) * 0.16; // beam nods ±0.16 rad
       });
 
-      // 2c. LIVE ROD-GUIDE mode highlight (only the over-well guide): blue on RIH
-      // (rod running IN, speed > 0), green on POOH (pulling OUT, speed < 0), red
-      // on SLIP (grip slipping or safety clamp engaged). Neutral = dark steel.
+      // 2c. LIVE ROD-GUIDE highlight — TWITCHES with the rod, not a fixed colour.
+      // The over-well guide glows the SAME direction colours as the rod string
+      // (blue on RIH / green on POOH / red on freefall or slip) and PULSES with
+      // the exact same frequency & speed-driven intensity as the rod's own
+      // emissive pulse, so the guide reads as lighting up in sympathy with the
+      // rod running through it. Idle → the glow fades back to dark steel.
       if (injectorGuideMeshesRef.current.length) {
         const rodS = stateRef.current.rod;
         const clampOn = stateRef.current.hydraulics.safetyClampLever === 'ON';
-        let guideColor = 0x111827; // neutral dark steel
-        let guideEmissive = 0x000000;
-        if (rodS.rodGripSlipping || clampOn) { guideColor = 0xdc2626; guideEmissive = 0x3a0a0a; }
-        else if (rodS.rodSpeedFtPerMin > 0.1) { guideColor = 0x2563eb; guideEmissive = 0x0a1a3a; }
-        else if (rodS.rodSpeedFtPerMin < -0.1) { guideColor = 0x16a34a; guideEmissive = 0x08240f; }
+        const gSpeed = rodS.rodSpeedFtPerMin;
+        const gSpeedRatio = Math.min(1, Math.abs(gSpeed) / 85); // 0..1 (matches rod)
+        const gPulse = 0.5 + 0.5 * Math.sin(time * 0.02);       // SAME pulse as the rod
+        let emissiveHex = 0x000000;
+        let targetIntensity = 0;
+        if (rodS.rodGripSlipping || clampOn) {
+          emissiveHex = 0xdc2626;                 // red alert — slip/clamp
+          targetIntensity = 0.6 * gPulse + 0.3;   // strong, always-on pulse
+        } else if (gSpeed < -0.1) {
+          emissiveHex = 0x3b82f6;                 // RIH (running in / down) → blue
+          targetIntensity = gSpeedRatio * 0.6 * gPulse;
+        } else if (gSpeed > 0.1) {
+          emissiveHex = 0x22c55e;                 // POOH (pulling out / up) → green
+          targetIntensity = gSpeedRatio * 0.6 * gPulse;
+        }
         for (const gm of injectorGuideMeshesRef.current) {
           const gmat = gm.material as THREE.MeshStandardMaterial;
-          gmat.color.setHex(guideColor);
-          gmat.emissive.setHex(guideEmissive);
+          gmat.color.setHex(0x111827);            // base stays dark steel
+          gmat.emissive.setHex(emissiveHex);
+          // Ease intensity toward target so it twitches on/off smoothly with speed.
+          gmat.emissiveIntensity = THREE.MathUtils.lerp(gmat.emissiveIntensity, targetIntensity, 0.3);
         }
       }
 
@@ -696,6 +751,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         } else {
           injectorGroupRef.current.position.x = THREE.MathUtils.lerp(injectorGroupRef.current.position.x, WELL_X, 0.2);
           injectorGroupRef.current.rotation.z = THREE.MathUtils.lerp(injectorGroupRef.current.rotation.z, 0, 0.2);
+        }
+      }
+
+      // 4b-bis. BOP vibration — shakes in SYMPATHY with the injector head (same
+      // frequency & speed-driven intensity), but slightly damped since the BOP is
+      // a heavy anchored well-control body. Uses the same `f` and `speedRatio` as
+      // the injector so the two read as one connected vibrating string.
+      if (bopModelHolderRef.current) {
+        const restX = bopHolderRestXRef.current;
+        if (isRunning) {
+          const shake = (0.012 * speedRatio + 0.004) * 0.6; // ~60% of injector amplitude
+          const f = time * 0.09;                            // matched frequency
+          bopModelHolderRef.current.position.x = restX + Math.sin(f) * shake;
+          bopModelHolderRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.4;
+        } else {
+          bopModelHolderRef.current.position.x = THREE.MathUtils.lerp(bopModelHolderRef.current.position.x, restX, 0.2);
+          bopModelHolderRef.current.rotation.z = THREE.MathUtils.lerp(bopModelHolderRef.current.rotation.z, 0, 0.2);
         }
       }
 
@@ -1218,42 +1290,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     }
     scene.add(cellarGroup);
 
-    // Item 29: Safety cones with white reflective stripes + base plate
-    const coneMat = new THREE.MeshStandardMaterial({ color: 0xf97316 });
-    const coneStripeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.3 });
-    const coneBaseMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.9 });
-    [
-      [MG_UNIT_X - 3, 0.32, 4],
-      [MG_UNIT_X - 3, 0.32, -4],
-      [WELL_X + 4, 0.32, 5],
-      [WELL_X + 4, 0.32, -5],
-      [REEL_X, 0.32, 5],
-      [WELL_X - 3, 0.32, 5],
-    ].forEach(([x, y, z]) => {
-      const coneGroup = new THREE.Group();
-      coneGroup.position.set(x, y, z);
-      // Orange cone body
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.65, 16), coneMat);
-      coneGroup.add(cone);
-      // Square base plate
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.5), coneBaseMat);
-      base.position.y = -0.32;
-      coneGroup.add(base);
-      // 2 white reflective stripe bands — radius matches cone taper at each height
-      // Cone: radius 0.2, height 0.65, base at y=-0.325, tip at y=+0.325
-      // At height h from base: r = 0.2 * (1 - h/0.65)
-      [0.15, 0.35].forEach((hFromBase) => {
-        const stripeY = -0.325 + hFromBase; // local Y on cone
-        const stripeR = 0.2 * (1 - hFromBase / 0.65); // tapered radius
-        const stripe = new THREE.Mesh(
-          new THREE.TorusGeometry(stripeR, 0.015, 8, 16),
-          coneStripeMat
-        );
-        stripe.position.y = stripeY;
-        coneGroup.add(stripe);
-      });
-      scene.add(coneGroup);
-    });
+    // (Removed the small striped procedural safety cones — only the larger yellow
+    // GLB cones from buildSafetyCones() remain.)
   }
 
   // =========================================================================
@@ -1288,29 +1326,127 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // rig-carrying rear/bed sits under the mast over the wellsite — like a real
     // workover unit backed up to the well.
     truck.rotation.y = Math.PI;
-    // Long flatbed deck running under the mast and out toward the cab (−X).
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.6, 3.0), steel(0x1e3a5f, 0.6, 0.4));
-    deck.position.set(-2.2, 1.4, 0); deck.castShadow = true; deck.receiveShadow = true; truck.add(deck);
-    // Cab at the far (−X) front of the truck.
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 2.6), steel(0xe5e7eb, 0.5, 0.3));
-    cab.position.set(-6.4, 2.3, 0); cab.castShadow = true; truck.add(cab);
-    // Wheels along the deck (X positions), both sides (±Z).
-    const whGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.5, 18); whGeo.rotateX(Math.PI / 2);
-    const whMat = steel(0x0a0a0a, 0.9, 0.1);
-    [-6.0, -3.0, 0.0, 1.6].forEach((x) => {
-      [1.6, -1.6].forEach((z) => {
-        const w = new THREE.Mesh(whGeo, whMat); w.position.set(x, 0.7, z); truck.add(w);
-      });
+
+    // Palette
+    const bodyBlue = steel(0x1e3a5f, 0.6, 0.4);   // deep blue truck body/deck
+    const frameMat = steel(0x14181d, 0.7, 0.5);   // dark chassis frame steel
+    const whMat = steel(0x0a0a0a, 0.9, 0.1);      // tyres
+    const hubMat = steel(0x6b7280, 0.8, 0.3);     // wheel hubs
+    const chromeMat2 = steel(0xc9ced6, 0.9, 0.25);// chrome trim / stacks
+    const glassMat = steel(0x0f2233, 0.2, 0.1);   // cab glass
+
+    // --- LONG chassis frame rails running the full length (−X cab → +X rear) ---
+    // A real pulling unit is a long heavy truck. The mast still mounts at local
+    // x = 0 (pu origin); the chassis extends well past the cab and past the rear.
+    // NOTE: the truck is rotated 180° (truck.rotation.y = π), so truck-local +X maps
+    // to WORLD −X (toward the wellhead at WELL_X=9) and local −X maps to world +X
+    // (away from the well, toward the cab). The pu group sits at world X = 16.5, so
+    // local +X must stay small enough that the rear never reaches the cellar
+    // (world ≈ 6.4..11.6). We therefore keep the rear end short and gain LENGTH on
+    // the cab side (−X local) so the long trailer extends AWAY from the well.
+    const CHASSIS_MIN_X = -14.5;  // cab/front end (long — extends away from the well)
+    const CHASSIS_MAX_X = 3.2;    // rear end — kept clear of the wellhead/cellar
+    const CHASSIS_LEN = CHASSIS_MAX_X - CHASSIS_MIN_X;
+    const CHASSIS_MID = (CHASSIS_MIN_X + CHASSIS_MAX_X) / 2;
+    [0.95, -0.95].forEach((fz) => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(CHASSIS_LEN, 0.35, 0.22), frameMat);
+      rail.position.set(CHASSIS_MID, 1.0, fz); rail.castShadow = true; truck.add(rail);
     });
-    // Drawworks drum on the deck between cab and mast (spooled cable winch).
+    // Cross-members tying the frame rails together.
+    for (let cx = CHASSIS_MIN_X + 1; cx < CHASSIS_MAX_X; cx += 2.0) {
+      const xm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 2.0), frameMat);
+      xm.position.set(cx, 1.0, 0); truck.add(xm);
+    }
+
+    // --- LONG flatbed trailer bed: extends from the rear (well-side, kept clear
+    // of the cellar) all the way forward toward the cab — the long working bed. ---
+    const DECK_MIN_X = -9.4;                 // just behind the cab (far from well)
+    const DECK_MAX_X = 3.0;                  // rear end — clear of the wellhead/cellar
+    const DECK_LEN = DECK_MAX_X - DECK_MIN_X;
+    const DECK_MID = (DECK_MIN_X + DECK_MAX_X) / 2;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(DECK_LEN, 0.5, 3.0), bodyBlue);
+    deck.position.set(DECK_MID, 1.45, 0); deck.castShadow = true; deck.receiveShadow = true; truck.add(deck);
+    // Low deck side rails / toolbox rows down each side of the long bed.
+    [1.35, -1.35].forEach((tz) => {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(DECK_LEN - 1.0, 0.7, 0.5), steel(0x24466e, 0.5, 0.5));
+      box.position.set(DECK_MID, 1.9, tz); box.castShadow = true; truck.add(box);
+    });
+
+    // --- Hood + engine cowl ahead of the cab (classic conventional truck) ---
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 2.5), bodyBlue);
+    hood.position.set(-12.3, 2.05, 0); hood.castShadow = true; truck.add(hood);
+    // Chrome grille + front bumper at the very nose.
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.3, 2.3), chromeMat2);
+    grille.position.set(-13.65, 2.0, 0); truck.add(grille);
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.4, 2.9), chromeMat2);
+    bumper.position.set(-13.9, 1.35, 0); bumper.castShadow = true; truck.add(bumper);
+    // Round headlights.
+    [1.0, -1.0].forEach((hz) => {
+      const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 12), chromeMat2);
+      hl.rotation.z = Math.PI / 2; hl.position.set(-13.78, 1.75, hz); truck.add(hl);
+    });
+
+    // --- Cab (behind the hood) with windows + roof visor ---
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.5, 2.7), steel(0xe5e7eb, 0.5, 0.3));
+    cab.position.set(-10.4, 2.5, 0); cab.castShadow = true; truck.add(cab);
+    // Windshield + side windows (dark glass planes slightly proud of the cab).
+    const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 2.3), glassMat);
+    windshield.position.set(-11.66, 2.95, 0); truck.add(windshield);
+    [1.36, -1.36].forEach((wz) => {
+      const sideWin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 0.08), glassMat);
+      sideWin.position.set(-10.4, 2.95, wz); truck.add(sideWin);
+    });
+    // Roof sun visor.
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 2.8), steel(0x1e3a5f, 0.5, 0.4));
+    visor.position.set(-11.7, 3.7, 0); truck.add(visor);
+    // Twin vertical exhaust stacks behind the cab.
+    [1.15, -1.15].forEach((sz) => {
+      const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 3.0, 12), chromeMat2);
+      stack.position.set(-9.2, 3.2, sz); stack.castShadow = true; truck.add(stack);
+    });
+    // Saddle fuel tank + battery box along the frame between axles.
+    const fuelTank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 16), chromeMat2);
+    fuelTank.rotation.z = Math.PI / 2; fuelTank.position.set(-8.4, 1.15, 1.25); truck.add(fuelTank);
+    const battBox = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.7), frameMat);
+    battBox.position.set(-8.4, 1.2, -1.25); truck.add(battBox);
+
+    // --- Wheels: steer axle up front + drive axles + REAR trailer axles spread
+    // along the long bed. Duals on the load-bearing axles for a heavy unit. ---
+    const tyreGeo = new THREE.CylinderGeometry(0.72, 0.72, 0.42, 20); tyreGeo.rotateX(Math.PI / 2);
+    const hubGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.5, 12); hubGeo.rotateX(Math.PI / 2);
+    const addWheel = (x: number, z: number) => {
+      const w = new THREE.Mesh(tyreGeo, whMat); w.position.set(x, 0.72, z); w.castShadow = true; truck.add(w);
+      const hub = new THREE.Mesh(hubGeo, hubMat); hub.position.set(x, 0.72, z); truck.add(hub);
+    };
+    // Steer axle (single tyre each side) up front (under the hood, far from well).
+    [1.65, -1.65].forEach((z) => addWheel(-12.4, z));
+    // Drive + rear trailer axle groups (dual tyres each side) spread down the bed.
+    [-8.6, -7.0, -3.0, -1.4, 1.2, 2.6].forEach((x) => {
+      [1.75, 1.28, -1.28, -1.75].forEach((z) => addWheel(x, z));
+    });
+
+    // --- Drawworks / hydraulic winch drum on the deck between cab and mast ---
     const drawworks = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.0, 20), steel(0x1f6feb, 0.5, 0.5));
-    drawworks.rotation.x = Math.PI / 2; drawworks.position.set(-3.5, 2.1, 0); drawworks.castShadow = true;
+    drawworks.rotation.x = Math.PI / 2; drawworks.position.set(-3.3, 2.15, 0); drawworks.castShadow = true;
     truck.add(drawworks);
-    // Rear outrigger jacks under the mast base to show the load is carried here.
-    const jackMat = steel(0x27272a, 0.6, 0.5);
-    [1.2, -1.2].forEach((z) => {
-      const jack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.4, 0.3), jackMat);
-      jack.position.set(0.2, 0.7, z); truck.add(jack);
+    // Drum end flanges.
+    [1.02, -1.02].forEach((dz) => {
+      const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.1, 20), frameMat);
+      flange.rotation.x = Math.PI / 2; flange.position.set(-3.3, 2.15, dz); truck.add(flange);
+    });
+    // Hydraulic control/power pack box on the deck beside the drawworks.
+    const powerPack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 2.2), steel(0x24466e, 0.5, 0.5));
+    powerPack.position.set(-1.4, 2.05, 0); powerPack.castShadow = true; truck.add(powerPack);
+
+    // (Outriggers moved to the MG unit — see buildMobileUnitTruck. The pulling
+    // unit keeps a couple of simple vertical rear stabiliser legs under the mast
+    // load, but the deployed L-shaped outriggers with pads live on the MG unit.)
+    const legMat = steel(0x27272a, 0.6, 0.5);
+    [[1.0, 1.4], [1.0, -1.4]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 0.3), legMat);
+      leg.position.set(lx, 0.75, lz); leg.castShadow = true; truck.add(leg);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), frameMat);
+      foot.position.set(lx, 0.06, lz); truck.add(foot);
     });
     pu.add(truck);
 
@@ -1464,11 +1600,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // to the real (leaned) mast top instead of an imaginary vertical one.
     const guyMat = new THREE.LineBasicMaterial({ color: 0x1f2937 });
     const guyTop = new THREE.Vector3(0, MAST_H - 1.5, 0).applyMatrix4(mast.matrix);
+    // Ground anchors in pu-LOCAL space (pu is at world X = WELL_X + MAST_OFFSET_X
+    // = 16.5). Spread the anchors FURTHER OUT so the guy wires reach well away from
+    // the rig, and route the −Z (reel-side) anchors clear of the transport reel at
+    // world (≈5, −11) — previously one anchor landed at world (4.5, −12), which put
+    // a guy wire straight through the reel. World = (16.5 + localX, ·, localZ).
     const anchors = [
-      new THREE.Vector3(9, 0.1, 12),
-      new THREE.Vector3(9, 0.1, -12),
-      new THREE.Vector3(-12, 0.1, 12),
-      new THREE.Vector3(-12, 0.1, -12),
+      new THREE.Vector3(16, 0.1, 18),    // world (32.5, 18)   far +X / +Z
+      new THREE.Vector3(16, 0.1, -18),   // world (32.5, −18)  far +X / −Z (clear of reel)
+      new THREE.Vector3(-16, 0.1, 18),   // world (0.5, 18)    far −X / +Z
+      new THREE.Vector3(-16, 0.1, -22),  // world (0.5, −22)   far −X / −Z, well past the reel
     ];
     anchors.forEach((a) => {
       const g = new THREE.BufferGeometry().setFromPoints([guyTop.clone(), a]);
@@ -1588,7 +1729,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       { x: WELL_X + 40, z: 6, ry: -1.9, s: 1.15, paint: 0x1f6feb, rate: 0.7 },
       { x: MG_UNIT_X - 30, z: 22, ry: 0.7, s: 0.9, paint: 0x15803d, rate: 1.1 },
       { x: MG_UNIT_X - 44, z: -14, ry: 2.2, s: 1.25, paint: 0xb91c1c, rate: 0.8 },
-      { x: WELL_X + 55, z: -34, ry: -0.9, s: 1.1, paint: 0xca8a04, rate: 0.6 },
+      // Moved well CLEAR of the tank farm (which spans ~X 36..68, Z ≈ −30 ± 3).
+      // Previously (WELL_X+55=64, −34) sat inside/behind the tank row, clipping it.
+      { x: WELL_X + 70, z: -52, ry: -0.9, s: 1.1, paint: 0xca8a04, rate: 0.6 },
     ];
     pumpjacksRef.current = [];
     pjPlacements.forEach((p, i) => {
@@ -1737,14 +1880,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       });
     });
 
-    // --- A few scattered pipe joints on the ground (like the reference) ---
-    const pipeMat = steel(0x1c1917, 0.7, 0.5);
-    for (let i = 0; i < 5; i++) {
-      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5, 10), pipeMat);
-      pipe.rotation.z = Math.PI / 2;
-      pipe.position.set(WELL_X - 1 + (i % 2) * 0.3, 0.15 + i * 0.26, -9 - i * 0.28);
-      pipe.castShadow = true; scene.add(pipe);
-    }
+    // (Removed the scattered ground pipe-joint stack that used to sit beside the
+    // transport reel — it read as stray floating rods near the reel base and did
+    // not correspond to any real prop, so it has been taken out.)
   }
 
   function buildMobileUnitTruck(scene: THREE.Scene) {
@@ -2564,74 +2702,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     });
 
     // =========================================================================
-    // OPERATOR FIGURE — standing at the console on the rear platform, facing
-    // across the site toward the wellhead (right). Simple stylised human.
+    // (Operator figure removed per request — no stylised human at the console.)
     // =========================================================================
-    const operator = new THREE.Group();
-    // Positioned relative to the platform group: standing on the grated floor
-    // (floor top ≈ y=0.06 local), set back from the console toward the cab side.
-    operator.position.set(-0.7, 0.06, 0);
-
-    const suitMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.6 }); // red coveralls
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9a066, roughness: 0.7 });
-    const hatMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4 }); // white hard hat
-    const bootMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.8 });
-
-    // Torso
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.5, 4, 12), suitMat);
-    torso.position.set(0, 0.95, 0);
-    torso.castShadow = true;
-    operator.add(torso);
-
-    // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), skinMat);
-    head.position.set(0, 1.42, 0);
-    head.castShadow = true;
-    operator.add(head);
-
-    // Hard hat
-    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
-    hat.position.set(0, 1.5, 0);
-    operator.add(hat);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 16), hatMat);
-    brim.position.set(0, 1.48, 0.05);
-    operator.add(brim);
-
-    // Arms reaching toward the console (in front, +X toward well side)
-    const armMat = suitMat;
-    const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.45, 4, 8), armMat);
-    armL.position.set(0.28, 1.0, 0.18);
-    armL.rotation.z = -0.9;
-    operator.add(armL);
-    const armR = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.45, 4, 8), armMat);
-    armR.position.set(0.28, 1.0, -0.18);
-    armR.rotation.z = -0.9;
-    operator.add(armR);
-
-    // Legs
-    const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.5, 4, 8), suitMat);
-    legL.position.set(0, 0.35, 0.12);
-    operator.add(legL);
-    const legR = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.5, 4, 8), suitMat);
-    legR.position.set(0, 0.35, -0.12);
-    operator.add(legR);
-
-    // Boots
-    const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.24), bootMat);
-    bootL.position.set(0.03, 0.06, 0.12);
-    operator.add(bootL);
-    const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.24), bootMat);
-    bootR.position.set(0.03, 0.06, -0.12);
-    operator.add(bootR);
-
-    // Keep the operator in a separate holder so it stays visible when the
-    // procedural truck body is hidden in favour of the imported glTF model.
-    const operatorHolder = new THREE.Group();
-    operatorHolder.position.set(MG_UNIT_X, 0, 0);
-    // Place the operator at the truck's rear (well-facing +X side) by the console.
-    operator.position.set(4.6, 0.0, 1.9);
-    operator.rotation.y = -Math.PI / 2; // face across toward the wellhead (+X)
-    operatorHolder.add(operator);
 
     // --- Swap in the imported MG Truck model (with its own console) ----------
     // Hide the procedural truck body, then load the detailed Blender model into
@@ -2642,7 +2714,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       truckGroup.visible = false;
     }
     truckVibGroup.add(truckGroup);
-    truckVibGroup.add(operatorHolder);
 
     // Re-parent the detailed procedural Weatherford console (with live 3D gauge
     // needles) to a visible holder at the truck's rear (well-facing +X side),
@@ -2678,17 +2749,55 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     }
 
     scene.add(truckVibGroup);
+
+    // --- Deployed L-SHAPED OUTRIGGER STABILISERS on the MG UNIT — just the TWO
+    // REAR ones (one per side). Each is an L: a THIN horizontal arm reaches out
+    // from the truck side, then a thin vertical leg drops to a round WHITE foot
+    // pad on the ground. The L members are CARBON BLACK with a slight sheen.
+    // Static ground props (NOT the vibrating group) so they stay planted.
+    const ogGroup = new THREE.Group();
+    ogGroup.position.set(MG_UNIT_X, 0, 0);
+    // Carbon-black, semi-glossy steel (low roughness → visible shine).
+    const ogBlack = new THREE.MeshStandardMaterial({ color: 0x0c0d0f, metalness: 0.85, roughness: 0.25 });
+    const ogPadWhite = new THREE.MeshStandardMaterial({ color: 0xe8e8ea, metalness: 0.2, roughness: 0.7 });
+    const ARM_Y = 1.4;          // height the horizontal arm runs at (off the chassis)
+    const ARM_INNER_Z = 1.8;    // where the arm leaves the truck side
+    const ARM_OUTER_Z = 4.4;    // how far the arm reaches out
+    const ARM_LEN = ARM_OUTER_Z - ARM_INNER_Z;
+    const SEC = 0.24;           // THIN square section for the L members
+    // Only the REAR pair (one per side) — rear of the MG bed (+X toward the well).
+    const ax = 2.6;
+    [1, -1].forEach((side) => {
+      // Horizontal arm (runs along Z, out from the truck side).
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(SEC, SEC, ARM_LEN), ogBlack);
+      arm.position.set(ax, ARM_Y, side * (ARM_INNER_Z + ARM_LEN / 2));
+      arm.castShadow = true; ogGroup.add(arm);
+      // Small pivot housing where the arm leaves the chassis.
+      const pivot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), ogBlack);
+      pivot.position.set(ax, ARM_Y, side * ARM_INNER_Z); ogGroup.add(pivot);
+      // Vertical leg dropping from the arm end down to the ground (the L corner).
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(SEC, ARM_Y + 0.2, SEC), ogBlack);
+      leg.position.set(ax, (ARM_Y + 0.2) / 2, side * ARM_OUTER_Z);
+      leg.castShadow = true; ogGroup.add(leg);
+      // Round WHITE foot pad on the ground under the leg.
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.13, 20), ogPadWhite);
+      pad.position.set(ax, 0.07, side * ARM_OUTER_Z);
+      pad.castShadow = true; pad.receiveShadow = true; ogGroup.add(pad);
+    });
+    scene.add(ogGroup);
   }
 
   function buildServiceReel(scene: THREE.Scene) {
     const reelGroup = new THREE.Group();
     // Reel on its own trailer: set back into depth (−Z) from the wellhead line
     // and closer to the well. Sized so the coil sits above its trailer deck.
-    reelGroup.position.set(REEL_X, 3.8, REEL_Z);
+    // Seat the reel trailer FLAT on the ground: the trailer wheels sit at local
+    // y = -2.6 with radius 0.5, so their bottoms reach local y = -3.1. Placing the
+    // group at Y = 3.1 lands the wheels exactly on grade (y ≈ 0) instead of floating.
+    reelGroup.position.set(REEL_X, 3.1, REEL_Z);
     reelGroup.scale.setScalar(1.0);
-    // Mount the whole reel assembly with a slight forward/downward inclination
-    // toward the front base (about the depth axis), as on a real transport reel.
-    reelGroup.rotation.x = 0.1;
+    // Stand the reel level (no tilt) so it sits squarely on its trailer/ground.
+    reelGroup.rotation.x = 0;
 
     // Simple flatbed trailer under the reel (per the field diagram).
     const trailerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.4, roughness: 0.6 });
@@ -2738,7 +2847,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     axle.rotation.x = Math.PI / 2;
     spool.add(axle);
 
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.6, roughness: 0.4 });
+    // Reel flange rings + spokes (the circular STEEL BOUNDARIES of the spool) are
+    // a silverish galvanised steel — distinct from the RED cradle/A-frame and the
+    // BLACK wound rod, matching the reference photo.
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xc4c9d0, metalness: 0.85, roughness: 0.35 });
     const rimLeft = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.08, 12, 48), rimMat);
     rimLeft.position.z = 1.25;
     spool.add(rimLeft);
@@ -2759,50 +2871,87 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       spool.add(spokeR);
     }
 
-    // --- Continuous Coiled Rod Pack (SPOOLED like a cable drum) -------------
-    // Per the reference: the rod is wound around the drum barrel as big circular
-    // turns (each turn = one wrap around the reel axis). Turns are close-packed
-    // ACROSS the NARROW drum width to complete a layer, then the NEXT layer sits
-    // radially on top — so the coil builds a LARGE DIAMETER on a comparatively
-    // NARROW width. Each individual turn is a visible torus (you see the rods).
-    const HUB_R = 0.85;                 // innermost wound layer radius (on the hub)
-    const OUTER_R = 2.25;               // large outer radius of the built-up coil
-    const ROD_R = 0.06;                 // individual rod radius (slightly chunky so turns read)
-    const PACK = ROD_R * 2.0;           // centre-to-centre spacing of tight turns
-    const halfWidth = 0.72;             // NARROW drum width (big-diameter/narrow look)
+    // --- Continuous Coiled Rod Pack (ONE rod wound like rope on a spool) ------
+    // Real transport-reel behaviour (the "rope wrapped around a hook" model): a
+    // SINGLE continuous rod is wound onto the barrel. It spirals across the drum
+    // width one wrap at a time; when it reaches a flange it steps OUT one rod
+    // diameter and spirals back — so the pack GROWS IN THICKNESS (radius) OUTWARD
+    // while always staying INSIDE the flanges. Every individual wrap ("strap") is
+    // still clearly visible. We render the whole thing as one continuous TubeGeometry
+    // following the helical path, so it reads as a real wound rod, not stacked rings.
+    const BARREL_R = 0.42;              // barrel the first wrap sits on (just off the axle)
+    const ROD_R = 0.075;               // individual rod radius
+    const PACK = ROD_R * 2.0;          // centre-to-centre pitch of neighbouring wraps
+    const FLANGE_R = 2.3;              // containing flange radius (hard outer limit)
+    const halfWidth = 1.08;            // wound width, kept just inside the flanges (±1.25)
+    // How many radial layers fit between the barrel and the flange rim when the reel
+    // is FULLY wound (with a small margin so the outer wrap never pokes past the flanges).
+    const maxLayers = Math.max(1, Math.floor((FLANGE_R - ROD_R - BARREL_R) / PACK));
+    const wrapsPerLayer = Math.max(2, Math.round((halfWidth * 2) / PACK));
 
-    // Weathered gunmetal with slight turn-to-turn variation so wraps read clearly.
-    const coilShades = [0x1a1613, 0x221d18, 0x120f0d, 0x2a231d];
-    const coilMats = coilShades.map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.5, roughness: 0.5 }));
+    // Build the wound-rod tube for a given FILL fraction (1 = full spool, 0 = empty).
+    // The rod pays off from the OUTSIDE in (real reels unwind their outer wraps first),
+    // so as fill drops we drop whole outer layers AND partially unwind the current
+    // outer layer — the coil visibly shrinks in radius. Returns a fresh geometry
+    // (or null if effectively empty). One continuous helix so it reads as a real rod.
+    const buildCoilGeometry = (fill: number): THREE.TubeGeometry | null => {
+      const clamped = THREE.MathUtils.clamp(fill, 0, 1);
+      // Total wraps at full spool, and how many remain at this fill level.
+      const totalWraps = maxLayers * wrapsPerLayer;
+      const wrapsRemaining = Math.max(0, clamped * totalWraps);
+      if (wrapsRemaining < 0.75) return null; // essentially bare barrel
+      const fullLayers = Math.floor(wrapsRemaining / wrapsPerLayer);
+      const partialWraps = wrapsRemaining - fullLayers * wrapsPerLayer;
 
-    // Thin dark core cylinder under the first layer so gaps never show through.
+      const path: THREE.Vector3[] = [];
+      const TURN_SEG = 48;             // path samples per single wrap (smoothness)
+      const emitLayer = (layer: number, wrapsInLayer: number) => {
+        const rIn = BARREL_R + layer * PACK;
+        const rOut = BARREL_R + (layer + 1) * PACK;
+        const forward = layer % 2 === 0;      // alternate sweep direction each layer
+        const totalSteps = Math.max(1, Math.round(wrapsInLayer * TURN_SEG));
+        for (let s = 0; s <= totalSteps; s++) {
+          const w = (s / TURN_SEG);           // wraps completed so far in this layer
+          const f = Math.min(1, w / wrapsPerLayer); // 0..1 across the layer width
+          const zPos = forward ? -halfWidth + f * halfWidth * 2
+                               :  halfWidth - f * halfWidth * 2;
+          const ang = w * Math.PI * 2;        // one wrap = 2π
+          const r = Math.min(FLANGE_R - ROD_R, rIn + (rOut - rIn) * f);
+          path.push(new THREE.Vector3(Math.cos(ang) * r, Math.sin(ang) * r, zPos));
+        }
+      };
+      for (let layer = 0; layer < fullLayers; layer++) emitLayer(layer, wrapsPerLayer);
+      if (partialWraps > 0.05) emitLayer(fullLayers, partialWraps);
+      if (path.length < 2) return null;
+
+      const coilCurve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.0);
+      const tubularSegments = Math.min(4000, path.length); // cap for perf
+      return new THREE.TubeGeometry(coilCurve, tubularSegments, ROD_R, 8, false);
+    };
+
+    // Initial build at FULL spool. The render loop rebuilds this geometry as the
+    // rod pays off during RIH so the coil shrinks live.
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0x45403a, metalness: 0.75, roughness: 0.45 });
+    const initialGeo = buildCoilGeometry(1);
+    const coilTube = new THREE.Mesh(initialGeo ?? new THREE.BufferGeometry(), coilMat);
+    coilTube.castShadow = true;
+    coilTube.receiveShadow = true;
+    spool.add(coilTube);
+    coilTubeRef.current = coilTube;
+    coilMatRef.current = coilMat;
+    coilFillRef.current = 1;
+    // Expose the builder on the mesh so the render loop can regenerate geometry.
+    (coilTube as THREE.Mesh & { userData: { buildCoilGeometry: (f: number) => THREE.TubeGeometry | null } })
+      .userData.buildCoilGeometry = buildCoilGeometry;
+
+    // Dark barrel cylinder under the innermost wrap so no gap shows to the axle.
     const core = new THREE.Mesh(
-      new THREE.CylinderGeometry(HUB_R - ROD_R, HUB_R - ROD_R, halfWidth * 2, 40),
-      coilMats[0],
+      new THREE.CylinderGeometry(BARREL_R - ROD_R * 0.5, BARREL_R - ROD_R * 0.5, halfWidth * 2, 32),
+      new THREE.MeshStandardMaterial({ color: 0x0c0a08, metalness: 0.4, roughness: 0.8 }),
     );
     core.rotation.x = Math.PI / 2;
     core.castShadow = true; core.receiveShadow = true;
     spool.add(core);
-
-    // MANY radial layers (big diameter build-up) × FEW width turns per layer.
-    const radialLayers = Math.max(1, Math.round((OUTER_R - HUB_R) / PACK));
-    const widthTurns = Math.max(1, Math.round((halfWidth * 2) / PACK));
-    for (let li = 0; li < radialLayers; li++) {
-      const r = HUB_R + li * PACK;
-      const zOff = (li % 2) * (PACK * 0.5); // nest alternate layers half a pitch
-      for (let wi = 0; wi <= widthTurns; wi++) {
-        const z = -halfWidth + wi * PACK + zOff;
-        if (z < -halfWidth - 0.01 || z > halfWidth + 0.01) continue;
-        const turn = new THREE.Mesh(
-          new THREE.TorusGeometry(r, ROD_R, 6, 40),
-          coilMats[(li + wi) % coilMats.length],
-        );
-        turn.rotation.y = Math.PI / 2;   // torus axis → z = spool axis (wraps around drum)
-        turn.position.z = z;
-        if (li >= radialLayers - 2) turn.castShadow = true; // outer layers cast (perf)
-        spool.add(turn);
-      }
-    }
 
     reelGroup.add(spool);
     reelSpoolRef.current = spool;
@@ -3427,6 +3576,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Seat the BOP on the wellhead's real mating face (below the wide bbox top).
     bopModelHolder.position.y = WELLHEAD_H * WELLHEAD_MATE_FRAC;
     wellheadGroup.add(bopModelHolder);
+    bopModelHolderRef.current = bopModelHolder;
+    bopHolderRestXRef.current = bopModelHolder.position.x; // remember rest X for vibration
     loadEquipmentModel('/models/bop.glb', bopModelHolder, {
       targetHeight: BOP_H,
       alignBore: true,
