@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SimulatorState } from '../types';
 import { getEmergencyScenario } from '../data/emergencyScenarios';
+import { useT } from '../i18n';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -34,6 +35,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
   toast,
   onCancel,
 }) => {
+  const { t } = useT();
   const [showHint, setShowHint] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -123,10 +125,10 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             />
             <div className="min-w-0">
               <div className="text-[13px] font-semibold text-white truncate">
-                {scenario.title}
+                {t('emergencyHud.title', { scenario: scenario.title })}
               </div>
               <div className="text-eyebrow text-slate-500 font-mono truncate">
-                {scenario.manualSection}
+                {t('emergencyHud.manual', { section: scenario.manualSection })}
               </div>
             </div>
           </div>
@@ -135,7 +137,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
               type="button"
               onClick={() => setCollapsed((c) => !c)}
               className="p-1 rounded hover:bg-white/10 text-slate-600"
-              title={collapsed ? 'Expand' : 'Collapse'}
+              title={collapsed ? t('emergencyHud.btn.expand') : t('emergencyHud.btn.collapse')}
             >
               {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
             </button>
@@ -143,7 +145,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
               type="button"
               onClick={onCancel}
               className="p-1 rounded hover:bg-white/10 text-slate-600"
-              title="Abort drill"
+              title={t('emergencyHud.btn.abort')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -155,7 +157,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             {/* Progress */}
             <div className="flex items-center justify-between text-eyebrow font-mono text-slate-500 mb-1">
               <span>
-                STEP {stepIndex + 1} / {total}
+                {t('emergencyHud.step', { current: stepIndex + 1, total })}
               </span>
               {timeLeft !== null && (
                 <span
@@ -164,7 +166,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                   }`}
                 >
                   <Clock className="w-3 h-3" />
-                  {timeLeft.toFixed(0)}s
+                  {t('emergencyHud.timeout', { seconds: timeLeft.toFixed(0) })}
                 </span>
               )}
             </div>
@@ -178,9 +180,9 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             {/* Current step */}
             {step && (
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 mb-3">
-                <div className="text-[13px] font-semibold text-white mb-1">{step.title}</div>
-                <p className="text-2xs text-slate-600 leading-snug">{step.instruction}</p>
-                <div className="text-eyebrow text-amber-500/70 font-mono mt-1.5">{step.manualRef}</div>
+                <div className="text-[13px] font-semibold text-white mb-1">{t('emergencyHud.step.title', { title: step.title })}</div>
+                <p className="text-2xs text-slate-600 leading-snug">{t('emergencyHud.step.instruction', { instruction: step.instruction })}</p>
+                <div className="text-eyebrow text-amber-500/70 font-mono mt-1.5">{t('emergencyHud.step.reference', { reference: step.manualRef })}</div>
 
                 {/* Toggle-able "Show me" control hint */}
                 {step.controlId && (
@@ -195,11 +197,11 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                       }`}
                     >
                       {showHint ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      {showHint ? 'Hide hint' : 'Show me'}
+                      {showHint ? t('emergencyHud.btn.hide') : t('emergencyHud.btn.show')}
                     </button>
                     {showHint && step.controlName && (
                       <span className="text-2xs text-cyan-300 font-mono">
-                        → {step.controlName}
+                        {t('emergencyHud.hint.control', { control: step.controlName })}
                       </span>
                     )}
                   </div>

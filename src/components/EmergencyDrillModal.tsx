@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SimulatorState } from '../types';
 import { soundManager } from '../utils/audio';
+import { useT } from '../i18n';
 import {
   ShieldAlert,
   Volume2,
@@ -32,6 +33,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
   onUpdateHydraulics,
   onUpdateBop,
 }) => {
+  const { t } = useT();
   const [startTime] = useState<number>(Date.now());
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [step1Done, setStep1Done] = useState<boolean>(false);
@@ -68,13 +70,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
             </div>
             <div>
               <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-300">
-                HIGH-PRIORITY EMERGENCY DRILL
+                {t('drill.header.title')}
               </span>
               <h3 className="text-lg font-semibold text-white">
-                {drillType === 'freefall' && 'Loss of Charge Pressure / Freefalling Rod String'}
-                {drillType === 'blowout' && 'Well Kick & Rapid BOP Shut-In Drill'}
-                {drillType === 'h2s' && 'H2S Sour Gas Release & Man Down Drill'}
-                {drillType === 'overheat' && 'Hydraulic Overheat Emergency Shutdown (>70°C)'}
+                {drillType === 'freefall' && t('drill.freefall.title')}
+                {drillType === 'blowout' && t('drill.blowout.title')}
+                {drillType === 'h2s' && t('drill.h2s.title')}
+                {drillType === 'overheat' && t('drill.overheat.title')}
               </h3>
             </div>
           </div>
@@ -93,28 +95,16 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
           <div className="space-y-4">
             <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-200">
               {drillType === 'freefall' && (
-                <p>
-                  <strong>INCIDENT:</strong> Main charge pump pressure dropped below 250 psi! Gripper motors are freewheeling.
-                  Follow Section 4.18 procedure in exact sequence:
-                </p>
+                <p>{t('drill.freefall.incident')}</p>
               )}
               {drillType === 'blowout' && (
-                <p>
-                  <strong>INCIDENT:</strong> Formation kick encountered! Wellbore fluid rising rapidly through casing.
-                  Follow Section 4.19 rapid shut-in procedure (EUB 60s mandate):
-                </p>
+                <p>{t('drill.blowout.incident')}</p>
               )}
               {drillType === 'h2s' && (
-                <p>
-                  <strong>INCIDENT:</strong> H2S monitor alarmed (&gt;10 ppm). Crew member prone on wellpad ("Man Down").
-                  Follow Section 4.20 H2S emergency response procedure:
-                </p>
+                <p>{t('drill.h2s.incident')}</p>
               )}
               {drillType === 'overheat' && (
-                <p>
-                  <strong>INCIDENT:</strong> Hydraulic temperature spiked over 70°C. Hydraulic component failure imminent.
-                  Follow Section 3.6.7 &amp; 4.23.5 emergency cooling and shutdown:
-                </p>
+                <p>{t('drill.overheat.incident')}</p>
               )}
             </div>
 
@@ -153,13 +143,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold block text-slate-800">
-                    {drillType === 'freefall' && '1. Move Safety Lever DOWN (Engage Safety Clamp)'}
-                    {drillType === 'blowout' && '1. Sound 1 Long Blast Rig Air Horn'}
-                    {drillType === 'h2s' && '1. Sound 1 Long Air Horn Alert'}
-                    {drillType === 'overheat' && '1. Apply Gripper Brake to Lock String'}
+                    {drillType === 'freefall' && t('drill.step1.freefall')}
+                    {drillType === 'blowout' && t('drill.step1.blowout')}
+                    {drillType === 'h2s' && t('drill.step1.h2s')}
+                    {drillType === 'overheat' && t('drill.step1.overheat')}
                   </span>
                   <span className="text-eyebrow text-slate-500">
-                    {step1Done ? '✓ Action Executed' : 'Click to perform immediate action'}
+                    {step1Done ? t('drill.step1.status.done') : t('drill.step1.status.pending')}
                   </span>
                 </div>
               </button>
@@ -194,13 +184,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold block text-slate-800">
-                    {drillType === 'freefall' && '2. Sound Air Horn & Evacuate if Moving'}
-                    {drillType === 'blowout' && '2. Turn Automatic BOP Pump ON (1250 PSI)'}
-                    {drillType === 'h2s' && '2. Evacuate Upwind to Muster Point'}
-                    {drillType === 'overheat' && '2. Turn Cooler Fan Bypass to MANUAL'}
+                    {drillType === 'freefall' && t('drill.step2.freefall')}
+                    {drillType === 'blowout' && t('drill.step2.blowout')}
+                    {drillType === 'h2s' && t('drill.step2.h2s')}
+                    {drillType === 'overheat' && t('drill.step2.overheat')}
                   </span>
                   <span className="text-eyebrow text-slate-500">
-                    {step2Done ? '✓ Action Executed' : 'Step 2'}
+                    {step2Done ? t('drill.step1.status.done') : t('drill.step2.status')}
                   </span>
                 </div>
               </button>
@@ -231,13 +221,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold block text-slate-800">
-                    {drillType === 'freefall' && '3. Install Two 2-Bolt Mechanical Rod Clamps'}
-                    {drillType === 'blowout' && '3. Install Mechanical Rod Clamp on BOP Plate'}
-                    {drillType === 'h2s' && '3. Verify 100% Crew Headcount & Don SCBA'}
-                    {drillType === 'overheat' && '3. Close Tank Heater & Allow Fluid to Circulate'}
+                    {drillType === 'freefall' && t('drill.step3.freefall')}
+                    {drillType === 'blowout' && t('drill.step3.blowout')}
+                    {drillType === 'h2s' && t('drill.step3.h2s')}
+                    {drillType === 'overheat' && t('drill.step3.overheat')}
                   </span>
                   <span className="text-eyebrow text-slate-500">
-                    {step3Done ? '✓ Action Executed' : 'Step 3'}
+                    {step3Done ? t('drill.step1.status.done') : t('drill.step3.status')}
                   </span>
                 </div>
               </button>
@@ -268,13 +258,13 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-bold block text-slate-800">
-                    {drillType === 'freefall' && '4. Perform Mandatory 3-Tap Bump Test'}
-                    {drillType === 'blowout' && '4. Perform 3-Tap Bump Test & Muster'}
-                    {drillType === 'h2s' && '4. Execute Backward Arm Drag Rescue'}
-                    {drillType === 'overheat' && '4. Hit Emergency Shut Down if Temp >70°C'}
+                    {drillType === 'freefall' && t('drill.step4.freefall')}
+                    {drillType === 'blowout' && t('drill.step4.blowout')}
+                    {drillType === 'h2s' && t('drill.step4.h2s')}
+                    {drillType === 'overheat' && t('drill.step4.overheat')}
                   </span>
                   <span className="text-eyebrow text-slate-500">
-                    {step4Done ? '✓ Action Executed' : 'Final Step'}
+                    {step4Done ? t('drill.step1.status.done') : t('drill.step4.status')}
                   </span>
                 </div>
               </button>
@@ -286,35 +276,35 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
             <Award className="w-14 h-14 text-emerald-700 mx-auto animate-bounce" />
             <div>
               <h4 className="text-lg font-semibold text-emerald-200">
-                Drill Passed with Excellence!
+                {t('drill.completion.title')}
               </h4>
               <p className="text-xs text-emerald-700 font-mono mt-1">
-                Reaction Time: {(elapsedMs / 1000).toFixed(2)}s • Safety Compliance: 100%
+                {t('drill.completion.reaction')}: {(elapsedMs / 1000).toFixed(2)}s • {t('drill.completion.safety')}: 100%
               </p>
             </div>
 
             <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600 max-w-md mx-auto">
-              <span className="font-bold text-amber-700 block mb-1">Key Operational Takeaway:</span>
-              {drillType === 'freefall' && 'The Safety Accumulator only maintains holding pressure for a few minutes. Immediate installation of 2 mechanical rod clamps with 500 ft-lb torque is required.'}
-              {drillType === 'blowout' && 'Regan BOP was successfully closed within the strict 1-minute EUB regulatory shut-in threshold.'}
-              {drillType === 'h2s' && 'Never attempt rescue without SCBA. Always drag victims backward under arms, never by the feet.'}
-              {drillType === 'overheat' && 'Managing cooler bypass and heating circuits prevents catastrophic pump cavitation and seal breakdown.'}
+              <span className="font-bold text-amber-700 block mb-1">{t('drill.completion.takeaway')}:</span>
+              {drillType === 'freefall' && t('drill.takeaway.freefall')}
+              {drillType === 'blowout' && t('drill.takeaway.blowout')}
+              {drillType === 'h2s' && t('drill.takeaway.h2s')}
+              {drillType === 'overheat' && t('drill.takeaway.overheat')}
             </div>
 
             <button
               onClick={onClose}
               className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg"
             >
-              Close & Log to Operations Book
+              {t('drill.btn.close')}
             </button>
           </div>
         )}
 
         {/* Footer */}
         <div className="mt-4 pt-3 border-t border-slate-300 flex items-center justify-between text-2xs text-slate-500">
-          <span>Weatherford Global Safety Manual (Form GL-PCP-OEPS-L4-11)</span>
+          <span>{t('drill.footer')}</span>
           <button onClick={onClose} className="hover:text-slate-700">
-            Cancel Drill
+            {t('drill.btn.cancel')}
           </button>
         </div>
       </div>
