@@ -1225,7 +1225,7 @@ export default function App() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="max-w-7xl mx-auto flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-800">
+        <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-800">
           {[
             { id: 'console', label: '3D View', icon: Boxes },
             { id: 'scenarios', label: 'Step-by-Step Procedures', icon: BookOpen },
