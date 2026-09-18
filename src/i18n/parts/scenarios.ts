@@ -2,6 +2,20 @@ import type { TranslationPart } from './index';
 
 export const scenarios: TranslationPart = {
   en: {
+    // Emergency Practice tab (drill cards grid in App.tsx)
+    'drillsTab.title': 'Interactive Emergency Response — Act on the Real Console',
+    'drillsTab.subtitle': "Inject a live fault, then perform the manual's response procedure on the actual console controls. Steps auto-validate; time-critical steps have consequences.",
+    'drillsTab.active': 'A live emergency is in progress — respond on the console using the floating Response HUD.',
+    'drillsTab.active.short': 'Emergency Active…',
+    'drillsTab.responseSteps': '${count} response steps',
+    'drillsTab.inject': 'Inject: ${title}',
+    'drillsTab.surprise': 'Surprise Drill',
+    'drillsTab.random.title': 'Random Emergency',
+    'drillsTab.random.desc': 'Inject a random emergency without warning to test your reaction.',
+    'drillsTab.random.btn': 'Random Drill',
+    'drillsTab.sev.critical': 'Critical',
+    'drillsTab.sev.high': 'High',
+    'drillsTab.sev.moderate': 'Moderate',
     // ScenarioRunner
     'scenario.header.title': 'Structured Wellsite Training Scenarios',
     'scenario.header.subtitle': 'Interactive procedure modules aligned with Weatherford COROD Operations Manual',
@@ -150,6 +164,20 @@ export const scenarios: TranslationPart = {
     'drill.btn.cancel': 'Cancel Drill',
   },
   ar: {
+    // Emergency Practice tab (drill cards grid in App.tsx)
+    'drillsTab.title': 'الاستجابة التفاعلية للطوارئ — نفّذ على الكونسول الحقيقي',
+    'drillsTab.subtitle': 'احقن عطل حقيقي، وبعدين نفّذ إجراء الاستجابة من الدليل على تحكمات الكونسول الفعلية. الخطوات بتتأكد أوتوماتيك، والخطوات الحرجة زمنيًا ليها عواقب.',
+    'drillsTab.active': 'في حالة طوارئ شغّالة دلوقتي — استجيب على الكونسول باستخدام نافذة الاستجابة العائمة.',
+    'drillsTab.active.short': 'طوارئ نشطة…',
+    'drillsTab.responseSteps': '${count} خطوات استجابة',
+    'drillsTab.inject': 'احقن: ${title}',
+    'drillsTab.surprise': 'تدريب مفاجئ',
+    'drillsTab.random.title': 'طوارئ عشوائية',
+    'drillsTab.random.desc': 'احقن طوارئ عشوائية من غير سابق إنذار عشان تختبر رد فعلك.',
+    'drillsTab.random.btn': 'تدريب عشوائي',
+    'drillsTab.sev.critical': 'حرج',
+    'drillsTab.sev.high': 'عالي',
+    'drillsTab.sev.moderate': 'متوسط',
     // ScenarioRunner
     'scenario.header.title': 'سيناريوهات التدريب المنظمة على موقع الحفر',
     'scenario.header.subtitle': 'وحدات الإجراءات التفاعلية المتوافقة مع دليل عمليات ويذرفورد كورود',

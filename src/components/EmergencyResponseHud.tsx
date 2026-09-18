@@ -35,7 +35,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
   toast,
   onCancel,
 }) => {
-  const { t } = useT();
+  const { t, tData } = useT();
   const [showHint, setShowHint] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [elapsed, setElapsed] = useState(0);

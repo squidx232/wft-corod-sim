@@ -270,7 +270,7 @@ function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' {
 }
 
 export default function App() {
-  const { t, lang, toggle: toggleLang } = useT();
+  const { t, tData, lang, toggle: toggleLang } = useT();
   const [state, setState] = useState<SimulatorState>(INITIAL_STATE);
   const viewMode = useRef(getViewMode()).current;
   const isSecondary = viewMode !== 'full';
@@ -1513,19 +1513,19 @@ export default function App() {
                   <ShieldAlert className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black uppercase text-slate-800">
-                    Interactive Emergency Response — Act on the Real Console
+                  <h3 className="text-base font-semibold text-slate-800">
+                    {t('drillsTab.title')}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Inject a live fault, then perform the manual&apos;s response procedure on the actual console controls. Steps auto-validate; time-critical steps have consequences.
+                    {t('drillsTab.subtitle')}
                   </p>
                 </div>
               </div>
 
               {state.emergencyScenarioId && (
-                <div className="rounded-xl bg-red-50 border border-red-300 p-3 text-sm text-red-100 flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-                  A live emergency is in progress — respond on the console using the floating Response HUD.
+                <div className="rounded-xl bg-red-50 border border-red-300 p-3 text-sm text-red-800 flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-700 animate-pulse" />
+                  {t('drillsTab.active')}
                 </div>
               )}
 
@@ -1533,16 +1533,22 @@ export default function App() {
                 {EMERGENCY_SCENARIOS.map((emg) => {
                   const sevStyle =
                     emg.severity === 'critical'
-                      ? 'bg-red-50 text-red-400 border-red-300'
+                      ? 'bg-red-50 text-red-700 border-red-300'
                       : emg.severity === 'high'
-                      ? 'bg-amber-50 text-amber-400 border-amber-300'
-                      : 'bg-yellow-900 text-yellow-300 border-yellow-700';
+                      ? 'bg-amber-50 text-amber-700 border-amber-300'
+                      : 'bg-yellow-50 text-yellow-700 border-yellow-300';
                   const btnStyle =
                     emg.severity === 'critical'
-                      ? 'bg-red-600 hover:bg-red-500'
+                      ? 'bg-red-700 hover:bg-red-800'
                       : emg.severity === 'high'
-                      ? 'bg-amber-600 hover:bg-amber-500'
-                      : 'bg-yellow-600 hover:bg-yellow-500';
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-yellow-600 hover:bg-yellow-700';
+                  const sevLabel =
+                    emg.severity === 'critical'
+                      ? t('drillsTab.sev.critical')
+                      : emg.severity === 'high'
+                      ? t('drillsTab.sev.high')
+                      : t('drillsTab.sev.moderate');
                   return (
                     <div
                       key={emg.id}
@@ -1550,14 +1556,14 @@ export default function App() {
                     >
                       <div>
                         <span
-                          className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${sevStyle}`}
+                          className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded border ${sevStyle}`}
                         >
-                          {emg.severity} • {emg.manualSection}
+                          {sevLabel} • {emg.manualSection}
                         </span>
-                        <h4 className="text-sm font-bold text-slate-800 mt-2">{emg.title}</h4>
-                        <p className="text-xs text-slate-500 mt-1">{emg.cause}</p>
+                        <h4 className="text-sm font-bold text-slate-800 mt-2">{tData(emg.title)}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{tData(emg.cause)}</p>
                         <p className="text-[10px] text-slate-500 mt-1">
-                          {emg.steps.length} response steps
+                          {t('drillsTab.responseSteps', { count: emg.steps.length })}
                         </p>
                       </div>
                       <button
@@ -1566,9 +1572,9 @@ export default function App() {
                           triggerEmergencyScenario(emg.id);
                           setState((prev) => ({ ...prev, activeTab: 'console' }));
                         }}
-                        className={`w-full py-2 rounded-lg text-white font-bold text-xs uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${btnStyle}`}
+                        className={`w-full py-2 rounded-lg text-white font-semibold text-xs uppercase shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${btnStyle}`}
                       >
-                        {state.emergencyScenarioId ? 'Emergency Active…' : `Inject: ${emg.title}`}
+                        {state.emergencyScenarioId ? t('drillsTab.active.short') : t('drillsTab.inject', { title: tData(emg.title) })}
                       </button>
                     </div>
                   );
@@ -1577,12 +1583,12 @@ export default function App() {
                 {/* Random surprise drill */}
                 <div className="p-4 rounded-xl bg-white border-2 border-dashed border-slate-400 flex flex-col justify-between space-y-3">
                   <div>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border bg-slate-200 text-slate-600 border-slate-400">
-                      Surprise Drill
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded border bg-slate-200 text-slate-600 border-slate-400">
+                      {t('drillsTab.surprise')}
                     </span>
-                    <h4 className="text-sm font-bold text-slate-800 mt-2">Random Emergency</h4>
+                    <h4 className="text-sm font-bold text-slate-800 mt-2">{t('drillsTab.random.title')}</h4>
                     <p className="text-xs text-slate-500 mt-1">
-                      Inject a random emergency without warning to test your reaction.
+                      {t('drillsTab.random.desc')}
                     </p>
                   </div>
                   <button
@@ -1593,9 +1599,9 @@ export default function App() {
                       triggerEmergencyScenario(pick.id);
                       setState((prev) => ({ ...prev, activeTab: 'console' }));
                     }}
-                    className="w-full py-2 rounded-lg bg-slate-300 hover:bg-slate-600 text-white font-bold text-xs uppercase shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full py-2 rounded-lg bg-slate-500 hover:bg-slate-600 text-white font-semibold text-xs uppercase shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Random Drill
+                    {t('drillsTab.random.btn')}
                   </button>
                 </div>
               </div>
