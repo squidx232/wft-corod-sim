@@ -74,7 +74,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-100">
+            <h3 className="text-base font-semibold text-slate-100">
               Structured Wellsite Training Scenarios
             </h3>
             <p className="text-sm text-slate-400 mt-0.5">
@@ -85,7 +85,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
 
         {activeScenario && (
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950 border border-slate-800 text-2xs font-mono">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>
                 {/* BUG FIX: Floor seconds before display (was showing floating point like "12.300000001") */}
@@ -131,7 +131,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     <span className="text-[10px] font-mono text-slate-400">~{scen.targetDurationMinutes} min</span>
                   </div>
 
-                  <h4 className="text-sm font-bold text-slate-100 mb-1 leading-snug">{scen.title}</h4>
+                  <h4 className="text-sm font-semibold text-slate-100 mb-1 leading-snug">{scen.title}</h4>
                   <p className="text-xs text-slate-400 line-clamp-3 mb-3">{scen.description}</p>
                 </div>
 
@@ -206,15 +206,15 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     ) : (
                       <Play className="w-4 h-4 text-emerald-400" />
                     )}
-                    <h4 className="text-sm font-bold text-slate-100">{currentStep.title}</h4>
+                    <h4 className="text-sm font-semibold text-slate-100">{currentStep.title}</h4>
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed my-2">{currentStep.instruction}</p>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-800 text-[11px]">
-                    <span className="text-amber-400 font-mono font-bold">Ref: {currentStep.manualSection}</span>
+                    <span className="text-amber-400 font-mono font-semibold">Ref: {currentStep.manualSection}</span>
                     {state.difficulty === 'trainee' && currentStep.hint && (
-                      <span className="text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800 flex items-center gap-1">
+                      <span className="text-blue-300 bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800 flex items-center gap-1">
                         <HelpCircle className="w-3 h-3" />
                         Hint: {currentStep.hint}
                       </span>
@@ -234,7 +234,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                   <div className="pt-2 flex justify-center gap-3">
                     <button
                       onClick={() => onSelectScenario(null as unknown as TrainingScenario)}
-                      className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs uppercase tracking-wide border border-emerald-600 shadow-sm"
+                      className="px-4 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-2xs border border-emerald-600 shadow-sm"
                     >
                       Return to Scenario Library
                     </button>
@@ -246,7 +246,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
             {/* Step Advance / Check Action */}
             {currentStep && !state.scenarioCompleted && (
               <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">
+                <span className="text-2xs text-slate-400">
                   Operate the console/rig controls according to the instruction above.
                 </span>
 
@@ -261,7 +261,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                       soundManager.playBuzzerAlert();
                     }
                   }}
-                  className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs uppercase flex items-center gap-1.5 shadow-md"
+                  className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-bold text-2xs flex items-center gap-1.5 shadow-md"
                 >
                   <span>Check & Advance</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -273,7 +273,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
           {/* Right: Step Sequence Checklist */}
           <div className="lg:col-span-5 rounded-xl bg-slate-950 border border-slate-800 p-4 flex flex-col justify-between">
             <div>
-              <span className="text-xs font-bold uppercase text-slate-300 tracking-wider block border-b border-slate-800 pb-2 mb-3">
+              <span className="text-xs font-semibold text-slate-300 block border-b border-slate-800 pb-2 mb-3">
                 Module Step Sequence
               </span>
 
@@ -303,7 +303,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                           {idx + 1}. {step.title}
                         </span>
                       </div>
-                      <span className="text-[9px] font-mono text-slate-500 shrink-0">
+                      <span className="text-eyebrow font-mono text-slate-500 shrink-0">
                         {step.manualSection.split(' ')[0]}
                       </span>
                     </div>
@@ -312,11 +312,11 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
+            <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-eyebrow text-slate-400">
               <span>Weatherford OEPS-L4-11</span>
               <button
                 onClick={() => onSelectScenario(null as unknown as TrainingScenario)}
-                className="text-cyan-400 hover:underline font-bold"
+                className="text-blue-400 hover:underline font-semibold"
               >
                 Change Module
               </button>

@@ -99,24 +99,27 @@ function assess(state: SimulatorState): Assessment {
   };
 }
 
-const STYLES: Record<Health, { bar: string; icon: React.ReactNode; chip: string; ring: string }> = {
+const STYLES: Record<Health, { border: string; bg: string; icon: React.ReactNode; chip: string; chipLabel: string }> = {
   good: {
-    bar: 'from-emerald-950/80 to-emerald-900/30 border-emerald-700',
+    border: 'border-emerald-800',
+    bg: 'bg-emerald-950/40',
     icon: <CheckCircle2 className="w-6 h-6 text-emerald-400" />,
     chip: 'bg-emerald-600 text-white',
-    ring: 'ring-emerald-500/40',
+    chipLabel: 'All good',
   },
   caution: {
-    bar: 'from-amber-950/80 to-amber-900/30 border-amber-700',
+    border: 'border-amber-800',
+    bg: 'bg-amber-950/40',
     icon: <AlertTriangle className="w-6 h-6 text-amber-400" />,
     chip: 'bg-amber-500 text-black',
-    ring: 'ring-amber-500/40',
+    chipLabel: 'Caution',
   },
   danger: {
-    bar: 'from-red-950/90 to-red-900/40 border-red-600',
+    border: 'border-red-700',
+    bg: 'bg-red-950/50',
     icon: <AlertOctagon className="w-6 h-6 text-red-400 animate-pulse" />,
     chip: 'bg-red-600 text-white',
-    ring: 'ring-red-500/50',
+    chipLabel: 'Action needed',
   },
 };
 
@@ -125,24 +128,24 @@ export const StatusBanner: React.FC<Props> = ({ state }) => {
   const s = STYLES[a.health];
   return (
     <div
-      className={`rounded-2xl border bg-gradient-to-r ${s.bar} px-4 py-3 shadow-lg ring-1 ${s.ring} flex items-center gap-4`}
+      className={`rounded-xl border ${s.border} ${s.bg} px-4 py-3 shadow-sm flex items-center gap-4`}
       role="status"
       aria-live="polite"
     >
       <div className="shrink-0">{s.icon}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${s.chip}`}>
-            {a.health === 'good' ? 'All Good' : a.health === 'caution' ? 'Caution' : 'Action Needed'}
+          <span className={`text-eyebrow font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${s.chip}`}>
+            {s.chipLabel}
           </span>
-          <span className="text-sm sm:text-base font-bold text-slate-100">{a.title}</span>
+          <span className="text-sm sm:text-base font-semibold text-slate-100">{a.title}</span>
         </div>
-        <div className="text-[12px] text-slate-300 mt-0.5">{a.detail}</div>
+        <div className="text-2xs text-slate-300 mt-0.5">{a.detail}</div>
       </div>
       <div className="hidden md:flex items-center gap-2 shrink-0 max-w-[42%]">
         <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
-        <div className="text-[12px] text-slate-200">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400 block">Do this next</span>
+        <div className="text-2xs text-slate-200">
+          <span className="eyebrow block">Do this next</span>
           {a.nextAction}
         </div>
       </div>

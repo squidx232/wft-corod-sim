@@ -36,7 +36,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-5xl rounded-2xl bg-slate-900 border-2 border-slate-700 shadow-2xl p-6 text-slate-100 max-h-[90vh] flex flex-col justify-between">
+      <div className="relative w-full max-w-5xl rounded-xl bg-slate-900 border-2 border-slate-700 shadow-xl p-6 text-slate-100 max-h-[90vh] flex flex-col justify-between">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
@@ -44,10 +44,10 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 font-bold">
+              <span className="text-eyebrow font-mono text-red-400 font-bold">
                 GL-PCP-OEPS-L4-11 (REV 25)
               </span>
-              <h3 className="text-base font-black uppercase text-slate-100">
+              <h3 className="text-base font-semibold text-slate-100">
                 Weatherford COROD® Mobile Gripper Reference Manual
               </h3>
             </div>
@@ -62,10 +62,10 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-1.5 my-3 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <div className="flex flex-wrap gap-1.5 my-3 bg-slate-950 p-1 rounded-lg border border-slate-800">
           <button
             onClick={() => setActiveTab('squeeze')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'squeeze' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -73,7 +73,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           </button>
           <button
             onClick={() => setActiveTab('clamps')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'clamps' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -81,7 +81,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           </button>
           <button
             onClick={() => setActiveTab('straightener')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'straightener' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -89,7 +89,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           </button>
           <button
             onClick={() => setActiveTab('weather')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'weather' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -97,7 +97,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           </button>
           <button
             onClick={() => setActiveTab('tools')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'tools' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -105,7 +105,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           </button>
           <button
             onClick={() => setActiveTab('glossary')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'glossary' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -118,14 +118,14 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {/* TAB 1: SQUEEZE CALCULATOR */}
           {activeTab === 'squeeze' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-bold uppercase text-amber-400 block mb-3">
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-xs font-semibold text-amber-400 block mb-3">
                   Interactive Squeeze Pressure & String Weight Calculator (Figure 248)
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                    <label className="text-eyebrow font-semibold text-slate-400 block mb-1">
                       Select COROD Size & Shape:
                     </label>
                     <select
@@ -142,7 +142,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                    <label className="text-eyebrow font-semibold text-slate-400 block mb-1">
                       Well Depth: {calcDepthFt} FT ({Math.round(calcDepthFt * 0.3048)} M)
                     </label>
                     <input
@@ -159,16 +159,16 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
                 <div className="grid grid-cols-3 gap-3 mt-4 text-center font-mono">
                   <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">Total String Weight</span>
+                    <span className="text-eyebrow text-slate-400 block">Total String Weight</span>
                     <span className="text-lg font-bold text-amber-400">{Math.round(stringWeight).toLocaleString()} lbs</span>
                   </div>
                   <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">Min Squeeze Required</span>
+                    <span className="text-eyebrow text-slate-400 block">Min Squeeze Required</span>
                     <span className="text-lg font-bold text-emerald-400">{matchedCurve.minSqueezePsi} psi</span>
                   </div>
                   <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">Recommended Clamp</span>
-                    <span className="text-xs font-bold text-cyan-300 truncate block mt-1">
+                    <span className="text-eyebrow text-slate-400 block">Recommended Clamp</span>
+                    <span className="text-2xs font-semibold text-blue-300 truncate block mt-1">
                       {recommendedClamp.type}
                     </span>
                   </div>
@@ -186,8 +186,8 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {/* TAB 2: ROD CLAMP SELECTION */}
           {activeTab === 'clamps' && (
             <div className="space-y-3">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-bold uppercase text-slate-200 block mb-2">
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800">
+                <span className="text-xs font-semibold text-slate-200 block mb-2">
                   Table 9 & 10: Rod Clamp Selection Guidelines
                 </span>
                 <div className="text-xs text-slate-300 space-y-2">
@@ -211,8 +211,8 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {/* TAB 3: ROD STRAIGHTENER TABLE */}
           {activeTab === 'straightener' && (
             <div className="space-y-3">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 overflow-x-auto">
-                <span className="text-xs font-bold uppercase text-slate-200 block mb-3">
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 overflow-x-auto">
+                <span className="text-xs font-semibold text-slate-200 block mb-3">
                   Table 11: Rod Straightening Pressures for Round COROD (psi)
                 </span>
                 <table className="w-full text-left text-xs font-mono">
@@ -244,8 +244,8 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
           {/* TAB 4: WEATHER & HUMIDEX */}
           {activeTab === 'weather' && (
             <div className="space-y-3">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
-                <span className="text-xs font-bold uppercase text-slate-200 block mb-2">
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+                <span className="text-xs font-semibold text-slate-200 block mb-2">
                   Extreme Weather & Thermal Management (Section 4.23 & 4.24)
                 </span>
                 <p>
@@ -265,8 +265,8 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
           {/* TAB 5: TOOL INVENTORY */}
           {activeTab === 'tools' && (
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
-              <span className="text-xs font-bold uppercase text-slate-200 block mb-2">
+            <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+              <span className="text-xs font-semibold text-slate-200 block mb-2">
                 Table 14: Mobile Gripper Standard Tool Chest
               </span>
               <p>• 18", 24", and 36" Rigid Pipe Wrenches (Never use snipes on aluminum wrenches!)</p>
@@ -280,8 +280,8 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
           {/* TAB 6: GLOSSARY */}
           {activeTab === 'glossary' && (
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
-              <span className="text-xs font-bold uppercase text-slate-200 block mb-2">
+            <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+              <span className="text-xs font-semibold text-slate-200 block mb-2">
                 Appendix J: Glossary of Terms
               </span>
               <p><strong>BOP:</strong> Blow Out Preventer used to control well pressure during servicing.</p>
@@ -298,7 +298,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
         <div className="pt-3 border-t border-slate-800 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase"
+            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs"
           >
             Close Manual
           </button>

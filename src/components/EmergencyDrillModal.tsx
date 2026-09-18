@@ -59,7 +59,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-4 border-red-600 shadow-2xl p-6 text-slate-100 animate-in fade-in zoom-in-95">
+      <div className="relative w-full max-w-3xl rounded-xl bg-slate-900 border-4 border-red-600 shadow-xl p-6 text-slate-100 animate-in fade-in zoom-in-95">
         {/* Drill Header */}
         <div className="flex items-center justify-between border-b-2 border-red-600/60 pb-3 mb-4">
           <div className="flex items-center gap-3">
@@ -67,10 +67,10 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
               <ShieldAlert className="w-7 h-7" />
             </div>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-700">
+              <span className="text-eyebrow font-black px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-700">
                 HIGH-PRIORITY EMERGENCY DRILL
               </span>
-              <h3 className="text-lg font-black uppercase tracking-wider text-white">
+              <h3 className="text-lg font-semibold text-white">
                 {drillType === 'freefall' && 'Loss of Charge Pressure / Freefalling Rod String'}
                 {drillType === 'blowout' && 'Well Kick & Rapid BOP Shut-In Drill'}
                 {drillType === 'h2s' && 'H2S Sour Gas Release & Man Down Drill'}
@@ -158,7 +158,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                     {drillType === 'h2s' && '1. Sound 1 Long Air Horn Alert'}
                     {drillType === 'overheat' && '1. Apply Gripper Brake to Lock String'}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-eyebrow text-slate-400">
                     {step1Done ? '✓ Action Executed' : 'Click to perform immediate action'}
                   </span>
                 </div>
@@ -199,7 +199,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                     {drillType === 'h2s' && '2. Evacuate Upwind to Muster Point'}
                     {drillType === 'overheat' && '2. Turn Cooler Fan Bypass to MANUAL'}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-eyebrow text-slate-400">
                     {step2Done ? '✓ Action Executed' : 'Step 2'}
                   </span>
                 </div>
@@ -236,7 +236,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                     {drillType === 'h2s' && '3. Verify 100% Crew Headcount & Don SCBA'}
                     {drillType === 'overheat' && '3. Close Tank Heater & Allow Fluid to Circulate'}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-eyebrow text-slate-400">
                     {step3Done ? '✓ Action Executed' : 'Step 3'}
                   </span>
                 </div>
@@ -273,7 +273,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
                     {drillType === 'h2s' && '4. Execute Backward Arm Drag Rescue'}
                     {drillType === 'overheat' && '4. Hit Emergency Shut Down if Temp >70°C'}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-eyebrow text-slate-400">
                     {step4Done ? '✓ Action Executed' : 'Final Step'}
                   </span>
                 </div>
@@ -285,7 +285,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
           <div className="p-6 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-center space-y-4">
             <Award className="w-14 h-14 text-emerald-400 mx-auto animate-bounce" />
             <div>
-              <h4 className="text-lg font-black uppercase text-emerald-200">
+              <h4 className="text-lg font-semibold text-emerald-200">
                 Drill Passed with Excellence!
               </h4>
               <p className="text-xs text-emerald-300 font-mono mt-1">
@@ -303,7 +303,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
 
             <button
               onClick={onClose}
-              className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase shadow-lg"
+              className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg"
             >
               Close & Log to Operations Book
             </button>
@@ -311,7 +311,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-2xs text-slate-400">
           <span>Weatherford Global Safety Manual (Form GL-PCP-OEPS-L4-11)</span>
           <button onClick={onClose} className="hover:text-slate-200">
             Cancel Drill

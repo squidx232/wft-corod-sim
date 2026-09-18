@@ -24,6 +24,7 @@ import { EngineStartModal } from './components/EngineStartModal';
 import { EmergencyResponseHud } from './components/EmergencyResponseHud';
 import { Rig3DViewport } from './components/Rig3DViewport';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
+import { Button, Badge, SegmentedControl, cx } from './components/ui';
 
 import {
   Gauge,
@@ -1154,14 +1155,12 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold tracking-tight text-slate-100 uppercase">
+                <h1 className="text-base font-semibold tracking-tight text-slate-100">
                   COROD® Mobile Gripper™ Simulator
                 </h1>
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-semibold uppercase tracking-wider">
-                  REV 25
-                </span>
+                <Badge tone="neutral">Rev 25</Badge>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-2xs text-slate-400">
                 Weatherford Continuous Sucker Rod &amp; Wellsite Operations Trainer
               </p>
             </div>
@@ -1170,71 +1169,58 @@ export default function App() {
           {/* App-level Controls Bar (reference, help, global settings) */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Difficulty Selector */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-              <span className="text-[10px] font-semibold uppercase text-slate-400 px-2">Level:</span>
-              {(['trainee', 'operator', 'specialist'] as DifficultyLevel[]).map((lvl) => (
-                <button
-                  key={lvl}
-                  id={`btn-diff-${lvl}`}
-                  onClick={() => {
-                    soundManager.playMetalTap();
-                    setState((prev) => ({ ...prev, difficulty: lvl }));
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase transition-all ${
-                    state.difficulty === lvl
-                      ? 'bg-red-700 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              label="Level"
+              value={state.difficulty}
+              onChange={(lvl) => {
+                soundManager.playMetalTap();
+                setState((prev) => ({ ...prev, difficulty: lvl }));
+              }}
+              segments={(['trainee', 'operator', 'specialist'] as DifficultyLevel[]).map((lvl) => ({
+                id: lvl,
+                label: <span className="capitalize">{lvl}</span>,
+              }))}
+            />
 
             {/* Sound Toggle */}
             <button
               onClick={() => setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
-              className={`p-2 rounded-xl border transition-all ${
+              className={cx(
+                'p-2 rounded-lg border transition-colors',
                 state.soundEnabled
                   ? 'bg-slate-800 border-slate-700 text-emerald-400'
-                  : 'bg-slate-950 border-slate-800 text-slate-500'
-              }`}
-              title="Toggle Audio Feedback"
+                  : 'bg-slate-950 border-slate-800 text-slate-500',
+              )}
+              title="Toggle audio feedback"
               aria-label={state.soundEnabled ? 'Mute audio' : 'Enable audio'}
             >
               {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
 
-            {/* Pre-Job JSA Modal Trigger */}
-            <button
-              id="btn-open-jsa"
+            <Button
+              variant="ghost"
+              icon={<FileText className="w-3.5 h-3.5 text-amber-400" />}
               onClick={() => setShowJsaModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 flex items-center gap-1.5 active:scale-95 shadow-sm"
             >
-              <FileText className="w-3.5 h-3.5 text-amber-400" />
               Site JSA (4.12)
-            </button>
+            </Button>
 
-            {/* Reference Manual Modal Trigger */}
-            <button
-              id="btn-open-manual"
+            <Button
+              variant="ghost"
+              icon={<BookOpen className="w-3.5 h-3.5 text-cyan-400" />}
               onClick={() => setShowManualModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-200 flex items-center gap-1.5 active:scale-95 shadow-sm"
             >
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
               Operations Manual
-            </button>
+            </Button>
 
-            {/* Plain-English Glossary — helps trainees decode the jargon */}
-            <button
-              id="btn-open-glossary"
+            <Button
+              variant="ghost"
+              icon={<HelpCircle className="w-3.5 h-3.5 text-cyan-400" />}
               onClick={() => setShowGlossary(true)}
-              className="px-3 py-1.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800 text-xs font-semibold text-cyan-200 flex items-center gap-1.5 active:scale-95 shadow-sm"
               title="Look up any term in plain English"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-cyan-300" />
               What do these mean?
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -1259,11 +1245,12 @@ export default function App() {
                   soundManager.playMetalTap();
                   setState((prev) => ({ ...prev, activeTab: tab.id as SimulatorTab }));
                 }}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all flex items-center gap-2 focus:outline-2 focus:outline-offset-2 focus:outline-red-500 ${
+                className={cx(
+                  'px-3.5 py-1.5 rounded-lg text-2xs font-semibold transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500',
                   isActive
-                    ? 'bg-red-700 text-white shadow-sm'
-                    : 'bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
+                    ? 'bg-slate-100 text-slate-900 shadow-sm'
+                    : 'bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800',
+                )}
               >
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}

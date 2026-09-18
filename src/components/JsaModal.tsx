@@ -37,10 +37,10 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-red-400 font-bold">
+              <span className="eyebrow text-red-400">
                 FORM 3-5-GL-GL-CSR-00001 (REV 2)
               </span>
-              <h3 className="text-base font-black uppercase text-slate-100">
+              <h3 className="text-base font-semibold text-slate-100">
                 Pre-Job Site Hazard Assessment & JSA (Section 4.11 / 4.12)
               </h3>
             </div>
@@ -58,7 +58,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
         <div className="flex-1 overflow-y-auto pr-2 space-y-4 my-4 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+              <label className="eyebrow block mb-1">
                 Wellsite Location & Lease #
               </label>
               <input
@@ -69,7 +69,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+              <label className="eyebrow block mb-1">
                 Lead MG Operator & Rig Crew Lead
               </label>
               <input
@@ -80,7 +80,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+              <label className="eyebrow block mb-1">
                 Wind Direction & Conditions (Windsock)
               </label>
               <input
@@ -91,7 +91,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+              <label className="eyebrow block mb-1">
                 Designated Upwind Muster Point
               </label>
               <input
@@ -105,7 +105,7 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
 
           {/* Checklist Verification */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-            <span className="text-xs font-bold uppercase text-amber-400 block mb-2">
+            <span className="eyebrow text-amber-400 block mb-2">
               Critical Safety Verification Checklist (Appendix O)
             </span>
 
@@ -161,8 +161,8 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
           </div>
 
           {/* RADAR Assessment Box */}
-          <div className="p-3 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-400 space-y-1">
-            <span className="font-bold text-slate-200 block">RADAR Behavior Process (Section 4.13):</span>
+          <div className="p-3 rounded-lg bg-slate-900 border border-slate-700 text-2xs text-slate-400 space-y-1">
+            <span className="font-semibold text-slate-200 block">RADAR Behavior Process (Section 4.13):</span>
             <p>1. <strong>Recognize:</strong> Scan the entire lease and observe behavior.</p>
             <p>2. <strong>Approach:</strong> Safely halt uncoordinated work.</p>
             <p>3. <strong>Discuss:</strong> Understand the issue without rush.</p>
@@ -173,11 +173,11 @@ export const JsaModal: React.FC<JsaModalProps> = ({ onClose, onApproveJsa }) => 
 
         {/* Footer */}
         <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
-          <span className="text-[11px] text-slate-400">Rules to Live By: I will ALWAYS intervene and Stop unsafe acts.</span>
+          <span className="text-2xs text-slate-400">Rules to Live By: I will ALWAYS intervene and Stop unsafe acts.</span>
           <button
             id="btn-sign-jsa"
             onClick={handleApprove}
-            className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase flex items-center gap-1.5 shadow-md active:scale-95"
+            className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95"
           >
             <CheckCircle className="w-4 h-4" />
             Approve & Authorize Work (JSA Signoff)

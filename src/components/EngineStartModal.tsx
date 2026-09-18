@@ -294,15 +294,15 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono font-bold text-slate-500">
+                      <span className="text-eyebrow font-mono text-slate-500">
                         STEP {idx + 1}
                       </span>
                       <h3 className="text-sm font-bold text-slate-100">{step.title}</h3>
                     </div>
-                    <p className="text-[12px] text-slate-400 mt-1 leading-snug">
+                    <p className="text-2xs text-slate-400 mt-1 leading-snug">
                       {step.instruction}
                     </p>
-                    <p className="text-[10px] text-amber-500/70 font-mono mt-1">{step.manualRef}</p>
+                    <p className="text-eyebrow text-amber-500/70 font-mono mt-1">{step.manualRef}</p>
 
                     {/* Reference photo from the manual (shown for the active/running/done step) */}
                     {step.image && (status !== 'pending' || isActive) && (
@@ -313,8 +313,8 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                           className="w-full h-auto object-cover"
                           loading="lazy"
                         />
-                        <div className="text-[9px] text-slate-500 font-mono px-2 py-1 bg-slate-950/60 border-t border-slate-800">
-                          Manual reference — {step.manualRef}
+                        <div className="text-eyebrow text-slate-500 font-mono px-2 py-1 bg-slate-950/60 border-t border-slate-800">
+                          Manual reference â€" {step.manualRef}
                         </div>
                       </div>
                     )}
@@ -334,14 +334,14 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                       <button
                         type="button"
                         onClick={() => runStep(idx)}
-                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[12px] uppercase tracking-wide transition-colors shadow-lg"
+                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-2xs transition-colors shadow-lg"
                       >
                         {step.actionLabel}
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     )}
                     {status === 'done' && (
-                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 font-mono">
+                      <span className="mt-2 inline-flex items-center gap-1 text-eyebrow text-emerald-400 font-mono">
                         <CheckCircle className="w-3.5 h-3.5" /> COMPLETE
                       </span>
                     )}
@@ -358,7 +358,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
             <button
               type="button"
               onClick={handleFinish}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 shadow-xl transition-all animate-pulse"
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all"
             >
               <Gauge className="w-5 h-5" />
               Engine Ready — Begin Operation

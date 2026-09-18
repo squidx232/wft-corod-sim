@@ -104,14 +104,14 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
     <div className="fixed top-20 right-4 z-[90] w-[340px] max-w-[calc(100vw-2rem)] select-none">
       {/* Consequence toast */}
       {toast && (
-        <div className="mb-2 rounded-lg bg-red-600 text-white text-[12px] font-bold px-3 py-2 shadow-2xl border border-red-300 animate-pulse flex items-start gap-2">
+        <div className="mb-2 rounded-lg bg-red-600 text-white text-[12px] font-bold px-3 py-2 shadow-xl border border-red-300 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>{toast}</span>
         </div>
       )}
 
       <div
-        className={`rounded-2xl border-2 ${severityColor} bg-gradient-to-b to-slate-950 shadow-2xl overflow-hidden`}
+        className={`rounded-xl border-2 ${severityColor} bg-slate-950 shadow-xl overflow-hidden`}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-3 py-2 bg-black/40 border-b border-white/10">
@@ -122,10 +122,10 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
               }`}
             />
             <div className="min-w-0">
-              <div className="text-[13px] font-black text-white uppercase tracking-wide truncate">
+              <div className="text-[13px] font-semibold text-white truncate">
                 {scenario.title}
               </div>
-              <div className="text-[9px] text-slate-400 font-mono truncate">
+              <div className="text-eyebrow text-slate-400 font-mono truncate">
                 {scenario.manualSection}
               </div>
             </div>
@@ -153,7 +153,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
         {!collapsed && (
           <div className="p-3">
             {/* Progress */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+            <div className="flex items-center justify-between text-eyebrow font-mono text-slate-400 mb-1">
               <span>
                 STEP {stepIndex + 1} / {total}
               </span>
@@ -178,9 +178,9 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             {/* Current step */}
             {step && (
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 mb-3">
-                <div className="text-[13px] font-bold text-white mb-1">{step.title}</div>
-                <p className="text-[12px] text-slate-300 leading-snug">{step.instruction}</p>
-                <div className="text-[9px] text-amber-500/70 font-mono mt-1.5">{step.manualRef}</div>
+                <div className="text-[13px] font-semibold text-white mb-1">{step.title}</div>
+                <p className="text-2xs text-slate-300 leading-snug">{step.instruction}</p>
+                <div className="text-eyebrow text-amber-500/70 font-mono mt-1.5">{step.manualRef}</div>
 
                 {/* Toggle-able "Show me" control hint */}
                 {step.controlId && (
@@ -188,7 +188,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowHint((h) => !h)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-2xs font-semibold border transition-all ${
                         showHint
                           ? 'bg-cyan-600 border-cyan-400 text-white'
                           : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
@@ -198,7 +198,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                       {showHint ? 'Hide hint' : 'Show me'}
                     </button>
                     {showHint && step.controlName && (
-                      <span className="text-[11px] text-cyan-300 font-mono">
+                      <span className="text-2xs text-cyan-300 font-mono">
                         → {step.controlName}
                       </span>
                     )}
@@ -215,7 +215,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                 return (
                   <div
                     key={st.id}
-                    className={`flex items-center gap-2 text-[11px] px-2 py-1 rounded ${
+                    className={`flex items-center gap-2 text-2xs px-2 py-1 rounded ${
                       active ? 'bg-white/5' : ''
                     }`}
                   >
