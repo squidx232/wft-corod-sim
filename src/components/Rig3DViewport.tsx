@@ -97,7 +97,12 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // runs continuously coil edge → arm guide head → guide arch → injector.
 // Placed WELL OUTBOARD of the reel rims (flange radius 2.3) on the +X side, at a
 // low/side height (not above the reel), matching the field layout.
-const GUIDE_HEAD = { x: REEL_X + 2.9, y: 3.2, z: REEL_Z };
+// The arm/guide stands on the GROUND BESIDE the reel on the WELLHEAD (+X) side.
+// The reel centre is at world (REEL_X=5, ·, REEL_Z=-11) with rim radius ≈2.3, so
+// its +X rim edge is at world x≈7.3. Placing the head at x≈8.2 puts the arm just
+// PAST the rim (≈2 ft beside it), between the reel and the wellhead (x=9), NOT on
+// or behind the reel. Height is low (side level).
+const GUIDE_HEAD = { x: REEL_X + 3.2, y: 3.2, z: REEL_Z };
 // Reel coil geometry proxy (must match buildServiceReel's coil params) so the rod
 // can dynamically connect to the coil's CURRENT outer radius as it shrinks.
 const COIL_BARREL_R = 0.42;            // barrel radius the first wrap sits on
@@ -3115,34 +3120,30 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const headLZ = GUIDE_HEAD.z;            // = REEL_Z (-11)
     const headPt = new THREE.Vector3(headLX, headLY, headLZ);
 
-    // The containment arm stands on the GROUND outboard of the reel, like the two
-    // vertical bars in the field diagram: a small ground skid + two vertical red
-    // posts forming the throat the rod passes between, capped by the guide head.
-    const skid = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 1.2), armDark);
-    skid.position.set(headLX, 0.09, headLZ); skid.receiveShadow = true; skid.castShadow = true;
+    // The containment arm is a COMPACT free-standing frame planted on the ground
+    // BESIDE the reel (well side). It is a small skid with TWO vertical red posts
+    // forming the throat (the "two bars" in the field diagram) that the rod passes
+    // between, capped by the guide head. All members are AT headLX so the whole
+    // thing sits cleanly to the side of the reel — nothing reaches back toward it.
+    const skid = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.6), armDark);
+    skid.position.set(headLX, 0.1, headLZ); skid.receiveShadow = true; skid.castShadow = true;
     armGroup.add(skid);
 
-    // Two vertical red posts (the containment-arm throat), straddling the rod path
-    // in Z, tall enough to carry the guide head at headLY. They stand OUTSIDE the
-    // reel rims so the reel never contacts them when rotating (per the CAUTION).
-    const postH = headLY + 0.3;
-    [0.5, -0.5].forEach((pz) => {
+    // Two vertical red posts straddling the rod path in Z, standing on the skid,
+    // tall enough to carry the guide head at headLY. They stand clear of the reel
+    // rims so the reel never contacts them when rotating (per the CAUTION).
+    const postH = headLY + 0.2;
+    [0.45, -0.45].forEach((pz) => {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, postH, 0.24), armRed);
       post.position.set(headLX, postH / 2, headLZ + pz);
       post.castShadow = true; armGroup.add(post);
     });
-    // A second, slightly inboard pair (the "two bars" look from the diagram).
-    [0.5, -0.5].forEach((pz) => {
-      const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, postH * 0.9, 0.2), armRed);
-      post2.position.set(headLX - 0.7, postH * 0.45, headLZ + pz);
-      post2.castShadow = true; armGroup.add(post2);
-    });
-    // Cross-tie linking the post pairs near the top for rigidity.
-    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.16), armRed);
-    tie.position.set(headLX - 0.35, postH - 0.4, headLZ); armGroup.add(tie);
+    // Cross-tie linking the two posts near the top for rigidity.
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 1.1), armRed);
+    tie.position.set(headLX, postH - 0.35, headLZ); armGroup.add(tie);
     // Drop-pin barrel at the base (Fig 235 support-arm locking pin).
     const pinBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 12), armChrome);
-    pinBarrel.position.set(headLX - 0.7, 0.4, headLZ + 0.62); armGroup.add(pinBarrel);
+    pinBarrel.position.set(headLX, 0.45, headLZ + 0.78); armGroup.add(pinBarrel);
 
     // GUIDE HEAD atop the throat — a ring the rod threads through (axis along the
     // rod's outward travel ≈ +X), flanked by two removable SAFETY FORKS + housing.
