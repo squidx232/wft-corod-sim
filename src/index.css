@@ -1,5 +1,75 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   DESIGN TOKENS (Tailwind v4 @theme)
+   Central source of truth for the UI. Components should prefer these
+   semantic tokens over ad-hoc slate-XXX / arbitrary text-[Npx] values.
+   ---------------------------------------------------------------------
+   Type scale: a real, small ramp instead of text-[9px..13px] soup.
+   Colors:     one brand accent + semantic status roles on a slate base.
+   Radii:      three intentional corner sizes.
+   ===================================================================== */
+@theme {
+  /* --- Type scale (label ramp + body) --- */
+  --text-2xs: 0.6875rem;   /* 11px — smallest legible label */
+  --text-2xs--line-height: 1rem;
+  --text-eyebrow: 0.625rem; /* 10px — tiny uppercase eyebrow labels only */
+  --text-eyebrow--line-height: 0.875rem;
+
+  /* --- Brand + surfaces --- */
+  --color-brand: #d97706;        /* amber-600 — the single primary action color */
+  --color-brand-strong: #b45309; /* amber-700 */
+  --color-surface: #0f172a;      /* slate-900 — panels */
+  --color-surface-2: #020617;    /* slate-950 — insets/wells */
+  --color-line: #1e293b;         /* slate-800 — borders */
+  --color-line-soft: #334155;    /* slate-700 */
+
+  /* --- Semantic status roles --- */
+  --color-success: #10b981;  /* emerald-500 */
+  --color-danger: #ef4444;   /* red-500 */
+  --color-info: #3b82f6;     /* blue-500 */
+  --color-warning: #f59e0b;  /* amber-500 */
+}
+
+/* =====================================================================
+   REUSABLE UI PRIMITIVES (utility classes)
+   Small, composable classes so repeated patterns stay identical across
+   components instead of each one re-inventing spacing/type/color.
+   ===================================================================== */
+@layer components {
+  /* Tiny uppercase section/field label. Replaces the ad-hoc
+     text-[10px] font-mono uppercase tracking-wider text-slate-400 combo. */
+  .eyebrow {
+    font-size: var(--text-eyebrow);
+    line-height: var(--text-eyebrow--line-height);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: theme(--color-slate-400);
+  }
+
+  /* Numeric readout — the ONLY place mono is appropriate. */
+  .stat-value {
+    font-family: theme(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+
+  /* Standard surface card. */
+  .ui-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 0.75rem; /* rounded-xl */
+  }
+
+  /* Inset well / pill container. */
+  .ui-well {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem; /* rounded-lg */
+  }
+}
+
 /* Dark theme scrollbar styling */
 * {
   scrollbar-width: thin;
