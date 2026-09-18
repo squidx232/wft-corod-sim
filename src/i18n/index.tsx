@@ -17,12 +17,23 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { en } from './en';
 import { ar } from './ar';
+import { PARTS } from './parts';
 
 export type Lang = 'en' | 'ar';
 
 export type Dict = Record<string, string>;
 
-const DICTS: Record<Lang, Dict> = { en, ar };
+// Merge the core dictionaries with all per-component "parts" fragments.
+// Parts are added by feature and merged here so multiple areas can be
+// translated independently without editing one giant file.
+const mergedEn: Dict = { ...en };
+const mergedAr: Dict = { ...ar };
+for (const part of PARTS) {
+  Object.assign(mergedEn, part.en);
+  Object.assign(mergedAr, part.ar);
+}
+
+const DICTS: Record<Lang, Dict> = { en: mergedEn, ar: mergedAr };
 
 const STORAGE_KEY = 'corod.lang';
 
@@ -96,7 +107,7 @@ export function useT(): LanguageContextValue {
       setLang: () => {},
       toggle: () => {},
       dir: 'ltr',
-      t: (k) => en[k] ?? k,
+      t: (k) => mergedEn[k] ?? k,
     };
   }
   return ctx;

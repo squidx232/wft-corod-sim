@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SimulatorState } from '../types';
 import { soundManager } from '../utils/audio';
+import { useT } from '../i18n';
 import {
   Power,
   Droplet,
@@ -51,40 +52,39 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
   onComplete,
   onUpdateHydraulics,
 }) => {
+  const { t } = useT();
+  
   const steps: StartStep[] = [
     {
       id: 'checks',
       icon: <Droplet className="w-6 h-6" />,
-      title: 'Pre-Start Fluid Checks',
-      instruction:
-        'Before starting, check the engine oil and coolant levels. Confirm the hydraulic reservoir level is adequate.',
-      manualRef: 'Section 5.2.1 (p. 151)',
+      title: t('engineStart.checks.title'),
+      instruction: t('engineStart.checks.instruction'),
+      manualRef: t('engineStart.checks.ref'),
       image: '/manual/start-fluidcheck.jpg',
-      actionLabel: 'Confirm Levels OK',
+      actionLabel: t('engineStart.checks.action'),
       durationSec: 1.2,
       sound: () => soundManager.playMetalTap(),
     },
     {
       id: 'preheater',
       icon: <Flame className="w-6 h-6" />,
-      title: 'Verify Engine Pre-Heater',
-      instruction:
-        'Confirm the Webasto / ProHeat diesel pre-heater is operational. Required below 0 °C to prevent cold-start damage; run weekly in summer to burn off soot.',
-      manualRef: 'Section 5.2.1 / Fig. 124 Control Pad (p. 151)',
+      title: t('engineStart.preheater.title'),
+      instruction: t('engineStart.preheater.instruction'),
+      manualRef: t('engineStart.preheater.ref'),
       image: '/manual/start-preheater.jpg',
-      actionLabel: 'Verify Pre-Heater',
+      actionLabel: t('engineStart.preheater.action'),
       durationSec: 1.2,
       sound: () => soundManager.playMetalTap(),
     },
     {
       id: 'crank',
       icon: <Power className="w-6 h-6" />,
-      title: 'Start the Rig Engine',
-      instruction:
-        'Turn the ignition and crank the diesel engine. Bring it to a low idle of 1000–1100 RPM. DO NOT elevate RPM during initial warm-up — serious engine damage can result.',
-      manualRef: 'Section 5.2.1 / Cab Ignition, Clutch & Gear (p. 151)',
+      title: t('engineStart.crank.title'),
+      instruction: t('engineStart.crank.instruction'),
+      manualRef: t('engineStart.crank.ref'),
       image: '/manual/start-ignition.png',
-      actionLabel: 'Crank & Idle @ 1050 RPM',
+      actionLabel: t('engineStart.crank.action'),
       durationSec: 2.5,
       apply: { engineRunning: true, engineRpm: 1050 },
       sound: () => {
@@ -100,12 +100,11 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
     {
       id: 'warmup',
       icon: <Thermometer className="w-6 h-6" />,
-      title: 'Warm Engine to Operating Temp',
-      instruction:
-        'Allow the engine to warm until the cab temperature gauge reaches the normal operating range (≈15 min in summer; longer below freezing).',
-      manualRef: 'Section 5.2.1 / Dash Trans-Temp Gauge (p. 151)',
+      title: t('engineStart.warmup.title'),
+      instruction: t('engineStart.warmup.instruction'),
+      manualRef: t('engineStart.warmup.ref'),
       image: '/manual/start-warmtemp.jpg',
-      actionLabel: 'Warm to Operating Temp',
+      actionLabel: t('engineStart.warmup.action'),
       durationSec: 3.0,
       apply: { engineRpm: 1100, hydraulicFluidTempC: 45 },
       sound: () => soundManager.playMetalTap(),
@@ -113,12 +112,11 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
     {
       id: 'pto',
       icon: <Cog className="w-6 h-6" />,
-      title: 'Engage the PTO (Pump Drive)',
-      instruction:
-        'Engage the Power Take-Off to drive the hydraulic pumps. In cold weather, start in a lower gear and increase as fluid warms.',
-      manualRef: 'Section 5.2.2 / Cab ROAD-HYDRAULIC PTO Selector (p. 152)',
+      title: t('engineStart.pto.title'),
+      instruction: t('engineStart.pto.instruction'),
+      manualRef: t('engineStart.pto.ref'),
       image: '/manual/start-pto.jpg',
-      actionLabel: 'Engage PTO',
+      actionLabel: t('engineStart.pto.action'),
       durationSec: 2.0,
       apply: { ptoEngaged: true },
       sound: () => soundManager.playMetalTap(),
@@ -126,12 +124,11 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
     {
       id: 'circulate',
       icon: <Waves className="w-6 h-6" />,
-      title: 'Circulate & Build System Pressure',
-      instruction:
-        'Turn the gripper motors with minimal up-pressure to circulate fluid. Open the safety bleed valve to warm the auxiliary pump, then CLOSE it before work so the pump can build pressure.',
-      manualRef: 'Section 5.2.2 / Fig. 125 Control Console (p. 152, 154)',
+      title: t('engineStart.circulate.title'),
+      instruction: t('engineStart.circulate.instruction'),
+      manualRef: t('engineStart.circulate.ref'),
       image: '/manual/start-console.jpg',
-      actionLabel: 'Circulate & Close Bleed',
+      actionLabel: t('engineStart.circulate.action'),
       durationSec: 2.5,
       apply: {
         chargePressure: 360,
@@ -212,10 +209,10 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black text-amber-100 uppercase tracking-wide font-mono">
-                Engine Start-Up Sequence
+                {t('engineStart.title')}
               </h2>
               <p className="text-[11px] text-slate-500 font-mono">
-                Daily Procedure — Manual Section 5.2 (pp. 151-152)
+                {t('engineStart.subtitle')}
               </p>
             </div>
           </div>
@@ -233,7 +230,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
           ) : (
             <span
               className="p-1.5 rounded-lg text-slate-600 cursor-not-allowed"
-              title="Complete all start-up steps before closing"
+              title={t('engineStart.closeFull')}
             >
               <X className="w-5 h-5" />
             </span>
@@ -243,9 +240,9 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
         {/* Progress bar */}
         <div className="px-5 pt-3">
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-            <span>Progress</span>
+            <span>{t('engineStart.progress')}</span>
             <span>
-              {completedCount} / {steps.length} steps
+              {t('engineStart.steps', { completed: completedCount, total: steps.length })}
             </span>
           </div>
           <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
@@ -295,7 +292,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-eyebrow font-mono text-slate-500">
-                        STEP {idx + 1}
+                        {t('engineStart.step', { num: idx + 1 })}
                       </span>
                       <h3 className="text-sm font-bold text-slate-800">{step.title}</h3>
                     </div>
@@ -314,7 +311,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                           loading="lazy"
                         />
                         <div className="text-eyebrow text-slate-500 font-mono px-2 py-1 bg-slate-100/60 border-t border-slate-300">
-                          Manual reference â€" {step.manualRef}
+                          {t('engineStart.manualRef', { ref: step.manualRef })}
                         </div>
                       </div>
                     )}
@@ -342,7 +339,7 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
                     )}
                     {status === 'done' && (
                       <span className="mt-2 inline-flex items-center gap-1 text-eyebrow text-emerald-700 font-mono">
-                        <CheckCircle className="w-3.5 h-3.5" /> COMPLETE
+                        <CheckCircle className="w-3.5 h-3.5" /> {t('engineStart.complete')}
                       </span>
                     )}
                   </div>
@@ -361,12 +358,12 @@ export const EngineStartModal: React.FC<EngineStartModalProps> = ({
               className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all"
             >
               <Gauge className="w-5 h-5" />
-              Engine Ready — Begin Operation
+              {t('engineStart.readyBtn')}
             </button>
           ) : (
             <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-200/60 border border-slate-300 text-slate-500 text-[12px] font-mono">
               <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-              Complete each step in sequence to bring the engine online…
+              {t('engineStart.inProgress')}
             </div>
           )}
         </div>

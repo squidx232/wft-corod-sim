@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SimulatorState } from '../types';
 import { RealtimeRodAnimationLayer } from './RealtimeRodAnimationLayer';
 import { Rig3DViewport } from './Rig3DViewport';
+import { useT } from '../i18n';
 import {
   Wrench,
   CheckCircle,
@@ -55,6 +56,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   onTriggerEmergencyStop,
   onResetEmergencyStop,
 }) => {
+  const { t } = useT();
   const { rod, hydraulics, bop } = state;
   const [displayMode, setDisplayMode] = useState<DisplayPerspectiveMode>('3d');
   const [viewMode2D, setViewMode2D] = useState<'full' | 'gripper' | 'reel'>('full');
@@ -74,25 +76,25 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
           {isInjecting && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-950/90 border border-emerald-600 text-emerald-300 font-mono text-xs font-bold animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.3)]">
               <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
-              <span>RIH INJECTING: {Math.abs(Math.round(rod.rodSpeedFtPerMin))} FT/MIN</span>
+              <span>{t('sightline.rihInjecting', { speed: Math.abs(Math.round(rod.rodSpeedFtPerMin)) })}</span>
             </div>
           )}
           {isSurfacing && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-950/90 border border-blue-600 text-blue-300 font-mono text-xs font-bold animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.3)]">
               <ArrowUp className="w-3.5 h-3.5 text-blue-400" />
-              <span>POOH SURFACING: +{Math.round(rod.rodSpeedFtPerMin)} FT/MIN</span>
+              <span>{t('sightline.poohSurfacing', { speed: Math.round(rod.rodSpeedFtPerMin) })}</span>
             </div>
           )}
           {isStationary && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white border hairline text-slate-600 font-mono text-xs">
               <span className="w-2 h-2 rounded-full bg-slate-400" />
-              <span>STATIONARY: {Math.round(rod.currentDepthFt)} FT</span>
+              <span>{t('sightline.stationary', { depth: Math.round(rod.currentDepthFt) })}</span>
             </div>
           )}
 
           {rod.isLandedOnTagBar && (
             <span className="px-2 py-0.5 rounded bg-amber-950 border border-amber-600 text-amber-300 font-mono text-[11px] font-bold">
-              TAG BAR LANDED
+              {t('sightline.tagBarLanded')}
             </span>
           )}
         </div>
@@ -100,15 +102,15 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
         {/* Quick Depth Presets & Slider */}
         <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border hairline">
           <span className="eyebrow">
-            Depth:
+            {t('sightline.depth')}:
           </span>
           <div className="flex items-center gap-1">
             {[
-              { label: "0' (Surface)", depth: 0 },
-              { label: "1000'", depth: 1000 },
-              { label: "2250' (Mid)", depth: 2250 },
-              { label: "3500'", depth: 3500 },
-              { label: "4500' (Bottom)", depth: 4500 },
+              { labelKey: 'sightline.depthPreset.surface', depth: 0 },
+              { labelKey: 'sightline.depthPreset.1000', depth: 1000 },
+              { labelKey: 'sightline.depthPreset.mid', depth: 2250 },
+              { labelKey: 'sightline.depthPreset.3500', depth: 3500 },
+              { labelKey: 'sightline.depthPreset.bottom', depth: 4500 },
             ].map((preset) => (
               <button
                 key={preset.depth}
@@ -120,7 +122,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
                     : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                 }`}
               >
-                {preset.label}
+                {t(preset.labelKey)}
               </button>
             ))}
           </div>
@@ -135,7 +137,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
               value={Math.round(rod.currentDepthFt)}
               onChange={(e) => onSetDepth && onSetDepth(Number(e.target.value))}
               className="w-24 accent-red-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-              title={`Adjust Depth: ${Math.round(rod.currentDepthFt)} ft`}
+              title={t('sightline.adjustDepth', { depth: Math.round(rod.currentDepthFt) })}
             />
             <span className="text-xs font-mono font-bold text-amber-700 min-w-[50px] text-right">
               {Math.round(rod.currentDepthFt)}'
@@ -149,7 +151,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
         <div className="flex items-center gap-1.5">
           <span className="eyebrow flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 text-amber-600" />
-            SIGHTLINE DISPLAY:
+            {t('sightline.display')}:
           </span>
           <div className="flex items-center gap-1 bg-white p-1 rounded-xl border hairline">
             <button
@@ -162,7 +164,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
               }`}
             >
               <Box className="w-3.5 h-3.5" />
-              <span>3D Rig Viewport (WebGL)</span>
+              <span>{t('sightline.3d')}</span>
             </button>
 
             <button
@@ -178,7 +180,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
               }`}
             >
               <Layout className="w-3.5 h-3.5" />
-              <span>2D Schematic</span>
+              <span>{t('sightline.2d')}</span>
             </button>
 
             <button
@@ -191,7 +193,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Split (3D + 2D)</span>
+              <span>{t('sightline.split')}</span>
             </button>
           </div>
         </div>
@@ -209,7 +211,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
                 viewMode2D === 'full' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Full Rig
+              {t('sightline.view.fullRig')}
             </button>
             <button
               type="button"
@@ -221,7 +223,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
                 viewMode2D === 'gripper' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Gripper Head
+              {t('sightline.view.gripperHead')}
             </button>
             <button
               type="button"
@@ -233,7 +235,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
                 viewMode2D === 'reel' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Service Reel
+              {t('sightline.view.serviceReel')}
             </button>
           </div>
         )}
@@ -295,9 +297,9 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
         <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl p-1.5 shadow-sm">
           <div className="flex items-center gap-1.5 px-2 text-slate-300 font-semibold">
             <Wrench className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-[11px]">Mech Clamp:</span>
+            <span className="text-[11px]">{t('sightline.mechClamp')}:</span>
             <span className="text-[11px] font-mono text-amber-400 font-bold">
-              {rod.mechanicalClampsInstalled > 0 ? `${rod.mechanicalClampsInstalled} (550 ft-lbs)` : 'None'}
+              {rod.mechanicalClampsInstalled > 0 ? t('sightline.clampCount', { count: rod.mechanicalClampsInstalled }) : t('sightline.clampNone')}
             </span>
           </div>
 
@@ -347,7 +349,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-800 text-white font-semibold text-[11px] shadow-sm active:scale-95 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Install</span>
+            <span>{t('sightline.install')}</span>
           </button>
 
           {/* - Remove Clamp Button */}
@@ -359,7 +361,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-semibold text-[11px] shadow-sm active:scale-95 transition-all"
           >
             <Minus className="w-3.5 h-3.5" />
-            <span>Remove</span>
+            <span>{t('sightline.remove')}</span>
           </button>
         </div>
 
@@ -371,9 +373,9 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             type="button"
             onClick={onTapTest}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 font-semibold text-xs transition-all active:scale-95"
-            title="Acoustic Tap Test: Strike string with brass hammer to verify secure clamping (Dull thud = Loose / Sharp ping = Tight)"
+            title={t('sightline.tapTestTooltip')}
           >
-            <span>🔨 Hammer Tap Test</span>
+            <span>🔨 {t('sightline.tapTest')}</span>
           </button>
 
           {/* Reel Safety Fork Toggle */}
@@ -389,7 +391,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
           >
             <ShieldAlert className="w-3.5 h-3.5" />
             <span>
-              Reel Fork: {hydraulics.reelSafetyForkEngaged ? 'ENGAGED (LOCKED)' : 'DISENGAGED'}
+              {t('sightline.reelFork')}: {hydraulics.reelSafetyForkEngaged ? t('sightline.reelForkEngaged') : t('sightline.reelForkDisengaged')}
             </span>
           </button>
 
@@ -406,7 +408,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
           >
             <CheckCircle className="w-3.5 h-3.5" />
             <span>
-              Containment: {rod.containmentDeviceAttached ? 'ATTACHED' : 'DETACHED'}
+              {t('sightline.containment')}: {rod.containmentDeviceAttached ? t('sightline.containmentAttached') : t('sightline.containmentDetached')}
             </span>
           </button>
 
@@ -416,9 +418,9 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             type="button"
             onClick={onStrokeBopHandPump}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-red-300 border border-slate-700 text-xs font-semibold active:scale-95 transition-all"
-            title="Stroke Manual BOP Emergency Hand Pump (+250 PSI per stroke)"
+            title={t('sightline.bopHandPumpTooltip')}
           >
-            <span>🚨 BOP Hand Pump ({bop.handPumpStrokes}x)</span>
+            <span>🚨 {t('sightline.bopHandPump', { strokes: bop.handPumpStrokes })}</span>
           </button>
         </div>
       </div>

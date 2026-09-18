@@ -12,6 +12,7 @@
 import React from 'react';
 import { CheckCircle2, AlertTriangle, AlertOctagon, ArrowRight } from 'lucide-react';
 import { SimulatorState } from '../types';
+import { useT } from '../i18n';
 
 interface Props {
   state: SimulatorState;
@@ -26,7 +27,7 @@ interface Assessment {
   nextAction: string; // what to do next
 }
 
-function assess(state: SimulatorState): Assessment {
+function assess(state: SimulatorState, t: (key: string, vars?: Record<string, string | number>) => string): Assessment {
   const h = state.hydraulics;
   const rod = state.rod;
   const bop = state.bop;
@@ -35,17 +36,17 @@ function assess(state: SimulatorState): Assessment {
   if (h.emergencyStopTripped) {
     return {
       health: 'danger',
-      title: 'Emergency Stop is active — everything is halted.',
-      detail: 'The machine is locked out for safety.',
-      nextAction: 'When the area is safe, press “Emergency Reset” to restore controls.',
+      title: t('banner.emergency.active.title'),
+      detail: t('banner.emergency.active.detail'),
+      nextAction: t('banner.emergency.active.action'),
     };
   }
   if (state.activeEmergency && state.activeEmergency !== 'none') {
     return {
       health: 'danger',
-      title: 'A fault is in progress — respond now.',
-      detail: 'The simulator has injected an emergency condition.',
-      nextAction: 'Follow the on-screen emergency prompt, or hit the red Emergency Stop.',
+      title: t('banner.fault.title'),
+      detail: t('banner.fault.detail'),
+      nextAction: t('banner.fault.action'),
     };
   }
 
@@ -53,17 +54,17 @@ function assess(state: SimulatorState): Assessment {
   if (!h.engineRunning) {
     return {
       health: 'caution',
-      title: 'Engine is off — nothing will move yet.',
-      detail: 'Pressures are low because the pump isn’t turning. This is normal before startup.',
-      nextAction: 'Start the engine (press E) to build up pressure.',
+      title: t('banner.startup.engineOff.title'),
+      detail: t('banner.startup.engineOff.detail'),
+      nextAction: t('banner.startup.engineOff.action'),
     };
   }
   if (!h.ptoEngaged) {
     return {
       health: 'caution',
-      title: 'Engine running, but power to the hydraulics is off (PTO).',
-      detail: 'The engine idles and builds charge pressure, but the drive/gripper aren’t powered yet.',
-      nextAction: 'Engage the transmission/PTO (press P) to power the controls.',
+      title: t('banner.startup.ptoOff.title'),
+      detail: t('banner.startup.ptoOff.detail'),
+      nextAction: t('banner.startup.ptoOff.action'),
     };
   }
 
@@ -71,31 +72,36 @@ function assess(state: SimulatorState): Assessment {
   if (h.chargePressure < 250) {
     return {
       health: 'danger',
-      title: 'Low charge pressure — the rods could free-fall (freewheel).',
-      detail: 'Below 250 psi the brake can’t hold the string safely.',
-      nextAction: 'Reduce speed and set the Safety Lever; check the engine/pump.',
+      title: t('banner.lowCharge.title'),
+      detail: t('banner.lowCharge.detail'),
+      nextAction: t('banner.lowCharge.action'),
     };
   }
 
   // 4) Moving
   const speed = Math.abs(rod.rodSpeedFtPerMin);
   if (speed > 0.5) {
-    const dir = rod.rodSpeedFtPerMin > 0 ? 'into the well (running in / RIH)' : 'out of the well (pulling out / POOH)';
+    const direction = rod.rodSpeedFtPerMin > 0 ? 'rih' : 'pooh';
+    const depthStr = Math.round(rod.currentDepthFt).toLocaleString();
+    const speedStr = speed.toFixed(0);
+    const weightStr = Math.round(rod.totalStringWeightLbs).toLocaleString();
     return {
       health: 'good',
-      title: `Rods are moving ${dir}.`,
-      detail: `Depth ${Math.round(rod.currentDepthFt).toLocaleString()} ft • Speed ${speed.toFixed(0)} ft/min • Weight ${Math.round(rod.totalStringWeightLbs).toLocaleString()} lb.`,
-      nextAction: 'Watch the weight and pressures. Push the drive stick back to center to stop.',
+      title: t('banner.moving.title', { direction: t(`banner.moving.dir.${direction}`) }),
+      detail: t('banner.moving.detail', { depth: depthStr, speed: speedStr, weight: weightStr }),
+      nextAction: t('banner.moving.action'),
     };
   }
 
   // 5) Ready / idle but powered
   const bopClosed = bop.reganBopClosed;
+  const bopState = bopClosed ? 'closed' : 'open';
+  const depthStr = Math.round(rod.currentDepthFt).toLocaleString();
   return {
     health: 'good',
-    title: 'Ready — powered and holding steady.',
-    detail: `Depth ${Math.round(rod.currentDepthFt).toLocaleString()} ft • Well valve (BOP) is ${bopClosed ? 'CLOSED' : 'open'}.`,
-    nextAction: 'Choose a direction and use the drive stick (right stick / R = in, F = out) to move the rods.',
+    title: t('banner.ready.title'),
+    detail: t('banner.ready.detail', { depth: depthStr, bopState: t(`banner.bopState.${bopState}`) }),
+    nextAction: t('banner.ready.action'),
   };
 }
 
@@ -105,26 +111,27 @@ const STYLES: Record<Health, { border: string; bg: string; icon: React.ReactNode
     bg: 'bg-green-50',
     icon: <CheckCircle2 className="w-6 h-6 text-green-700" />,
     chip: 'bg-green-700 text-white',
-    chipLabel: 'All good',
+    chipLabel: 'status.good',
   },
   caution: {
     border: 'border-amber-300',
     bg: 'bg-amber-50',
     icon: <AlertTriangle className="w-6 h-6 text-amber-700" />,
     chip: 'bg-amber-600 text-white',
-    chipLabel: 'Caution',
+    chipLabel: 'status.caution',
   },
   danger: {
     border: 'border-red-300',
     bg: 'bg-red-50',
     icon: <AlertOctagon className="w-6 h-6 text-red-700 animate-pulse" />,
     chip: 'bg-red-700 text-white',
-    chipLabel: 'Action needed',
+    chipLabel: 'status.action',
   },
 };
 
 export const StatusBanner: React.FC<Props> = ({ state }) => {
-  const a = assess(state);
+  const { t } = useT();
+  const a = assess(state, t);
   const s = STYLES[a.health];
   return (
     <div
@@ -136,7 +143,7 @@ export const StatusBanner: React.FC<Props> = ({ state }) => {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-eyebrow font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${s.chip}`}>
-            {s.chipLabel}
+            {t(s.chipLabel)}
           </span>
           <span className="text-sm sm:text-base font-semibold text-slate-800">{a.title}</span>
         </div>
@@ -145,7 +152,7 @@ export const StatusBanner: React.FC<Props> = ({ state }) => {
       <div className="hidden md:flex items-center gap-2 shrink-0 max-w-[42%]">
         <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
         <div className="text-2xs text-slate-700">
-          <span className="eyebrow block">Do this next</span>
+          <span className="eyebrow block">{t('status.doThisNext')}</span>
           {a.nextAction}
         </div>
       </div>

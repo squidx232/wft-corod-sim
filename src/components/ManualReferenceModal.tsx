@@ -6,6 +6,7 @@ import {
   getRecommendedClamp,
 } from '../data/manualReference';
 import { RodSize, RodGrade } from '../types';
+import { useT } from '../i18n';
 import {
   BookOpen,
   Search,
@@ -23,6 +24,7 @@ interface ManualReferenceModalProps {
 }
 
 export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onClose }) => {
+  const { t } = useT();
   const [activeTab, setActiveTab] = useState<'squeeze' | 'clamps' | 'straightener' | 'weather' | 'tools' | 'glossary'>('squeeze');
   const [calcRodSize, setCalcRodSize] = useState<RodSize>('#6');
   const [calcDepthFt, setCalcDepthFt] = useState<number>(4500);
@@ -45,10 +47,10 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             </div>
             <div>
               <span className="text-eyebrow font-mono text-red-700 font-bold">
-                GL-PCP-OEPS-L4-11 (REV 25)
+                {t('manual.doc')}
               </span>
               <h3 className="text-base font-semibold text-slate-800">
-                Weatherford COROD® Mobile Gripper Reference Manual
+                {t('manual.title')}
               </h3>
             </div>
           </div>
@@ -69,7 +71,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'squeeze' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Squeeze Curves & Calculator (Fig 248)
+            {t('manual.tab.squeeze')}
           </button>
           <button
             onClick={() => setActiveTab('clamps')}
@@ -77,7 +79,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'clamps' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Rod Clamp Selection (Table 9/10)
+            {t('manual.tab.clamps')}
           </button>
           <button
             onClick={() => setActiveTab('straightener')}
@@ -85,7 +87,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'straightener' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Rod Straightener (Table 11)
+            {t('manual.tab.straightener')}
           </button>
           <button
             onClick={() => setActiveTab('weather')}
@@ -93,7 +95,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'weather' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Weather & Humidex (Table 2-5)
+            {t('manual.tab.weather')}
           </button>
           <button
             onClick={() => setActiveTab('tools')}
@@ -101,7 +103,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'tools' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Tool Inventory (Table 14)
+            {t('manual.tab.tools')}
           </button>
           <button
             onClick={() => setActiveTab('glossary')}
@@ -109,7 +111,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
               activeTab === 'glossary' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Glossary (Appendix J)
+            {t('manual.tab.glossary')}
           </button>
         </div>
 
@@ -120,13 +122,13 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
             <div className="space-y-4">
               <div className="p-4 rounded-lg bg-slate-100 border border-slate-300">
                 <span className="text-xs font-semibold text-amber-700 block mb-3">
-                  Interactive Squeeze Pressure & String Weight Calculator (Figure 248)
+                  {t('manual.squeeze.title')}
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                      Select COROD Size & Shape:
+                      {t('manual.squeeze.rodSize')}
                     </label>
                     <select
                       value={calcRodSize}
@@ -143,7 +145,7 @@ export const ManualReferenceModal: React.FC<ManualReferenceModalProps> = ({ onCl
 
                   <div>
                     <label className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                      Well Depth: {calcDepthFt} FT ({Math.round(calcDepthFt * 0.3048)} M)
+                      {t('manual.squeeze.depth', { depth: calcDepthFt, depthM: Math.round(calcDepthFt * 0.3048) })}
                     </label>
                     <input
                       type="range"

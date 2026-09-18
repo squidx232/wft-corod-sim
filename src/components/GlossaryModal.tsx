@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react';
 import { X, BookMarked, Search } from 'lucide-react';
+import { useT } from '../i18n';
 
 interface Props {
   onClose: () => void;
@@ -54,6 +55,7 @@ const TERMS: Term[] = [
 const CATEGORIES = ['Movement', 'Power', 'Gripper', 'Well Control', 'Readouts', 'Equipment', 'Safety'];
 
 export const GlossaryModal: React.FC<Props> = ({ onClose }) => {
+  const { t } = useT();
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
   const match = (t: Term) => !query || t.term.toLowerCase().includes(query) || t.short.toLowerCase().includes(query) || t.detail.toLowerCase().includes(query);
@@ -64,14 +66,14 @@ export const GlossaryModal: React.FC<Props> = ({ onClose }) => {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-300 bg-slate-100">
           <div className="flex items-center gap-2">
             <BookMarked className="w-5 h-5 text-blue-700" />
-            <h2 className="text-sm font-semibold text-slate-800">Plain-English Glossary</h2>
+            <h2 className="text-sm font-semibold text-slate-800">{t('glossary.title')}</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-4 py-2 border-b border-slate-300 bg-slate-100/60">
           <div className="flex items-center gap-1 bg-slate-200 rounded-md px-2 py-1">
             <Search className="w-3.5 h-3.5 text-slate-500" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a term (e.g. BOP, squeeze, PTO)…" className="bg-transparent outline-none text-2xs text-slate-700 w-full" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('glossary.searchPlaceholder')} className="bg-transparent outline-none text-2xs text-slate-700 w-full" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-2">

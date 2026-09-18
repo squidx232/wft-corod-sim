@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useT } from '../i18n';
 import { DynamicRigSightline } from './DynamicRigSightline';
 import { Rig3DViewport } from './Rig3DViewport';
 import { WeatherfordControlConsole } from './WeatherfordControlConsole';
@@ -70,6 +71,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   onSetTripMode,
   onSetDepth,
 }) => {
+  const { t } = useT();
   const { hydraulics, rod, bop } = state;
   // Allow deep-linking / sharing a specific station layout via the URL hash,
   // e.g. #console, #split, #rig, #cockpit. Falls back to the cockpit view.
@@ -322,7 +324,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               <Badge tone="brand" className="hidden sm:inline-flex">COROD™</Badge>
             </div>
             <p className="text-2xs ink-muted">
-              {hydraulics.engineRunning ? 'Engine running' : 'Engine off'} · Depth{' '}
+              {hydraulics.engineRunning ? t('common.engineOn') : t('common.engineOff')} · Depth{' '}
               {Math.round(rod.currentDepthFt).toLocaleString()} ft
             </p>
           </div>
@@ -331,22 +333,22 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
         {/* Layout selector + engine power */}
         <div className="flex flex-wrap items-center gap-2">
           <SegmentedControl
-            label="View"
+            label={t('station.view')}
             value={layoutMode}
             onChange={setLayoutMode}
             segments={[
-              { id: 'split', label: <span className="hidden lg:inline">Side-by-Side</span>, icon: <Columns className="w-3.5 h-3.5" />, title: 'Side-by-Side Split' },
-              { id: 'rig-focus', label: <span className="hidden lg:inline">Windshield</span>, icon: <Maximize2 className="w-3.5 h-3.5" />, title: '3D Windshield Focus' },
-              { id: 'console-focus', label: <span className="hidden lg:inline">Console</span>, icon: <Sliders className="w-3.5 h-3.5" />, title: 'Console Focus' },
+              { id: 'split', label: <span className="hidden lg:inline">{t('station.view.split')}</span>, icon: <Columns className="w-3.5 h-3.5" />, title: t('station.view.split') },
+              { id: 'rig-focus', label: <span className="hidden lg:inline">{t('station.view.windshield')}</span>, icon: <Maximize2 className="w-3.5 h-3.5" />, title: t('station.view.windshield') },
+              { id: 'console-focus', label: <span className="hidden lg:inline">{t('station.view.console')}</span>, icon: <Sliders className="w-3.5 h-3.5" />, title: t('station.view.console') },
             ]}
           />
 
           {/* Pop-out to second monitor — opens a synced window (state via BroadcastChannel). */}
           <div className="hidden md:flex items-center gap-1 rounded-lg surface-2 border hairline p-1">
-            <span className="eyebrow px-1.5">Pop out</span>
+            <span className="eyebrow px-1.5">{t('station.popout')}</span>
             {[
-              { view: '3d', label: '3D View', icon: <Monitor className="w-3.5 h-3.5" /> },
-              { view: 'console', label: 'Console', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+              { view: '3d', label: t('station.popout.3d'), icon: <Monitor className="w-3.5 h-3.5" /> },
+              { view: 'console', label: t('station.popout.console'), icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
             ].map((item) => (
               <button
                 key={item.view}
@@ -359,7 +361,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
                   )
                 }
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-2xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
-                title={`Open ${item.label} in a separate window (for a second monitor)`}
+                title={t('station.popoutTooltip', { label: item.label })}
               >
                 {item.icon}
                 <span className="hidden lg:inline">{item.label}</span>
@@ -381,7 +383,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               }
             }}
           >
-            {state.engineStartSequenceComplete ? 'Running' : 'Start'}
+            {state.engineStartSequenceComplete ? t('station.running') : t('station.start')}
           </Button>
         </div>
       </Card>

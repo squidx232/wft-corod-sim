@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SimulatorState, LogbookEntry } from '../types';
 import { soundManager } from '../utils/audio';
+import { useT } from '../i18n';
 import {
   Award,
   FileText,
@@ -27,6 +28,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
   state,
   onAddLogbookEntry,
 }) => {
+  const { t } = useT();
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'logbook' | 'certificate'>('analytics');
   const { performance, telemetry, logbook, rod } = state;
 
@@ -76,10 +78,10 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-800">
-              Operator Performance & Operations Logbook
+              {t('analytics.header.title')}
             </h3>
             <p className="text-sm text-slate-500 mt-0.5">
-              Real-time competency matrix, telemetry, and Weatherford field audit records
+              {t('analytics.header.subtitle')}
             </p>
           </div>
         </div>
@@ -94,7 +96,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             }`}
           >
             <TrendingUp className="w-4 h-4" />
-            Performance Dashboard
+            {t('analytics.tab.dashboard')}
           </button>
 
           <button
@@ -106,7 +108,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             }`}
           >
             <FileText className="w-4 h-4" />
-            Operations Logbook (3.9 / 4.3)
+            {t('analytics.tab.logbook')}{t('analytics.tab.logbook.version')}
           </button>
 
           <button
@@ -118,7 +120,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             }`}
           >
             <Award className="w-4 h-4" />
-            Operator Certification
+            {t('analytics.tab.certificate')}
           </button>
         </div>
       </div>
@@ -130,42 +132,42 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-slate-100 border border-slate-300 text-center">
               <span className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                Overall Competency
+                {t('analytics.score.competency')}
               </span>
               <span className="text-3xl font-mono font-bold text-emerald-700">
                 {performance.overallScore}%
               </span>
-              <span className="text-eyebrow text-slate-500 block mt-1">Level II Operator Grade</span>
+              <span className="text-eyebrow text-slate-500 block mt-1">{t('analytics.score.competency.grade')}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-100 border border-slate-300 text-center">
               <span className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                Safety Adherence
+                {t('analytics.score.safety')}
               </span>
               <span className="text-3xl font-mono font-bold text-emerald-700">
                 {performance.safetyScore}%
               </span>
-              <span className="text-eyebrow text-slate-500 block mt-1">Zero Lockout Violations</span>
+              <span className="text-eyebrow text-slate-500 block mt-1">{t('analytics.score.safety.subtitle')}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-100 border border-slate-300 text-center">
               <span className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                Emergency Reaction Time
+                {t('analytics.score.reaction')}
               </span>
               <span className="text-3xl font-mono font-bold text-amber-700">
                 {(performance.emergencyReactionTimeMs / 1000).toFixed(2)}s
               </span>
-              <span className="text-eyebrow text-slate-500 block mt-1">Target: &lt; 3.00s</span>
+              <span className="text-eyebrow text-slate-500 block mt-1">{t('analytics.score.reaction.target')}</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-100 border border-slate-300 text-center">
               <span className="text-eyebrow font-semibold text-slate-500 block mb-1">
-                Completed Scenarios
+                {t('analytics.score.completed')}
               </span>
               <span className="text-3xl font-mono font-bold text-blue-700">
                 {performance.completedScenarios.length} / 8
               </span>
-              <span className="text-eyebrow text-slate-500 block mt-1">Operational Modules</span>
+              <span className="text-eyebrow text-slate-500 block mt-1">{t('analytics.score.completed.subtitle')}</span>
             </div>
           </div>
 
@@ -173,16 +175,16 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           <div className="p-5 rounded-xl bg-slate-100 border border-slate-300 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-300 pb-2">
               <span className="text-xs font-semibold text-slate-700">
-                5 Core Competency Pillars (Weatherford Standards)
+                {t('analytics.matrix.title')}
               </span>
-              <span className="text-xs text-slate-500 font-mono">Evaluation Matrix</span>
+              <span className="text-xs text-slate-500 font-mono">{t('analytics.matrix.eval')}</span>
             </div>
 
             <div className="space-y-3 pt-2">
               {/* 1. Well Control & BOP */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">1. Primary Well Control & BOP Rapid Shut-In</span>
+                  <span className="text-slate-600">{t('analytics.pillar.wellcontrol')}</span>
                   <span className="text-emerald-700 font-mono">{performance.competencyPillars.wellControl}%</span>
                 </div>
                 <div className="h-2 bg-white rounded-full overflow-hidden border border-slate-300">
@@ -196,7 +198,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
               {/* 2. Rig Stability */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">2. Rig Stability, Outrigger Pads & Crane 14' Limit</span>
+                  <span className="text-slate-600">{t('analytics.pillar.rigstability')}</span>
                   <span className="text-emerald-700 font-mono">{performance.competencyPillars.rigStability}%</span>
                 </div>
                 <div className="h-2 bg-white rounded-full overflow-hidden border border-slate-300">
@@ -210,7 +212,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
               {/* 3. Hydraulic Regulation */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">3. Hydraulic Squeeze Pressure vs Weight Modulation</span>
+                  <span className="text-slate-600">{t('analytics.pillar.hydraulic')}</span>
                   <span className="text-blue-700 font-mono">{performance.competencyPillars.hydraulicRegulation}%</span>
                 </div>
                 <div className="h-2 bg-white rounded-full overflow-hidden border border-slate-300">
@@ -224,7 +226,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
               {/* 4. Emergency Action */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">4. Emergency Action: Safety Clamp & Horn Sequence</span>
+                  <span className="text-slate-600">{t('analytics.pillar.emergency')}</span>
                   <span className="text-amber-700 font-mono">{performance.competencyPillars.emergencyReaction}%</span>
                 </div>
                 <div className="h-2 bg-white rounded-full overflow-hidden border border-slate-300">
@@ -238,7 +240,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
               {/* 5. Procedural Accuracy */}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">5. 3-Stage Clamping, 3-Tap Test & Y-Tool Calibration</span>
+                  <span className="text-slate-600">{t('analytics.pillar.procedural')}</span>
                   <span className="text-purple-700 font-mono">{performance.competencyPillars.proceduralAccuracy}%</span>
                 </div>
                 <div className="h-2 bg-white rounded-full overflow-hidden border border-slate-300">
@@ -254,20 +256,20 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
           {/* Telemetry Stream */}
           <div className="p-5 rounded-xl bg-slate-100 border border-slate-300">
             <span className="text-xs font-semibold text-slate-600 block border-b border-slate-300 pb-2 mb-3">
-              Session Live Telemetry History
+              {t('analytics.telemetry.title')}
             </span>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead>
                   <tr className="border-b border-slate-300 text-slate-500">
-                    <th className="py-2">Time</th>
-                    <th>Depth (ft)</th>
-                    <th>Speed (ft/min)</th>
-                    <th>Weight (lbs)</th>
-                    <th>Squeeze (psi)</th>
-                    <th>Charge (psi)</th>
-                    <th>Safety (psi)</th>
-                    <th>Hyd Temp (°C)</th>
+                    <th className="py-2">{t('analytics.telemetry.time')}</th>
+                    <th>{t('analytics.telemetry.depth')}</th>
+                    <th>{t('analytics.telemetry.speed')}</th>
+                    <th>{t('analytics.telemetry.weight')}</th>
+                    <th>{t('analytics.telemetry.squeeze')}</th>
+                    <th>{t('analytics.telemetry.charge')}</th>
+                    <th>{t('analytics.telemetry.safety')}</th>
+                    <th>{t('analytics.telemetry.temp')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900 text-slate-600">
@@ -288,7 +290,7 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
                   {telemetry.length === 0 && (
                     <tr>
                       <td colSpan={8} className="py-4 text-center text-slate-500 italic">
-                        Engage PTO or start tripping to record telemetry stream.
+                        {t('analytics.telemetry.empty')}
                       </td>
                     </tr>
                   )}

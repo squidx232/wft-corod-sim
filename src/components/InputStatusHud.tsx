@@ -4,6 +4,7 @@
  * to open the full ControlBindingsPanel.
  */
 import React from 'react';
+import { useT } from '../i18n';
 import { Gamepad2, Keyboard, Settings2, Power, Crosshair } from 'lucide-react';
 import { UseInputSystem } from '../input/useInputSystem';
 import { CONTROLS_BY_ID } from '../input/controlRegistry';
@@ -65,18 +66,18 @@ export const InputStatusHud: React.FC<Props> = ({ input, onOpenPanel }) => {
           ${enabled ? 'bg-emerald-950 text-emerald-300 border-emerald-700' : 'bg-neutral-900 text-neutral-500 border-neutral-700'}`}
       >
         <Power className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">{enabled ? 'On' : 'Off'}</span>
+        <span className="hidden sm:inline">{enabled ? t('inputHud.on') : t('inputHud.off')}</span>
       </button>
 
       {/* Open bindings panel */}
       <button
         type="button"
         onClick={onOpenPanel}
-        title="Configure control bindings"
+        title={t('inputHud.configureBindings')}
         className="flex items-center gap-1 text-[11px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-400 hover:bg-slate-300"
       >
         <Settings2 className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Bindings</span>
+        <span className="hidden sm:inline">{t('inputHud.bindings')}</span>
       </button>
     </div>
   );

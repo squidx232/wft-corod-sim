@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '../i18n';
 import { SimulatorState, YToolState } from '../types';
 import { soundManager } from '../utils/audio';
 import {
@@ -40,6 +41,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
   onEmergencyAction,
   onStrokeBopHandPump,
 }) => {
+  const { t } = useT();
   const [activeAuxTab, setActiveAuxTab] = useState<'bop' | 'ytool' | 'outriggers' | 'picker' | 'thermal' | 'cab'>('bop');
   const [calibStage, setCalibStage] = useState<number>(0);
 
@@ -59,7 +61,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           <div className="absolute left-1 bottom-1 w-1.5 h-1.5 rounded-full bg-neutral-600 border border-neutral-800" />
           <div className="absolute right-1 bottom-1 w-1.5 h-1.5 rounded-full bg-neutral-600 border border-neutral-800" />
           <div className="text-sm font-semibold text-neutral-100 text-center mb-2 font-mono border-b border-neutral-700 pb-1">
-            Component Load Chart
+            {t('aux.componentLoadChart')}
           </div>
           <div className="flex flex-col gap-1 font-mono">
             {[
@@ -84,7 +86,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           className="flex-1 min-w-[240px] bg-slate-100 border-2 border-slate-300 rounded-lg shadow-lg px-4 py-3"
         >
           <div className="text-sm font-semibold text-slate-800 text-center mb-2 font-mono border-b border-slate-300 pb-1">
-            Rod Safety Clamps
+            {t('aux.rodSafetyClamps')}
           </div>
           <div className="flex items-center justify-center gap-3 my-2">
             {[0, 1].map((i) => {
@@ -112,9 +114,9 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             })}
           </div>
           <div className="text-center text-eyebrow text-slate-500 font-mono mb-2">
-            {state.rod.mechanicalClampsInstalled} of 2 installed
+            {t('aux.installedCount', { count: state.rod.mechanicalClampsInstalled })}
             {state.rod.mechanicalClampsInstalled > 0 &&
-              ` @ ${state.rod.clampTorqueFtLbs} ft-lbs`}
+              ` ${t('aux.clampTorque', { torque: state.rod.clampTorqueFtLbs })}`}
           </div>
           <div className="flex gap-2">
             <button
@@ -125,7 +127,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               disabled={state.rod.mechanicalClampsInstalled >= 2}
               className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase shadow active:scale-95"
             >
-              + Install Clamp
+              {t('aux.installClamp')}
             </button>
             <button
               type="button"
@@ -135,7 +137,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               disabled={state.rod.mechanicalClampsInstalled <= 0}
               className="flex-1 py-2 rounded-lg bg-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase shadow active:scale-95"
             >
-              − Remove
+              {t('aux.removeClamp')}
             </button>
           </div>
         </div>
@@ -143,7 +145,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
         {/* EMERGENCY RESPONSE ACTIONS — evacuate & SCBA (for H2S / weather drills) */}
         <div className="flex-1 min-w-[240px] bg-slate-100 border-2 border-slate-300 rounded-lg shadow-lg px-4 py-3">
           <div className="text-sm font-semibold text-slate-800 text-center mb-2 font-mono border-b border-slate-300 pb-1">
-            Emergency Response Actions
+            {t('aux.emergencyResponseActions')}
           </div>
           <div className="flex flex-col gap-2 mt-2">
             <button
@@ -156,7 +158,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   : 'bg-amber-700 hover:bg-amber-600 border-amber-500 text-white'
               }`}
             >
-              {state.evacuatedToMuster ? '✓ Evacuated to Muster' : 'Evacuate to Muster Point'}
+              {state.evacuatedToMuster ? t('aux.evacuated') : t('aux.evacuateToMuster')}
             </button>
             <button
               type="button"
@@ -168,10 +170,10 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   : 'bg-cyan-100 hover:bg-cyan-700 border-cyan-500 text-white'
               }`}
             >
-              {state.scbaEquipped ? '✓ SCBA Equipped' : 'Equip SCBA Gear'}
+              {state.scbaEquipped ? t('aux.scbaEquipped') : t('aux.equipSCBA')}
             </button>
             <p className="text-eyebrow text-slate-500 font-mono text-center mt-1">
-              Used during H2S &amp; severe-weather emergency drills
+              {t('aux.h2sEmergency')}
             </p>
           </div>
         </div>
@@ -182,7 +184,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
         <div className="flex items-center gap-3">
           <Settings className="w-6 h-6 text-amber-700" />
           <h3 className="text-base font-semibold text-slate-800">
-            Auxiliary Wellsite Systems & Sub-Panels
+            {t('aux.auxiliaryWellsiteSystems')}
           </h3>
         </div>
 
@@ -196,7 +198,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Layers className="w-4 h-4" />
-            Automatic BOP Pump (3.6.6)
+            {t('aux.tabBOP')}
           </button>
 
           <button
@@ -208,7 +210,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Activity className="w-4 h-4" />
-            Optical Y-Tool LCD (3.6.3)
+            {t('aux.tabYTool')}
           </button>
 
           <button
@@ -220,7 +222,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Sliders className="w-4 h-4" />
-            Outriggers Bank (3.6.1)
+            {t('aux.tabOutriggers')}
           </button>
 
           <button
@@ -232,7 +234,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Gauge className="w-4 h-4" />
-            Knuckle Crane Picker (3.6.2)
+            {t('aux.tabPicker')}
           </button>
 
           <button
@@ -244,7 +246,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Flame className="w-4 h-4" />
-            Cold Weather & Hydraulics
+            {t('aux.tabThermal')}
           </button>
 
           <button
@@ -256,7 +258,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             }`}
           >
             <Truck className="w-4 h-4" />
-            Truck Cab Diagnostics
+            {t('aux.tabCab')}
           </button>
         </div>
       </div>
