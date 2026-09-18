@@ -269,7 +269,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // Animated 3D Parts & Dynamically controlled meshes
   const truckVibrationGroupRef = useRef<THREE.Group | null>(null);
   const reelSpoolRef = useRef<THREE.Group | null>(null);
-  const levelWindRef = useRef<THREE.Mesh | null>(null);
   // Wound rod coil on the reel + the last fill fraction we (re)built it at. As we
   // RIH, rod pays off the reel: the coil is rebuilt with fewer wraps so it visibly
   // SHRINKS in radius (rope pulled off a spool). We only rebuild when the fill
@@ -635,11 +634,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       if (reelSpoolRef.current) {
         const radPerSec = (speed / 15) * Math.PI * 0.5;
         reelSpoolRef.current.rotation.z += radPerSec * delta;
-
-        // Level-Wind Sheave Traverse Animation
-        if (levelWindRef.current) {
-          levelWindRef.current.position.z = Math.sin(reelSpoolRef.current.rotation.z * 0.35) * 1.1;
-        }
       }
 
       // 2a. Wound-rod coil SHRINKS as rod pays off the reel during RIH -----------
@@ -2995,13 +2989,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     reelGroup.add(spool);
     reelSpoolRef.current = spool;
 
-    // Traversing Level-Wind Sheave Guide Arm
-    const levelWindMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.7 });
-    const levelWind = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.4, 16), levelWindMat);
-    levelWind.position.set(1.9, 0.6, 0);
-    levelWind.rotation.x = Math.PI / 2;
-    reelGroup.add(levelWind);
-    levelWindRef.current = levelWind;
+    // (Removed the blue level-wind sheave cylinder — it read as a stray floating
+    // blue object near the rod path and isn't needed for the visual.)
 
     // Item 52: Trailer tongue/hitch at front (LOCAL coords — group already at REEL_X, 3.8, REEL_Z)
     const tongueGeo = new THREE.BoxGeometry(3.0, 0.12, 0.15);
@@ -3821,8 +3810,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // head (GUIDE_HEAD), THEN follows the guide arch. It never goes over the top
     // and never dips toward the reel centre (which would clash with the spinning
     // coil) — matching the field routing: coil edge → arm head → arch → injector.
-    rodPoints.push(new THREE.Vector3(REEL_X + 2.0, 3.15, REEL_Z));           // off the coil +X edge
-    rodPoints.push(new THREE.Vector3(REEL_X + 3.1, 3.25, REEL_Z));           // running outward, clear of rims
+    // Start point is TUCKED INTO the coil's outer wrap surface (reel centre is at
+    // world (REEL_X, 3.1, REEL_Z); the wound coil's outer radius ≈ 2.05). Starting
+    // at radius ≈ 1.85 on the +X side (world x ≈ REEL_X+1.85, y = 3.1) makes the
+    // rod visibly EMERGE FROM / connect to the wraps instead of reading as a
+    // separate floating stub, then it runs outward to the guide head.
+    rodPoints.push(new THREE.Vector3(REEL_X + 1.85, 3.1, REEL_Z));           // tucked into the coil wraps
+    rodPoints.push(new THREE.Vector3(REEL_X + 2.6, 3.15, REEL_Z));           // leaving the coil surface
+    rodPoints.push(new THREE.Vector3(REEL_X + 3.4, 3.25, REEL_Z));           // running outward, clear of rims
     rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
     for (let i = 0; i <= ARC_SAMPLES; i++) {
       rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
