@@ -15,6 +15,7 @@ interface Props {
 }
 
 export const InputStatusHud: React.FC<Props> = ({ input, onOpenPanel }) => {
+  const { t } = useT();
   const { status, enabled, setEnabled, activeMovementTarget, activeValueTarget } = input;
   const moveLabel = activeMovementTarget ? CONTROLS_BY_ID[activeMovementTarget]?.label : null;
   const valLabel = activeValueTarget ? CONTROLS_BY_ID[activeValueTarget]?.label : null;
