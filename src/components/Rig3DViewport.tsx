@@ -89,12 +89,15 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
                             // wellhead (so the mast is NOT on top of the injector);
                             // its crown cable angles over to carry the injector.
 
-// Containment/guide arm HEAD position (world). The rod pays off the reel coil,
+// Containment/guide arm HEAD position (world). The rod pays off the OUTER SIDE
+// of the reel coil (the +X / well-facing edge), runs OUTWARD (never over the top
+// and never toward the reel centre — that would clash with the spinning coil),
 // threads through this guide head at the end of the reel's red containment arm,
 // and the arched rod guide (getRodGuideCurve) begins EXACTLY here so the rod
-// runs continuously arm → guide head → guide arch → injector. Placed up and
-// toward the well (+X) from the reel top, clear of the spinning coil/flanges.
-const GUIDE_HEAD = { x: REEL_X + 1.4, y: 6.5, z: REEL_Z };
+// runs continuously coil edge → arm guide head → guide arch → injector.
+// Placed WELL OUTBOARD of the reel rims (flange radius 2.3) on the +X side, at a
+// low/side height (not above the reel), matching the field layout.
+const GUIDE_HEAD = { x: REEL_X + 4.2, y: 3.4, z: REEL_Z };
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -3093,57 +3096,53 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const armDark = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.7, roughness: 0.4 });
     const armChrome = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.25 });
 
-    // Local coords are relative to (REEL_X, 0, 0). The guide head local point:
-    const headLX = GUIDE_HEAD.x - REEL_X;   // = 1.4
-    const headLY = GUIDE_HEAD.y;            // = 6.5
+    // Guide-head point in LOCAL coords (group is at REEL_X). It sits WELL OUTBOARD
+    // of the reel (+X) at a low/side height, so the rod runs sideways out of the
+    // coil edge and through it — never over the top, never toward the reel centre.
+    const headLX = GUIDE_HEAD.x - REEL_X;   // ≈ 4.2
+    const headLY = GUIDE_HEAD.y;            // ≈ 3.4 (side height)
     const headLZ = GUIDE_HEAD.z;            // = REEL_Z (-11)
-
-    // Pivot base on the reel-trailer frame (near/well side of the reel).
-    const pivotBase = new THREE.Vector3(-0.4, 3.3, REEL_Z + 1.4);
-    // Base mounting plate + drop-pin barrel (Fig 235 support-arm locking pin).
-    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.9), armDark);
-    basePlate.position.copy(pivotBase); basePlate.castShadow = true; armGroup.add(basePlate);
-    const pinBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.7, 12), armChrome);
-    pinBarrel.position.set(pivotBase.x, pivotBase.y + 0.1, pivotBase.z);
-    armGroup.add(pinBarrel);
-
-    // Vertical red support column rising off the pivot base.
-    const colTopY = 4.9;
-    const column = new THREE.Mesh(new THREE.BoxGeometry(0.32, colTopY - pivotBase.y, 0.32), armRed);
-    column.position.set(pivotBase.x, (pivotBase.y + colTopY) / 2, pivotBase.z);
-    column.castShadow = true; armGroup.add(column);
-
-    // Angled boom from the top of the column out to the GUIDE HEAD.
-    const columnTop = new THREE.Vector3(pivotBase.x, colTopY, pivotBase.z);
     const headPt = new THREE.Vector3(headLX, headLY, headLZ);
-    const boomDir = new THREE.Vector3().subVectors(headPt, columnTop);
-    const boomLen = boomDir.length();
-    const boom = new THREE.Mesh(new THREE.BoxGeometry(0.28, boomLen, 0.28), armRed);
-    boom.position.copy(columnTop).addScaledVector(boomDir, 0.5);
-    boom.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), boomDir.clone().normalize());
-    boom.castShadow = true; armGroup.add(boom);
 
-    // Diagonal brace from the pivot base up to mid-boom (rigidity, like the photo).
-    const braceEnd = new THREE.Vector3().copy(columnTop).addScaledVector(boomDir, 0.35);
-    const braceStart = new THREE.Vector3(pivotBase.x, pivotBase.y + 0.2, pivotBase.z);
-    const braceDir = new THREE.Vector3().subVectors(braceEnd, braceStart);
-    const braceLen = braceDir.length();
-    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.16, braceLen, 0.16), armRed);
-    brace.position.copy(braceStart).addScaledVector(braceDir, 0.5);
-    brace.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), braceDir.clone().normalize());
-    brace.castShadow = true; armGroup.add(brace);
+    // The containment arm stands on the GROUND outboard of the reel, like the two
+    // vertical bars in the field diagram: a small ground skid + two vertical red
+    // posts forming the throat the rod passes between, capped by the guide head.
+    const skid = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 1.2), armDark);
+    skid.position.set(headLX, 0.09, headLZ); skid.receiveShadow = true; skid.castShadow = true;
+    armGroup.add(skid);
 
-    // GUIDE HEAD at the boom end — a ring the rod threads through, flanked by two
-    // "safety forks" (the removable forks from the manual) and a housing block.
-    const headHousing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), armRed);
+    // Two vertical red posts (the containment-arm throat), straddling the rod path
+    // in Z, tall enough to carry the guide head at headLY. They stand OUTSIDE the
+    // reel rims so the reel never contacts them when rotating (per the CAUTION).
+    const postH = headLY + 0.3;
+    [0.5, -0.5].forEach((pz) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, postH, 0.24), armRed);
+      post.position.set(headLX, postH / 2, headLZ + pz);
+      post.castShadow = true; armGroup.add(post);
+    });
+    // A second, slightly inboard pair (the "two bars" look from the diagram).
+    [0.5, -0.5].forEach((pz) => {
+      const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, postH * 0.9, 0.2), armRed);
+      post2.position.set(headLX - 0.7, postH * 0.45, headLZ + pz);
+      post2.castShadow = true; armGroup.add(post2);
+    });
+    // Cross-tie linking the post pairs near the top for rigidity.
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.16), armRed);
+    tie.position.set(headLX - 0.35, postH - 0.4, headLZ); armGroup.add(tie);
+    // Drop-pin barrel at the base (Fig 235 support-arm locking pin).
+    const pinBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 12), armChrome);
+    pinBarrel.position.set(headLX - 0.7, 0.4, headLZ + 0.62); armGroup.add(pinBarrel);
+
+    // GUIDE HEAD atop the throat — a ring the rod threads through (axis along the
+    // rod's outward travel ≈ +X), flanked by two removable SAFETY FORKS + housing.
+    const headHousing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.6), armRed);
     headHousing.position.copy(headPt); headHousing.castShadow = true; armGroup.add(headHousing);
-    // Ring/roller guide the rod passes through (axis along the rod's travel ≈ +X).
     const headRing = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.06, 10, 20), armChrome);
     headRing.rotation.y = Math.PI / 2;  // opening faces along the rod path (X)
     headRing.position.copy(headPt); armGroup.add(headRing);
     // Two safety forks straddling the throat (±Z), per "safety forks can be removed".
-    [0.28, -0.28].forEach((fz) => {
-      const fork = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), armDark);
+    [0.3, -0.3].forEach((fz) => {
+      const fork = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.1), armDark);
       fork.position.set(headPt.x, headPt.y - 0.1, headPt.z + fz);
       armGroup.add(fork);
     });
@@ -3167,8 +3166,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // The arch is stretched/re-anchored to start there instead of floating off the
     // top of the coil, so the guide physically connects to the containment arm.
     return new THREE.CatmullRomCurve3([
-      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),  // AT the arm's guide head
-      new THREE.Vector3(REEL_X + 3.0, apexY - 2.6, REEL_Z * 0.5),  // rising & swinging to the well line
+      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),      // AT the arm's guide head (outboard, low)
+      new THREE.Vector3(GUIDE_HEAD.x + 1.0, GUIDE_HEAD.y + 3.0, REEL_Z * 0.75), // rising away from the reel toward the well
       new THREE.Vector3(WELL_X - 2.2, INJECTOR_TOP_Y + 1.6, 0),    // approaching the arch (reel side)
       new THREE.Vector3(WELL_X - 0.4, apexY, 0),                   // near the apex
       new THREE.Vector3(WELL_X, apexY - 0.05, 0),                  // over the apex
@@ -3817,11 +3816,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const guideCurve = getRodGuideCurve();
     const ARC_SAMPLES = 80;
     const rodPoints: THREE.Vector3[] = [];
-    // Lead-in: rod pays off the top of the reel coil, rises through the
-    // containment arm's guide head (GUIDE_HEAD), THEN follows the guide arch —
-    // so it runs continuously coil → arm head → arch → injector.
-    rodPoints.push(new THREE.Vector3(REEL_X, 5.15, REEL_Z));                 // off the coil top
-    rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x - 0.5, GUIDE_HEAD.y - 0.5, GUIDE_HEAD.z)); // approaching head
+    // Lead-in: rod pays off the OUTER SIDE of the reel coil (+X / well-facing
+    // edge), runs OUTWARD and slightly down/along to the containment arm's guide
+    // head (GUIDE_HEAD), THEN follows the guide arch. It never goes over the top
+    // and never dips toward the reel centre (which would clash with the spinning
+    // coil) — matching the field routing: coil edge → arm head → arch → injector.
+    rodPoints.push(new THREE.Vector3(REEL_X + 2.0, 3.15, REEL_Z));           // off the coil +X edge
+    rodPoints.push(new THREE.Vector3(REEL_X + 3.1, 3.25, REEL_Z));           // running outward, clear of rims
+    rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z)); // through the guide head
     for (let i = 0; i <= ARC_SAMPLES; i++) {
       rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
     }
