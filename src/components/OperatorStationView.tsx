@@ -646,14 +646,11 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       )}
 
       {/* 2. SPLIT SCREEN MODE (Side-by-Side 50/50 Zero-Scroll) */}
-      {/* The dark hardware (viewport + console) is mounted inside a dark
-          "equipment rack" bezel so it reads as installed gear on the light
-          workbench rather than floating dark blocks. */}
+      {/* Viewport and console are self-framed hardware (viewport bezel + the
+          console's red/aluminum enclosure), so they sit directly on the light
+          workbench with just spacing — no extra dark wrapper. */}
       {layoutMode === 'split' && (
-        <div
-          className="flex flex-row gap-3 rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg"
-          style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}
-        >
+        <div className="flex flex-row gap-4" style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
           {/* Left: 3D Rig Sightline Viewport */}
           <div className="flex-1 min-w-0 min-h-0 overflow-hidden rounded-xl">
             <DynamicRigSightline
@@ -703,7 +700,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 3. RIG FOCUS MODE (Expanded 3D Viewport) */}
       {layoutMode === 'rig-focus' && (
-        <div className="w-full rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg">
+        <div className="w-full">
           <DynamicRigSightline
             state={state}
             onInstallClamp={onInstallClamp}
@@ -728,7 +725,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 4. CONSOLE FOCUS MODE (Expanded Brushed Steel Console) */}
       {layoutMode === 'console-focus' && (
-        <div className="relative w-full rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg">
+        <div className="relative w-full">
           <WeatherfordControlConsole
             state={state}
             onUpdateHydraulics={handleUpdateHydraulics}
