@@ -395,10 +395,10 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             <ShieldAlert className="w-5 h-5 text-red-700 shrink-0" />
             <div>
               <span className="font-semibold text-sm block text-red-800">
-                Critical: charge pressure below 250 PSI
+                {t('warn.charge.title')}
               </span>
               <p className="text-2xs text-red-700">
-                Engage the rod safety clamp (V) immediately to lock the rod string.
+                {t('warn.charge.detail')}
               </p>
             </div>
           </div>
@@ -406,7 +406,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             variant="danger"
             onClick={() => handleUpdateHydraulics({ safetyClampLever: 'ON' })}
           >
-            Engage Safety Clamp (V)
+            {t('warn.charge.action')}
           </Button>
         </div>
       )}
@@ -417,40 +417,40 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       <div className="surface border hairline rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
         {/* Real-time Telemetry Badges */}
         <div className="flex flex-wrap items-center gap-2">
-          <StatBadge label="Depth" tone="success" value={`${Math.round(rod.currentDepthFt)} FT`} />
+          <StatBadge label={t('telemetry.depth')} tone="success" value={`${Math.round(rod.currentDepthFt)} FT`} />
 
           <StatBadge
-            label="Speed"
+            label={t('telemetry.speed')}
             tone={rod.rodSpeedFtPerMin > 0.05 ? 'success' : rod.rodSpeedFtPerMin < -0.05 ? 'info' : 'neutral'}
             value={
               rod.rodSpeedFtPerMin > 0.05
-                ? `${rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN (POOH ↑)`
+                ? `${rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN (${t('telemetry.pooh')})`
                 : rod.rodSpeedFtPerMin < -0.05
-                ? `${Math.abs(rod.rodSpeedFtPerMin).toFixed(1)} FT/MIN (RIH ↓)`
+                ? `${Math.abs(rod.rodSpeedFtPerMin).toFixed(1)} FT/MIN (${t('telemetry.rih')})`
                 : '0.0 FT/MIN'
             }
           />
 
           <StatBadge
-            label="Weight"
+            label={t('telemetry.weight')}
             tone="warning"
             value={`${Math.round(rod.totalStringWeightLbs).toLocaleString()} LBS`}
           />
 
           <StatBadge
-            label="Squeeze"
+            label={t('telemetry.squeeze')}
             className="hidden sm:flex"
             value={`${Math.round(hydraulics.squeezePressure)} PSI`}
           />
 
           <StatBadge
-            label="Chain Tension"
+            label={t('telemetry.chainTension')}
             className="hidden md:flex"
             value={`${Math.round(hydraulics.chainTensionPressure)} PSI`}
           />
 
           <div className="px-2.5 py-1 rounded-lg surface-2 border hairline flex items-center gap-1.5">
-            <span className="eyebrow">CLAMP (V):</span>
+            <span className="eyebrow">{t('telemetry.clamp')}:</span>
             <span
               className={`font-bold ${
                 hydraulics.safetyClampLever === 'ON' ? 'text-green-700' : 'text-slate-500'
@@ -652,7 +652,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
           console's red/aluminum enclosure), so they sit directly on the light
           workbench with just spacing — no extra dark wrapper. */}
       {layoutMode === 'split' && (
-        <div className="flex flex-row gap-4" style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
+        <div dir="ltr" data-hardware="true" className="flex flex-row gap-4" style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
           {/* Left: 3D Rig Sightline Viewport */}
           <div className="flex-1 min-w-0 min-h-0 overflow-hidden rounded-xl">
             <DynamicRigSightline
@@ -702,7 +702,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 3. RIG FOCUS MODE (Expanded 3D Viewport) */}
       {layoutMode === 'rig-focus' && (
-        <div className="w-full">
+        <div dir="ltr" data-hardware="true" className="w-full">
           <DynamicRigSightline
             state={state}
             onInstallClamp={onInstallClamp}
@@ -727,7 +727,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 4. CONSOLE FOCUS MODE (Expanded Brushed Steel Console) */}
       {layoutMode === 'console-focus' && (
-        <div className="relative w-full">
+        <div dir="ltr" data-hardware="true" className="relative w-full">
           <WeatherfordControlConsole
             state={state}
             onUpdateHydraulics={handleUpdateHydraulics}
