@@ -270,19 +270,19 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           <div className="space-y-4 rounded-lg bg-white border border-slate-300 p-4">
             <div className="flex items-center justify-between border-b border-slate-300 pb-2">
               <span className="text-xs font-semibold text-amber-700">
-                BOP Pneumatic/Hydraulic Telemetry
+                {t('aux.bopTelemetryLabel')}
               </span>
               <span className="text-eyebrow text-slate-500 font-mono">Fig 19 / Sec 3.6.6</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="p-3 rounded-lg bg-slate-100 border border-slate-300">
-                <span className="text-eyebrow uppercase text-slate-500 block">Truck Air Supply</span>
+                <span className="text-eyebrow uppercase text-slate-500 block">{t('aux.truckAirSupplyLabel')}</span>
                 <span className="text-xl font-mono font-semibold text-cyan-700">{bop.airSupplyPsi} PSI</span>
-                <span className="text-eyebrow text-slate-500 block">Nominal: 120 PSI</span>
+                <span className="text-eyebrow text-slate-500 block">{t('aux.nominalLabel')}</span>
               </div>
               <div className="p-3 rounded-lg bg-slate-100 border border-slate-300">
-                <span className="text-eyebrow uppercase text-slate-500 block">BOP Inflation Pressure</span>
+                <span className="text-eyebrow uppercase text-slate-500 block">{t('aux.bopInflationPressure')}</span>
                 <span
                   className={`text-xl font-mono font-semibold ${
                     hydraulics.bopPressure >= 1000 ? 'text-emerald-700' : 'text-amber-700'
@@ -290,26 +290,26 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 >
                   {Math.round(hydraulics.bopPressure)} PSI
                 </span>
-                <span className="text-eyebrow text-slate-500 block">Target: 1000 - 1250 PSI</span>
+                <span className="text-eyebrow text-slate-500 block">{t('aux.targetLabel')}</span>
               </div>
             </div>
 
             <div className="p-3 rounded-lg bg-slate-100/60 border border-slate-300 text-xs space-y-1.5">
               <div className="flex justify-between">
-                <span className="text-slate-500">Regan BOP Bag Status:</span>
+                <span className="text-slate-500">{t('aux.reganBopBagStatus')}:</span>
                 <span className={`font-bold ${bop.reganBopClosed ? 'text-red-700' : 'text-emerald-700'}`}>
-                  {bop.reganBopClosed ? 'CLOSED / SEALED' : 'OPEN / FULL BORE'}
+                  {bop.reganBopClosed ? t('aux.closedSealed') : t('aux.openFullBore')}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Wellbore Annulus:</span>
+                <span className="text-slate-500">{t('aux.wellboreAnnulus')}:</span>
                 <span className={`font-bold ${bop.reganBopClosed ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {bop.reganBopClosed ? 'CONTAINED' : 'UNCONTAINED'}
+                  {bop.reganBopClosed ? t('aux.contained') : t('aux.uncontained')}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">EUB 60s Mandate:</span>
-                <span className="text-slate-600 font-mono font-bold">&lt; 1 min shut-in</span>
+                <span className="text-slate-500">{t('aux.eubMandate')}:</span>
+                <span className="text-slate-600 font-mono font-bold">{t('aux.shutIn1min')}</span>
               </div>
             </div>
           </div>
@@ -317,14 +317,14 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           {/* BOP Controls & Regulators */}
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4">
             <span className="text-xs font-bold uppercase text-slate-600 tracking-wider block border-b border-slate-300 pb-2">
-              Automatic Pump Controls
+              {t('aux.automaticPumpControls')}
             </span>
 
             {/* BOP Pump On/Off */}
             <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
               <div>
-                <span className="text-xs font-bold block text-slate-700">Air Pump Motor</span>
-                <span className="text-eyebrow text-slate-500">Pneumatic driven</span>
+                <span className="text-xs font-bold block text-slate-700">{t('aux.airPumpMotor')}</span>
+                <span className="text-eyebrow text-slate-500">{t('aux.pneumaticDriven')}</span>
               </div>
               <button
                 id="btn-bop-pump-switch"
@@ -346,7 +346,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             {/* Pressure Regulator */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-600">Air Pressure Regulator</span>
+                <span className="text-slate-600">{t('aux.airPressureRegulator')}</span>
                 <span className="text-cyan-700 font-mono">{bop.bopRegulatorPsi} PSI</span>
               </div>
               <input
@@ -359,7 +359,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 onChange={(e) => onUpdateBop({ bopRegulatorPsi: Number(e.target.value) })}
                 className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-500"
               />
-              <span className="text-eyebrow text-slate-500 block">Bring BOP up to 1000 - 1250 PSI</span>
+              <span className="text-eyebrow text-slate-500 block">{t('aux.bringBopTo')}</span>
             </div>
 
             {/* BOP Bleed Valve */}
@@ -382,7 +382,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                   bop.bopBleedOpen ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-500'
                 }`}
               >
-                {bop.bopBleedOpen ? 'BLEED OPEN' : 'CLOSED'}
+                {bop.bopBleedOpen ? t('aux.bleedOpen') : t('aux.bopClosed')}
               </button>
             </div>
           </div>
@@ -391,7 +391,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
           <div className="space-y-4 rounded-xl bg-white border border-slate-300 p-4 flex flex-col justify-between">
             <div>
               <span className="text-xs font-bold uppercase text-slate-600 tracking-wider block border-b border-slate-300 pb-2">
-                Secondary / Baker Hand Pump (Backup)
+                {t('aux.secondaryBakerPump')}
               </span>
               <p className="text-xs text-slate-500 my-2">
                 If truck air fails or pneumatic pump cannot hold pressure, use the manual Baker hand pump lever to build BOP pressure manually.
@@ -399,7 +399,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             </div>
 
             <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Total Manual Strokes:</span>
+              <span className="text-xs text-slate-500">{t('aux.totalManualStrokes')}:</span>
               <span className="font-mono font-bold text-amber-700">{bop.handPumpStrokes}</span>
             </div>
 
@@ -412,7 +412,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               className="w-full py-3 rounded-lg bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-2"
             >
               <Play className="w-4 h-4" />
-              Stroke Baker Hand Pump (+150 PSI)
+              {t('aux.strokeBakerPump')}
             </button>
           </div>
         </div>
@@ -426,12 +426,12 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             {/* Console Faceplate Header */}
             <div className="flex items-center justify-between border-b-2 border-red-950/40 pb-2">
               <span className="font-semibold text-xs uppercase tracking-widest text-white">
-                Weatherford COROD® Y-Tool Calibrator
+                {t('aux.yToolCalibrator')}
               </span>
               <div className="flex items-center gap-2">
                 {yTool.alarmSounding && (
                   <span className="px-2 py-0.5 rounded bg-amber-400 text-red-900 text-eyebrow font-semibold uppercase animate-ping">
-                    AUDIBLE ALARM (&lt;0.900")
+                    {t('aux.audibleAlarmLabel')}
                   </span>
                 )}
                 <div
@@ -469,13 +469,13 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                       DEPTH: {yTool.unitSystem === 'imperial' ? `${Math.round(state.rod.currentDepthFt)} FT` : `${Math.round(state.rod.currentDepthFt * 0.3048)} M`}
                     </span>
                     <span className="text-eyebrow text-emerald-400">
-                      {yTool.calibrated ? 'CALIBRATED' : 'UNCALIBRATED'}
+                      {yTool.calibrated ? t('aux.calibrated') : t('aux.uncalibrated')}
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="text-center py-4 text-emerald-500 text-xs font-bold uppercase">
-                  [ Y-TOOL POWER OFF • ACTIVATE ON MAIN ELECTRICAL PANEL ]
+                  {t('aux.yToolPowerOffLabel')}
                 </div>
               )}
             </div>
@@ -492,7 +492,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 }}
                 className="py-2.5 rounded bg-white hover:bg-slate-200 active:scale-95 text-slate-800 font-mono font-bold text-xs shadow-md border border-slate-300"
               >
-                KEY 1 (Mode)
+                {t('aux.key1Mode')}
               </button>
 
               <button
@@ -503,7 +503,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 }}
                 className="py-2.5 rounded bg-white hover:bg-slate-200 active:scale-95 text-slate-800 font-mono font-bold text-xs shadow-md border border-slate-300"
               >
-                KEY 2 (Unit)
+                {t('aux.key2Unit')}
               </button>
 
               <button
@@ -518,7 +518,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 }}
                 className="py-2.5 rounded bg-white hover:bg-slate-200 active:scale-95 text-slate-800 font-mono font-bold text-xs shadow-md border border-slate-300"
               >
-                KEY 3 (Reset)
+                {t('aux.key3Reset')}
               </button>
 
               <button
@@ -530,7 +530,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 }}
                 className="py-2.5 rounded bg-white hover:bg-slate-200 active:scale-95 text-slate-800 font-mono font-bold text-xs shadow-md border border-slate-300"
               >
-                KEY 4 (Contrast)
+                {t('aux.key4Contrast')}
               </button>
             </div>
           </div>
@@ -652,7 +652,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
               {/* Right In/Out */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
-                <span className="text-xs font-bold text-slate-700">3. Right Outrigger In/Out</span>
+                <span className="text-xs font-bold text-slate-700">{t('aux.rightOutrigger')}</span>
                 <button
                   id="btn-outrigger-right-ext"
                   onClick={() => {
@@ -669,7 +669,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
               {/* Left Up/Down */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
-                <span className="text-xs font-bold text-slate-700">4. Left Jack Up/Down</span>
+                <span className="text-xs font-bold text-slate-700">{t('aux.leftJack')}</span>
                 <button
                   id="btn-outrigger-left-down"
                   onClick={() => {
@@ -680,13 +680,13 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                     outriggers.leftLowered ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {outriggers.leftLowered ? 'LOWERED (GROUND)' : 'RAISED'}
+                  {outriggers.leftLowered ? t('aux.loweredGround') : t('aux.raised')}
                 </button>
               </div>
 
               {/* Right Up/Down */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
-                <span className="text-xs font-bold text-slate-700">5. Right Jack Up/Down</span>
+                <span className="text-xs font-bold text-slate-700">{t('aux.rightJack')}</span>
                 <button
                   id="btn-outrigger-right-down"
                   onClick={() => {
@@ -697,20 +697,20 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                     outriggers.rightLowered ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {outriggers.rightLowered ? 'LOWERED (GROUND)' : 'RAISED'}
+                  {outriggers.rightLowered ? t('aux.loweredGround') : t('aux.raised')}
                 </button>
               </div>
 
               {/* 1. Chain Oiler */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
-                <span className="text-xs font-bold text-slate-700">1. Gripper Chain Oiler Lever</span>
+                <span className="text-xs font-bold text-slate-700">{t('aux.gripperChainOiler')}</span>
                 <button
                   onClick={() => {
                     soundManager.playHiss(0.3);
                   }}
                   className="px-3 py-1.5 rounded bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold uppercase active:scale-95"
                 >
-                  Dispense Lube Oil
+                  {t('aux.dispenseLubeOil')}
                 </button>
               </div>
             </div>
@@ -760,7 +760,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                       : 'bg-slate-100 border-slate-300 text-slate-500'
                   }`}
                 >
-                  Wooden Pads: {outriggers.woodenPadsUnderLeft ? 'PLACED' : 'MISSING'}
+                  {t('aux.woodenPads')}: {outriggers.woodenPadsUnderLeft ? t('aux.placed') : t('aux.missing')}
                 </button>
 
                 <button
@@ -775,7 +775,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                       : 'bg-slate-100 border-slate-300 text-slate-500'
                   }`}
                 >
-                  Wheel Chocks: {outriggers.wheelChocksPlaced ? 'SECURE' : 'UNSET'}
+                  {t('aux.wheelChocks')}: {outriggers.wheelChocksPlaced ? t('aux.secure') : t('aux.unset')}
                 </button>
               </div>
             </div>
@@ -798,7 +798,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               }}
               className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase shadow-md active:scale-95"
             >
-              Perform Full Rig Leveling
+              {t('aux.performFullRigLeveling')}
             </button>
           </div>
         </div>
@@ -818,8 +818,8 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             {/* Lockout Valve */}
             <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
               <div>
-                <span className="text-xs font-bold block text-slate-700">5. Crane Lockout Valve</span>
-                <span className="text-eyebrow text-slate-500">Quarter-turn ball valve</span>
+                <span className="text-xs font-bold block text-slate-700">{t('aux.craneLockoutValve')}</span>
+                <span className="text-eyebrow text-slate-500">{t('aux.quarterTurnBallValve')}</span>
               </div>
               <button
                 id="btn-crane-lockout"
@@ -833,7 +833,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                     : 'bg-red-700 text-white'
                 }`}
               >
-                {picker.craneLockoutValveOpen ? 'VALVE OPEN (LIVE)' : 'LOCKED (SAFE)'}
+                {picker.craneLockoutValveOpen ? t('aux.valveOpenLive') : t('aux.lockedSafe')}
               </button>
             </div>
 
@@ -841,7 +841,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             <div className="space-y-3 pt-1">
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">1. Telescope Reach</span>
+                  <span className="text-slate-600">{t('aux.telescopeReach')}</span>
                   <span className="text-cyan-700 font-mono">{picker.telescopeLengthFt.toFixed(1)} FT</span>
                 </div>
                 <input
@@ -857,7 +857,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">2 & 3. Knuckle Boom Articulation</span>
+                  <span className="text-slate-600">{t('aux.knuckleBoomArticulation')}</span>
                   <span className="text-cyan-700 font-mono">{picker.angleDegrees}°</span>
                 </div>
                 <input
@@ -872,7 +872,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
               <div className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-600">4. Base Rotation (360°)</span>
+                  <span className="text-slate-600">{t('aux.baseRotation')}</span>
                   <span className="text-cyan-700 font-mono">{picker.rotationDegrees}°</span>
                 </div>
                 <input
@@ -896,13 +896,13 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
 
               <div className="my-3 space-y-2 font-mono text-xs">
                 <div className="p-2.5 rounded bg-slate-100 border border-slate-300 flex justify-between">
-                  <span className="text-slate-500">Current Lift Load:</span>
+                  <span className="text-slate-500">{t('aux.currentLiftLoad')}</span>
                   <span className="font-bold text-amber-700">{picker.currentLiftWeightLbs} LBS</span>
                 </div>
                 <div className="p-2.5 rounded bg-slate-100 border border-slate-300 flex justify-between">
-                  <span className="text-slate-500">Capacity @ {picker.telescopeLengthFt.toFixed(0)} FT Reach:</span>
+                  <span className="text-slate-500">{t('aux.capacityAtReach', { reach: picker.telescopeLengthFt.toFixed(0) })}</span>
                   <span className="font-bold text-emerald-700">
-                    {picker.telescopeLengthFt <= 14 ? '4993 LBS (SAFE)' : '2381 LBS (OVERLOAD!)'}
+                    {picker.telescopeLengthFt <= 14 ? `4993 LBS (${t('aux.safe')})` : `2381 LBS (${t('aux.overloadExclaim')})`}
                   </span>
                 </div>
               </div>
@@ -918,7 +918,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             </div>
 
             <div className="text-eyebrow text-slate-500 italic">
-              *Never allow loads to swing over crew members. Always use tag lines and safety hooks.
+              {t('aux.craneTagLines')}
             </div>
           </div>
         </div>
@@ -935,8 +935,8 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 flex justify-between items-center">
                 <div>
-                  <span className="text-xs font-bold block text-slate-700">Diesel Pre-Heater Burner</span>
-                  <span className="text-eyebrow text-slate-500">Warms coolant in sub-zero winter</span>
+                  <span className="text-xs font-bold block text-slate-700">{t('aux.dieselPreheater')}</span>
+                  <span className="text-eyebrow text-slate-500">{t('aux.warmsInWinter')}</span>
                 </div>
                 <button
                   id="btn-toggle-preheater"
@@ -948,7 +948,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                     hydraulics.enginePreheaterOn ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {hydraulics.enginePreheaterOn ? 'HEATER ON' : 'HEATER OFF'}
+                  {hydraulics.enginePreheaterOn ? t('aux.heaterOn') : t('aux.heaterOff')}
                 </button>
               </div>
 
@@ -1017,7 +1017,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
             </div>
 
             <span className="text-eyebrow text-slate-500 italic">
-              *Maintain between 0°C and 50°C. If fluid temp exceeds 70°C, SYSTEM MUST BE SHUT DOWN IMMEDIATELY!
+              {t('aux.tempWarning')}
             </span>
           </div>
         </div>
@@ -1035,8 +1035,8 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               {/* Engine On/Off */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
                 <div>
-                  <span className="text-xs font-bold block text-slate-700">Rig Diesel Engine</span>
-                  <span className="text-eyebrow text-slate-500">Carrier Prime Mover</span>
+                  <span className="text-xs font-bold block text-slate-700">{t('aux.rigDieselEngine')}</span>
+                  <span className="text-eyebrow text-slate-500">{t('aux.carrierPrimeMover')}</span>
                 </div>
                 <button
                   id="btn-engine-toggle"
@@ -1053,15 +1053,15 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                     hydraulics.engineRunning ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {hydraulics.engineRunning ? 'ENGINE RUNNING' : 'ENGINE OFF'}
+                  {hydraulics.engineRunning ? t('aux.engineRunning') : t('aux.engineOff')}
                 </button>
               </div>
 
               {/* PTO Hydraulic Drive Switch */}
               <div className="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300">
                 <div>
-                  <span className="text-xs font-bold block text-slate-700">Hydraulic Selector Switch</span>
-                  <span className="text-eyebrow text-slate-500">Pneumatic transfer case toggle</span>
+                  <span className="text-xs font-bold block text-slate-700">{t('aux.hydraulicSelector')}</span>
+                  <span className="text-eyebrow text-slate-500">{t('aux.pneumaticTransferCase')}</span>
                 </div>
                 <button
                   id="btn-pto-switch"
@@ -1075,7 +1075,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                       : 'bg-slate-200 text-slate-500'
                   }`}
                 >
-                  {hydraulics.ptoEngaged ? 'HYDRAULICS (PTO ON)' : 'ROAD / TRAVEL'}
+                  {hydraulics.ptoEngaged ? t('aux.hydraulicsPTOOn') : t('aux.roadTravel')}
                 </button>
               </div>
 

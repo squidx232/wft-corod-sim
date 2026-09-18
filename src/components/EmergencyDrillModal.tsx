@@ -33,7 +33,7 @@ export const EmergencyDrillModal: React.FC<EmergencyDrillModalProps> = ({
   onUpdateHydraulics,
   onUpdateBop,
 }) => {
-  const { t } = useT();
+  const { t, tData } = useT();
   const [startTime] = useState<number>(Date.now());
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [step1Done, setStep1Done] = useState<boolean>(false);

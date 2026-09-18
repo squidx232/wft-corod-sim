@@ -97,10 +97,16 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
 
   const severityColor =
     scenario.severity === 'critical'
-      ? 'border-red-500 from-red-950/95'
+      ? 'border-red-400'
       : scenario.severity === 'high'
-      ? 'border-orange-500 from-orange-950/95'
-      : 'border-yellow-500 from-yellow-900/95';
+      ? 'border-orange-400'
+      : 'border-amber-400';
+  const headerBg =
+    scenario.severity === 'critical'
+      ? 'bg-red-50'
+      : scenario.severity === 'high'
+      ? 'bg-orange-50'
+      : 'bg-amber-50';
 
   return (
     <div className="fixed top-20 right-4 z-[90] w-[340px] max-w-[calc(100vw-2rem)] select-none">
@@ -113,19 +119,19 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
       )}
 
       <div
-        className={`rounded-xl border-2 ${severityColor} bg-slate-100 shadow-xl overflow-hidden`}
+        className={`rounded-xl border-2 ${severityColor} bg-white shadow-xl overflow-hidden`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-black/40 border-b border-white/10">
+        <div className={`flex items-center justify-between gap-2 px-3 py-2 ${headerBg} border-b border-slate-200`}>
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle
               className={`w-5 h-5 flex-shrink-0 ${
-                scenario.severity === 'critical' ? 'text-red-400 animate-pulse' : 'text-orange-400'
+                scenario.severity === 'critical' ? 'text-red-700 animate-pulse' : 'text-orange-700'
               }`}
             />
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-white truncate">
-                {t('emergencyHud.title', { scenario: scenario.title })}
+              <div className="text-[13px] font-semibold text-slate-800 truncate">
+                {t('emergencyHud.title', { scenario: tData(scenario.title) })}
               </div>
               <div className="text-eyebrow text-slate-500 font-mono truncate">
                 {t('emergencyHud.manual', { section: scenario.manualSection })}
@@ -136,7 +142,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             <button
               type="button"
               onClick={() => setCollapsed((c) => !c)}
-              className="p-1 rounded hover:bg-white/10 text-slate-600"
+              className="p-1 rounded hover:bg-black/5 text-slate-600"
               title={collapsed ? t('emergencyHud.btn.expand') : t('emergencyHud.btn.collapse')}
             >
               {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -144,7 +150,7 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="p-1 rounded hover:bg-white/10 text-slate-600"
+              className="p-1 rounded hover:bg-black/5 text-slate-600"
               title={t('emergencyHud.btn.abort')}
             >
               <X className="w-4 h-4" />
@@ -179,10 +185,10 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
 
             {/* Current step */}
             {step && (
-              <div className="rounded-xl bg-black/40 border border-white/10 p-3 mb-3">
-                <div className="text-[13px] font-semibold text-white mb-1">{t('emergencyHud.step.title', { title: step.title })}</div>
-                <p className="text-2xs text-slate-600 leading-snug">{t('emergencyHud.step.instruction', { instruction: step.instruction })}</p>
-                <div className="text-eyebrow text-amber-500/70 font-mono mt-1.5">{t('emergencyHud.step.reference', { reference: step.manualRef })}</div>
+              <div className="rounded-xl bg-slate-100 border border-slate-200 p-3 mb-3">
+                <div className="text-[13px] font-semibold text-slate-800 mb-1">{t('emergencyHud.step.title', { title: tData(step.title) })}</div>
+                <p className="text-2xs text-slate-600 leading-snug">{t('emergencyHud.step.instruction', { instruction: tData(step.instruction) })}</p>
+                <div className="text-eyebrow text-amber-700 font-mono mt-1.5">{t('emergencyHud.step.reference', { reference: step.manualRef })}</div>
 
                 {/* Toggle-able "Show me" control hint */}
                 {step.controlId && (
@@ -192,16 +198,16 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                       onClick={() => setShowHint((h) => !h)}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-2xs font-semibold border transition-all ${
                         showHint
-                          ? 'bg-cyan-600 border-cyan-400 text-white'
-                          : 'bg-slate-200 border-slate-400 text-slate-600 hover:bg-slate-300'
+                          ? 'bg-blue-700 border-blue-800 text-white'
+                          : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       {showHint ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       {showHint ? t('emergencyHud.btn.hide') : t('emergencyHud.btn.show')}
                     </button>
                     {showHint && step.controlName && (
-                      <span className="text-2xs text-cyan-300 font-mono">
-                        {t('emergencyHud.hint.control', { control: step.controlName })}
+                      <span className="text-2xs text-blue-700 font-mono font-semibold">
+                        {t('emergencyHud.hint.control', { control: tData(step.controlName) })}
                       </span>
                     )}
                   </div>
@@ -218,26 +224,26 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                   <div
                     key={st.id}
                     className={`flex items-center gap-2 text-2xs px-2 py-1 rounded ${
-                      active ? 'bg-white/5' : ''
+                      active ? 'bg-slate-100' : ''
                     }`}
                   >
                     {done ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-700 flex-shrink-0" />
                     ) : active ? (
-                      <Circle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 animate-pulse" />
+                      <Circle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 animate-pulse" />
                     ) : (
-                      <Circle className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+                      <Circle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                     )}
                     <span
                       className={
                         done
-                          ? 'text-emerald-400 line-through'
+                          ? 'text-green-700 line-through'
                           : active
-                          ? 'text-white font-semibold'
+                          ? 'text-slate-900 font-semibold'
                           : 'text-slate-500'
                       }
                     >
-                      {st.title}
+                      {tData(st.title)}
                     </span>
                   </div>
                 );

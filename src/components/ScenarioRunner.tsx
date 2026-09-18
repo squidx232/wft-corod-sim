@@ -32,7 +32,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
   onResetScenario,
   onCompleteScenario,
 }) => {
-  const { t } = useT();
+  const { t, tData } = useT();
   const activeScenario = TRAINING_SCENARIOS.find((s) => s.id === state.activeScenarioId) || null;
   const currentStep = activeScenario ? activeScenario.steps[state.currentStepIndex] : null;
 
@@ -133,8 +133,8 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     <span className="text-[10px] font-mono text-slate-500">{t('scenario.badge.duration', { minutes: scen.targetDurationMinutes })}</span>
                   </div>
 
-                  <h4 className="text-sm font-semibold text-slate-800 mb-1 leading-snug">{scen.title}</h4>
-                  <p className="text-xs text-slate-500 line-clamp-3 mb-3">{scen.description}</p>
+                  <h4 className="text-sm font-semibold text-slate-800 mb-1 leading-snug">{tData(scen.title)}</h4>
+                  <p className="text-xs text-slate-500 line-clamp-3 mb-3">{tData(scen.description)}</p>
                 </div>
 
                 <div className="pt-2 border-t border-slate-300/80 flex items-center justify-between">
@@ -176,7 +176,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase text-amber-700 tracking-wider">
-                  {t('scenario.instruction.label', { scenario: activeScenario.title })}
+                  {t('scenario.instruction.label', { scenario: tData(activeScenario.title) })}
                 </span>
                 <span className="text-xs font-mono font-bold text-slate-600">
                   {t('scenario.step.of', { current: state.currentStepIndex + 1, total: activeScenario.steps.length })}
@@ -208,10 +208,10 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                     ) : (
                       <Play className="w-4 h-4 text-emerald-700" />
                     )}
-                    <h4 className="text-sm font-semibold text-slate-800">{currentStep.title}</h4>
+                    <h4 className="text-sm font-semibold text-slate-800">{tData(currentStep.title)}</h4>
                   </div>
 
-                  <p className="text-xs text-slate-600 leading-relaxed my-2">{currentStep.instruction}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed my-2">{tData(currentStep.instruction)}</p>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-300 text-[11px]">
                     <span className="text-amber-700 font-mono font-semibold">{t('scenario.step.reference', { section: currentStep.manualSection })}</span>
@@ -302,7 +302,7 @@ export const ScenarioRunner: React.FC<ScenarioRunnerProps> = ({
                           <Circle className="w-4 h-4 text-slate-600 shrink-0" />
                         )}
                         <span className="truncate max-w-[220px]">
-                          {idx + 1}. {step.title}
+                          {idx + 1}. {tData(step.title)}
                         </span>
                       </div>
                       <span className="text-eyebrow font-mono text-slate-500 shrink-0">

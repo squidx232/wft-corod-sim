@@ -115,7 +115,17 @@ body {
    The 3D viewport and physical console keep LTR (see [dir] override).
    ===================================================================== */
 html[dir='rtl'] body {
-  font-family: 'Segoe UI', 'Tahoma', 'Cairo', 'Noto Naskh Arabic', system-ui, sans-serif;
+  font-family: 'Cairo', 'Tajawal', 'Segoe UI', 'Tahoma', system-ui, sans-serif;
+  /* Slightly larger + better line-height for Arabic legibility. */
+  letter-spacing: 0;
+}
+html[dir='rtl'] {
+  font-size: 105%;
+}
+/* Arabic reads better a touch heavier at small sizes. */
+html[dir='rtl'] .eyebrow {
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 /* Numeric readouts and hardware stay LTR even inside RTL chrome. */

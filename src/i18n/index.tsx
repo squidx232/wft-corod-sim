@@ -18,6 +18,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import { en } from './en';
 import { ar } from './ar';
 import { PARTS } from './parts';
+import { DATA_AR } from './data';
 
 export type Lang = 'en' | 'ar';
 
@@ -44,6 +45,13 @@ interface LanguageContextValue {
   dir: 'ltr' | 'rtl';
   /** Translate a key. Optional {vars} interpolation via `${name}` tokens. */
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /**
+   * Translate a raw DATA string (e.g. scenario/step text sourced from data
+   * files) by looking it up in the data-translation map. Falls back to the
+   * original English string if no translation exists. Use this for dynamic
+   * content that is not keyed, like `tData(step.title)`.
+   */
+  tData: (text: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -88,9 +96,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [lang],
   );
 
+  const tData = useCallback(
+    (text: string): string => {
+      if (lang === 'en' || !text) return text;
+      return DATA_AR[text.trim()] ?? text;
+    },
+    [lang],
+  );
+
   const value = useMemo<LanguageContextValue>(
-    () => ({ lang, setLang, toggle, dir, t }),
-    [lang, setLang, toggle, dir, t],
+    () => ({ lang, setLang, toggle, dir, t, tData }),
+    [lang, setLang, toggle, dir, t, tData],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
@@ -108,6 +124,7 @@ export function useT(): LanguageContextValue {
       toggle: () => {},
       dir: 'ltr',
       t: (k) => mergedEn[k] ?? k,
+      tData: (text) => text,
     };
   }
   return ctx;
