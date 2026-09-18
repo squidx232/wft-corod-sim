@@ -1246,10 +1246,10 @@ export default function App() {
                   setState((prev) => ({ ...prev, activeTab: tab.id as SimulatorTab }));
                 }}
                 className={cx(
-                  'px-3.5 py-1.5 rounded-lg text-2xs font-semibold transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500',
+                  'px-3.5 py-2 rounded-lg text-2xs font-semibold transition-colors flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600',
                   isActive
-                    ? 'bg-slate-100 text-slate-900 shadow-sm'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 border border-slate-300',
+                    ? 'bg-red-700 text-white shadow-sm'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-300',
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />

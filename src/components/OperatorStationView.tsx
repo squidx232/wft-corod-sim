@@ -18,6 +18,9 @@ import {
   RotateCcw,
   Sparkles,
   Layers,
+  Monitor,
+  SlidersHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 
 interface OperatorStationViewProps {
@@ -338,6 +341,33 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             ]}
           />
 
+          {/* Pop-out to second monitor — opens a synced window (state via BroadcastChannel). */}
+          <div className="hidden md:flex items-center gap-1 rounded-lg surface-2 border hairline p-1">
+            <span className="eyebrow px-1.5">Pop out</span>
+            {[
+              { view: '3d', label: '3D View', icon: <Monitor className="w-3.5 h-3.5" /> },
+              { view: 'console', label: 'Console', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+            ].map((item) => (
+              <button
+                key={item.view}
+                type="button"
+                onClick={() =>
+                  window.open(
+                    `${window.location.pathname}?view=${item.view}`,
+                    `corod-${item.view}`,
+                    'width=1280,height=900,menubar=no,toolbar=no',
+                  )
+                }
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-2xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white transition-colors"
+                title={`Open ${item.label} in a separate window (for a second monitor)`}
+              >
+                {item.icon}
+                <span className="hidden lg:inline">{item.label}</span>
+                <ExternalLink className="w-3 h-3 opacity-70" />
+              </button>
+            ))}
+          </div>
+
           {/* Engine power switch — RUNNING only after the full start-up sequence. */}
           <Button
             variant={state.engineStartSequenceComplete ? 'success' : 'primary'}
@@ -358,14 +388,14 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* Charge Pressure Critical Warning — the ONE place a pulse is warranted. */}
       {isChargePressureCritical && (
-        <div className="rounded-xl bg-red-950/90 border border-red-500 p-3 flex flex-wrap items-center justify-between gap-3 text-red-100 shadow-md animate-pulse">
+        <div className="rounded-xl bg-red-50 border-2 border-red-400 p-3 flex flex-wrap items-center justify-between gap-3 shadow-sm animate-pulse">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+            <ShieldAlert className="w-5 h-5 text-red-700 shrink-0" />
             <div>
-              <span className="font-semibold text-sm block text-red-200">
+              <span className="font-semibold text-sm block text-red-800">
                 Critical: charge pressure below 250 PSI
               </span>
-              <p className="text-2xs text-red-300">
+              <p className="text-2xs text-red-700">
                 Engage the rod safety clamp (V) immediately to lock the rod string.
               </p>
             </div>
@@ -616,8 +646,14 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
       )}
 
       {/* 2. SPLIT SCREEN MODE (Side-by-Side 50/50 Zero-Scroll) */}
+      {/* The dark hardware (viewport + console) is mounted inside a dark
+          "equipment rack" bezel so it reads as installed gear on the light
+          workbench rather than floating dark blocks. */}
       {layoutMode === 'split' && (
-        <div className="flex flex-row gap-4" style={{ height: 'calc(100vh - 190px)', minHeight: '500px' }}>
+        <div
+          className="flex flex-row gap-3 rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg"
+          style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}
+        >
           {/* Left: 3D Rig Sightline Viewport */}
           <div className="flex-1 min-w-0 min-h-0 overflow-hidden rounded-xl">
             <DynamicRigSightline
@@ -667,7 +703,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 3. RIG FOCUS MODE (Expanded 3D Viewport) */}
       {layoutMode === 'rig-focus' && (
-        <div className="w-full">
+        <div className="w-full rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg">
           <DynamicRigSightline
             state={state}
             onInstallClamp={onInstallClamp}
@@ -692,7 +728,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
 
       {/* 4. CONSOLE FOCUS MODE (Expanded Brushed Steel Console) */}
       {layoutMode === 'console-focus' && (
-        <div className="relative w-full">
+        <div className="relative w-full rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-lg">
           <WeatherfordControlConsole
             state={state}
             onUpdateHydraulics={handleUpdateHydraulics}
