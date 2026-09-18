@@ -550,7 +550,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // VSMShadowMap gives soft shadows without the PCFSoftShadowMap deprecation
+    // warning emitted by newer Three.js builds.
+    renderer.shadowMap.type = THREE.VSMShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     // Item 100: Tuned exposure for more contrast in daylight
     renderer.toneMappingExposure = 1.25;
@@ -572,6 +574,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     sunLight.shadow.camera.right = 30;
     sunLight.shadow.camera.top = 30;
     sunLight.shadow.camera.bottom = -30;
+    // VSM soft-shadow blur (VSMShadowMap needs a blur radius to look soft).
+    sunLight.shadow.radius = 4;
+    sunLight.shadow.blurSamples = 16;
     scene.add(sunLight);
 
     // Mast Work Floodlight (positioned at actual mast top, aimed at injector/wellhead)
