@@ -28,6 +28,8 @@ export interface HydraulicState {
   bopPressure: number;        // 0-1500 psi (target 1000-1250 psi)
   
   // Settings & Adjusters (0 - 100% or absolute psi)
+  // Operator-set targets; the physics loop follows these rather than ramping to
+  // hardcoded values or scaling with well depth.
   chainTensionTarget: number;
   squeezePressureTarget: number;
   upPressureTarget: number;
@@ -218,6 +220,89 @@ export interface OperatorPerformance {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Timed Assessment Run ("Start Simulation")
+// ---------------------------------------------------------------------------
+
+/** Personal details entered before a timed assessment run. */
+export interface AssessmentOperator {
+  name: string;
+  role: string;
+  unit: string;
+}
+
+/**
+ * Assessment difficulty.
+ * - 'guided'   : the Response HUD shows the ordered step list + hints (training).
+ * - 'realistic': no steps or hints are shown — the operator must know the correct
+ *                response from memory (certification-grade difficulty).
+ */
+export type AssessmentDifficulty = 'guided' | 'realistic';
+
+/** Per-emergency-event record captured during an assessment run. */
+export interface AssessmentEvent {
+  scenarioId: string;
+  /** epoch ms when the fault was injected. */
+  injectedAt: number;
+  /** epoch ms of the operator's first correct action (first step advance). */
+  firstActionAt: number | null;
+  /** epoch ms when the whole scenario was resolved. */
+  resolvedAt: number | null;
+  /** Number of "Show me" hints the operator used on this event. */
+  hintsUsed: number;
+  /** Count of time-critical steps whose limit was exceeded. */
+  timedOutSteps: number;
+}
+
+/**
+ * Live timed-assessment session. `null` when no run is active.
+ * Drives the Start-Simulation flow: sequential random emergencies, reaction
+ * timing, hint penalties, and the end-of-run scored report.
+ */
+export interface AssessmentSession {
+  active: boolean;
+  operator: AssessmentOperator;
+  /** Difficulty of the run (controls whether steps/hints are shown). */
+  difficulty: AssessmentDifficulty;
+  /** epoch ms when the run started. */
+  startedAt: number;
+  /** Fixed run length in seconds — the run HARD-ENDS at this time. */
+  targetDurationSec: number;
+  /**
+   * epoch ms at which the NEXT emergency should be injected. The orchestrator
+   * sets this after each resolution (a randomized quiet gap). null = inject as
+   * soon as possible (used at run start / immediately after resolution before a
+   * gap is scheduled).
+   */
+  nextInjectAt: number | null;
+  /** Timestamped event records (one per injected emergency). */
+  events: AssessmentEvent[];
+  /** Total hints used across the whole run. */
+  hintsUsedTotal: number;
+  /** True once the run has finished (report shown). */
+  ended: boolean;
+  /** epoch ms when the run ended. */
+  endedAt: number | null;
+}
+
+/** A persisted leaderboard entry (saved to localStorage) for a finished run. */
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  role: string;
+  unit: string;
+  score: number;
+  grade: string;
+  difficulty: AssessmentDifficulty;
+  eventsResolved: number;
+  eventsHandled: number;
+  avgReactionSec: number | null;
+  hintsUsed: number;
+  durationSec: number;
+  /** epoch ms when the run finished. */
+  timestamp: number;
+}
+
 export interface SimulatorState {
   hydraulics: HydraulicState;
   bop: BOPState;
@@ -251,6 +336,9 @@ export interface SimulatorState {
   // `emergencyScenarioId` matches an EMERGENCY_SCENARIOS entry id; null when idle.
   emergencyScenarioId: string | null;
   emergencyStepIndex: number;
+
+  // Timed assessment run ("Start Simulation"). null when no run is active.
+  assessment: AssessmentSession | null;
 
   // Emergency drill tracking flags (for scenario validation)
   airHornSounded: boolean;

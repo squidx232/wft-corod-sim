@@ -167,7 +167,7 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
               className={`w-full py-2.5 rounded-lg font-bold text-xs uppercase shadow active:scale-95 border transition-all ${
                 state.scbaEquipped
                   ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
-                  : 'bg-cyan-100 hover:bg-cyan-700 border-cyan-500 text-white'
+                  : 'bg-cyan-700 hover:bg-cyan-600 border-cyan-500 text-white'
               }`}
             >
               {state.scbaEquipped ? t('aux.scbaEquipped') : t('aux.equipSCBA')}

@@ -80,6 +80,10 @@ const engineOff = (s: SimulatorState) => !s.hydraulics.engineRunning;
 const eStopTripped = (s: SimulatorState) => s.hydraulics.emergencyStopTripped;
 const operationStopped = (s: SimulatorState) =>
   s.hydraulics.gripperBrakeSwitch || Math.abs(s.rod.rodSpeedFtPerMin) < 1;
+const joystickNeutral = (s: SimulatorState) => Math.abs(s.joystickPosition) < 0.05;
+const coolerBypassManual = (s: SimulatorState) => s.hydraulics.coolerBypassMode === 'MANUAL';
+const evacuated = (s: SimulatorState) => s.evacuatedToMuster;
+const engineShutDown = (s: SimulatorState) => !s.hydraulics.engineRunning || s.hydraulics.emergencyStopTripped;
 
 // ===========================================================================
 // EMERGENCY SCENARIOS
@@ -508,7 +512,406 @@ export const EMERGENCY_SCENARIOS: EmergencyScenario[] = [
       },
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // 8. OUTRIGGER SINKING / RIG TILT
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-outrigger',
+    emergencyKey: 'freefalling_rod', // handled like a stop-and-secure freefall risk
+    title: 'Outrigger Sinking / Rig Tilt',
+    icon: 'AlertOctagon',
+    severity: 'high',
+    cause:
+      'An outrigger pad is sinking into soft ground and the unit is going off level. Load paths are shifting and the rig is unstable.',
+    manualSection: '§5.2 Rig Set-Up & Stability (p. 55)',
+    inject: {
+      hydraulics: {},
+    },
+    steps: [
+      {
+        id: 'or-1',
+        title: 'Stop All Movement',
+        instruction:
+          'STOP tripping immediately. Return the joystick to neutral so no dynamic load is added while the unit is unstable.',
+        manualRef: '§5.2 Stability (p. 55)',
+        controlId: 'ctrl-joystick-y',
+        controlName: 'Drive Joystick',
+        validationFn: (s) => joystickNeutral(s),
+        timeLimitSec: 10,
+        timeoutMessage: 'The rig kept working while off level — stop movement before it tips further!',
+      },
+      {
+        id: 'or-2',
+        title: 'Engage the Safety Clamp',
+        instruction:
+          'Move the Safety lever DOWN (ON) to secure the string before addressing the outrigger.',
+        manualRef: '§5.2 / §4.18 (p. 55/84)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+      },
+      {
+        id: 'or-3',
+        title: 'Apply the Gripper Brake',
+        instruction: 'Apply the injector / gripper brake so the string cannot move while you re-level the rig.',
+        manualRef: '§5.2 (p. 55)',
+        controlId: 'ctrl-switch-injectorbrake',
+        controlName: 'Injector / Gripper Brake',
+        validationFn: gripperBraked,
+      },
+      {
+        id: 'or-4',
+        title: 'Shut Down to Re-Level',
+        instruction:
+          'Trip the Emergency Shut Down. The pad must be re-cribbed and the unit re-leveled before any further operation.',
+        manualRef: '§5.2 (p. 55)',
+        controlId: 'ctrl-estop-j',
+        controlName: 'Emergency Shut Down',
+        validationFn: engineShutDown,
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // 9. OVERPULL / STRING STUCK
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-overpull',
+    emergencyKey: 'freefalling_rod',
+    title: 'Overpull / String Stuck',
+    icon: 'ArrowUpFromLine',
+    severity: 'high',
+    cause:
+      'The string has become stuck and up-pressure is climbing past safe limits. Continued pull risks parting the COROD string.',
+    manualSection: '§3.6.5 Pull/Squeeze Limits (p. 42)',
+    inject: {
+      hydraulics: { upPressure: 4200, upPressureTarget: 4200 },
+      rod: { rodInTensionOrCompression: 'tension', isObstructed: true },
+    },
+    steps: [
+      {
+        id: 'op-1',
+        title: 'Back Off the Pull',
+        instruction:
+          'STOP pulling — return the joystick to neutral immediately to arrest the rising overpull before the rod parts.',
+        manualRef: '§3.6.5 (p. 42)',
+        controlId: 'ctrl-joystick-y',
+        controlName: 'Drive Joystick',
+        validationFn: (s) => joystickNeutral(s),
+        timeLimitSec: 8,
+        onTimeout: { rod: { rodGripSlipping: true } },
+        timeoutMessage: 'Overpull continued — the string is on the verge of parting! Ease off NOW.',
+      },
+      {
+        id: 'op-2',
+        title: 'Apply the Gripper Brake',
+        instruction: 'Apply the injector / gripper brake to hold the stuck string steady.',
+        manualRef: '§3.6.5 (p. 42)',
+        controlId: 'ctrl-switch-injectorbrake',
+        controlName: 'Injector / Gripper Brake',
+        validationFn: gripperBraked,
+      },
+      {
+        id: 'op-3',
+        title: 'Engage the Safety Clamp',
+        instruction: 'Secure the string with the Rod Safety Clamp while the stuck-pipe situation is assessed.',
+        manualRef: '§4.18 (p. 84)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+      },
+      {
+        id: 'op-4',
+        title: 'Install a Rod Clamp',
+        instruction: 'Install a mechanical rod clamp to positively secure the string before any fishing attempt.',
+        manualRef: '§4.18 Step 5 (p. 84)',
+        controlId: 'ctrl-install-clamp',
+        controlName: 'Install Clamp',
+        validationFn: oneRodClamp,
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // 10. CHAIN OVER-TENSION / OILER FAILURE
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-chain',
+    emergencyKey: 'hydraulic_overheat',
+    title: 'Chain Over-Tension / Oiler Failure',
+    icon: 'Link2Off',
+    severity: 'high',
+    cause:
+      'The chain oiler has failed and chain tension pressure has spiked. The gripper chain is running dry and over-tensioned — a bunching/snap hazard.',
+    manualSection: '§3.6.4 Chain Tension (p. 40)',
+    inject: {
+      hydraulics: { chainOilerOn: false, chainTensionPressure: 620 },
+    },
+    steps: [
+      {
+        id: 'ch-1',
+        title: 'Apply the Gripper Brake',
+        instruction:
+          'Apply the injector / gripper brake to stop the chain before it bunches or snaps.',
+        manualRef: '§3.6.4 (p. 40)',
+        controlId: 'ctrl-switch-injectorbrake',
+        controlName: 'Injector / Gripper Brake',
+        validationFn: gripperBraked,
+        timeLimitSec: 12,
+        timeoutMessage: 'The dry, over-tensioned chain kept running — brake it before it fails!',
+      },
+      {
+        id: 'ch-2',
+        title: 'Engage the Safety Clamp',
+        instruction: 'Secure the string with the Rod Safety Clamp.',
+        manualRef: '§4.18 (p. 84)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+      },
+      {
+        id: 'ch-3',
+        title: 'Signal the Emergency',
+        instruction: 'Sound one long air horn blast to keep personnel clear of the chain path.',
+        manualRef: '§4.18 Step 2 (p. 84)',
+        controlId: 'ctrl-horn',
+        controlName: 'Air Horn',
+        validationFn: hornSounded,
+      },
+      {
+        id: 'ch-4',
+        title: 'Shut Down',
+        instruction: 'Trip the Emergency Shut Down. The oiler must be repaired before operation resumes.',
+        manualRef: '§3.6.4 (p. 40)',
+        controlId: 'ctrl-estop-j',
+        controlName: 'Emergency Shut Down',
+        validationFn: engineShutDown,
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // 11. HYDRAULIC OVERHEAT (>70°C)
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-overheat',
+    emergencyKey: 'hydraulic_overheat',
+    title: 'Hydraulic Overheat (>70°C)',
+    icon: 'Thermometer',
+    severity: 'high',
+    cause:
+      'Hydraulic fluid temperature has climbed above 70°C. Pump cavitation and seal failure are imminent if not cooled.',
+    manualSection: '§3.6.7 & §4.23.5 Cooling / Shutdown (p. 44)',
+    inject: {
+      hydraulics: { hydraulicFluidTempC: 82 },
+    },
+    steps: [
+      {
+        id: 'oh-1',
+        title: 'Apply the Gripper Brake',
+        instruction: 'Apply the injector / gripper brake to stop working the hot system.',
+        manualRef: '§4.23.5 (p. 44)',
+        controlId: 'ctrl-switch-injectorbrake',
+        controlName: 'Injector / Gripper Brake',
+        validationFn: gripperBraked,
+      },
+      {
+        id: 'oh-2',
+        title: 'Cooler Bypass to MANUAL',
+        instruction:
+          'Switch the cooler bypass to MANUAL to force maximum fan cooling of the hydraulic fluid.',
+        manualRef: '§3.6.7 (p. 44)',
+        controlId: 'ctrl-cooler-bypass',
+        controlName: 'Cooler Bypass Switch',
+        validationFn: coolerBypassManual,
+        timeLimitSec: 20,
+        onTimeout: { hydraulics: { hydraulicFluidTempC: 90 } },
+        timeoutMessage: 'Temperature is still climbing — force the cooler to MANUAL now!',
+      },
+      {
+        id: 'oh-3',
+        title: 'Engage the Safety Clamp',
+        instruction: 'Secure the string with the Rod Safety Clamp while the system cools.',
+        manualRef: '§4.18 (p. 84)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+      },
+      {
+        id: 'oh-4',
+        title: 'Shut Down if Still Hot',
+        instruction: 'If the temperature remains above 70°C, trip the Emergency Shut Down to protect the pump.',
+        manualRef: '§4.23.5 (p. 44)',
+        controlId: 'ctrl-estop-j',
+        controlName: 'Emergency Shut Down',
+        validationFn: engineShutDown,
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // 12. BOP AIR-SUPPLY LOSS
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-bopair',
+    emergencyKey: 'well_kick',
+    title: 'BOP Air-Supply Loss',
+    icon: 'Wind',
+    severity: 'critical',
+    cause:
+      'The truck air supply feeding the Regan BOP has dropped. Well-control capability is degraded and the well may not be shut in on demand.',
+    manualSection: '§4.19 Well Control (p. 85)',
+    inject: {
+      bop: { airSupplyPsi: 35 },
+    },
+    steps: [
+      {
+        id: 'ba-1',
+        title: 'Engage the Safety Clamp',
+        instruction:
+          'Secure the string immediately with the Rod Safety Clamp while well control is compromised.',
+        manualRef: '§4.18 (p. 84)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+        timeLimitSec: 12,
+        timeoutMessage: 'Well control is degraded and the string is unsecured — clamp it now!',
+      },
+      {
+        id: 'ba-2',
+        title: 'Sound the Alarm',
+        instruction: 'Sound one long air horn blast to alert the crew to the well-control issue.',
+        manualRef: '§4.19 (p. 85)',
+        controlId: 'ctrl-horn',
+        controlName: 'Air Horn',
+        validationFn: hornSounded,
+      },
+      {
+        id: 'ba-3',
+        title: 'Close the BOP',
+        instruction:
+          'Use the BOP hand pump to hydraulically close the Regan BOP to 1250 psi despite the lost air supply.',
+        manualRef: '§4.19 (p. 85)',
+        controlId: 'ctrl-bop-pump',
+        controlName: 'BOP Hand Pump / Pump Switch',
+        validationFn: bopClosed,
+        timeLimitSec: 45,
+        timeoutMessage: 'The well is still open — get the BOP closed on the hand pump!',
+      },
+      {
+        id: 'ba-4',
+        title: 'Install a Rod Clamp',
+        instruction: 'Install a rod clamp to positively secure the string with the well shut in.',
+        manualRef: '§4.19 (p. 85)',
+        controlId: 'ctrl-install-clamp',
+        controlName: 'Install Clamp',
+        validationFn: oneRodClamp,
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // 13. HIGH WIND / GUST LIMIT EXCEEDED
+  // -------------------------------------------------------------------------
+  {
+    id: 'emg-wind',
+    emergencyKey: 'lightning_warning',
+    title: 'High Wind / Gust Limit Exceeded',
+    icon: 'Tornado',
+    severity: 'moderate',
+    cause:
+      'Sustained winds and gusts have exceeded the safe operating limit for the mast and picker. Operations must be suspended.',
+    manualSection: '§4.24 Adverse Weather (p. 101)',
+    inject: {
+      hydraulics: {},
+    },
+    steps: [
+      {
+        id: 'wd-1',
+        title: 'Stop Operations',
+        instruction:
+          'Stop working. Return the joystick to neutral / apply the gripper brake as the wind limit is exceeded.',
+        manualRef: '§4.24 (p. 101)',
+        controlId: 'ctrl-switch-injectorbrake',
+        controlName: 'Injector / Gripper Brake',
+        validationFn: operationStopped,
+      },
+      {
+        id: 'wd-2',
+        title: 'Secure the String',
+        instruction: 'Engage the Rod Safety Clamp so the string is held while operations are suspended.',
+        manualRef: '§4.24 (p. 101)',
+        controlId: 'ctrl-lever-safety',
+        controlName: 'Safety Clamp Lever',
+        validationFn: safetyClampOn,
+      },
+      {
+        id: 'wd-3',
+        title: 'Shut Down the Engine',
+        instruction: 'Shut down the engine before leaving the console area.',
+        manualRef: '§4.24 (p. 101)',
+        controlId: 'ctrl-estop-j',
+        controlName: 'Emergency Shut Down',
+        validationFn: engineShutDown,
+      },
+      {
+        id: 'wd-4',
+        title: 'Move to Shelter',
+        instruction: 'Move the crew away from the mast/picker to a safe shelter until the wind subsides.',
+        manualRef: '§4.24 (p. 101)',
+        controlId: 'ctrl-evacuate',
+        controlName: 'Move to Shelter',
+        validationFn: evacuated,
+      },
+    ],
+  },
 ];
 
 export const getEmergencyScenario = (id: string): EmergencyScenario | undefined =>
   EMERGENCY_SCENARIOS.find((e) => e.id === id);
+
+/**
+ * Build a randomized, de-duplicated queue of emergency scenario ids for a timed
+ * assessment run. Draws unique scenarios first (shuffled); if `count` exceeds
+ * the number of available scenarios, it wraps around with a fresh shuffle so a
+ * long run never repeats a scenario back-to-back.
+ */
+export const getRandomEmergencyQueue = (
+  count: number,
+  opts: { excludeIds?: string[] } = {},
+): string[] => {
+  const exclude = new Set(opts.excludeIds ?? []);
+  const pool = EMERGENCY_SCENARIOS.map((e) => e.id).filter((id) => !exclude.has(id));
+  if (pool.length === 0) return [];
+
+  const shuffle = (arr: string[]): string[] => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const queue: string[] = [];
+  while (queue.length < count) {
+    const batch = shuffle(pool);
+    for (const id of batch) {
+      if (queue.length >= count) break;
+      // Avoid immediate back-to-back repeat across batch boundaries.
+      if (queue.length > 0 && queue[queue.length - 1] === id && pool.length > 1) continue;
+      queue.push(id);
+    }
+  }
+  return queue;
+};
+
+/** Estimated seconds an average operator needs to fully resolve a scenario. */
+export const estimateScenarioSeconds = (id: string): number => {
+  const sc = getEmergencyScenario(id);
+  if (!sc) return 40;
+  // ~18s baseline per step, a little more for critical scenarios.
+  const perStep = sc.severity === 'critical' ? 22 : sc.severity === 'high' ? 18 : 15;
+  return sc.steps.length * perStep;
+};

@@ -1,4 +1,37 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+/**
+ * Very slight needle micro-vibration for realism. Returns a tiny angular offset
+ * (degrees) that jitters continuously, driven by requestAnimationFrame. A live
+ * pressure (value away from the floor) vibrates a touch more than a dead gauge,
+ * mimicking pump ripple / mechanical dither on a real Bourdon-tube needle.
+ */
+function useNeedleVibration(active: boolean, intensity: number): number {
+  const [offset, setOffset] = useState(0);
+  const raf = useRef<number | null>(null);
+  const seed = useRef(Math.random() * 1000); // desync each gauge
+  useEffect(() => {
+    if (!active) {
+      setOffset(0);
+      return;
+    }
+    const loop = () => {
+      const t = performance.now() * 0.001 + seed.current;
+      // Layered sines → organic, non-repeating micro-tremor (± ~0.35° × intensity).
+      const j =
+        Math.sin(t * 21.7) * 0.55 +
+        Math.sin(t * 37.3 + 1.3) * 0.3 +
+        Math.sin(t * 9.1 + 2.7) * 0.15;
+      setOffset(j * 0.55 * intensity);
+      raf.current = requestAnimationFrame(loop);
+    };
+    raf.current = requestAnimationFrame(loop);
+    return () => {
+      if (raf.current != null) cancelAnimationFrame(raf.current);
+    };
+  }, [active, intensity]);
+  return offset;
+}
 
 interface Zone {
   from: number;
@@ -25,6 +58,12 @@ export interface AnalogGaugeProps {
   kpaMax?: number;
   silverPlacard?: boolean;
   hasSideHandle?: boolean;
+  /**
+   * When true (rod running — RIH/POOH/any operation), the needle vibrates more
+   * strongly to convey the live mechanical load / pump ripple. Off = the gentle
+   * idle dither only.
+   */
+  operationActive?: boolean;
 }
 
 export const AnalogGauge: React.FC<AnalogGaugeProps> = ({
@@ -45,6 +84,7 @@ export const AnalogGauge: React.FC<AnalogGaugeProps> = ({
   kpaMax,
   silverPlacard = false,
   hasSideHandle = false,
+  operationActive = false,
 }) => {
   const clampedVal = Math.min(Math.max(value, min), max);
   const percent = (clampedVal - min) / (max - min);
@@ -53,7 +93,16 @@ export const AnalogGauge: React.FC<AnalogGaugeProps> = ({
   // 0% -> -135 deg (7:30 o'clock)
   // 50% -> 0 deg (12:00 o'clock)
   // 100% -> +135 deg (4:30 o'clock)
-  const needleRotation = -135 + percent * 270;
+  const baseNeedleRotation = -135 + percent * 270;
+  // Slight always-on micro-vibration; a hair stronger when the gauge reads a
+  // live (non-floor) pressure so pressurised gauges feel alive vs. dead ones.
+  // Always dither slightly when live; during an active operation the needle
+  // vibrates noticeably harder (rod running under load / pump ripple).
+  const vibrationActive = percent > 0.01 || operationActive;
+  const vibrationIntensity =
+    (0.6 + Math.min(1, percent) * 0.7) * (operationActive ? 2.2 : 1); // ~0.6–1.3× idle, ~1.3–2.9× running
+  const vibrationOffset = useNeedleVibration(vibrationActive, vibrationIntensity);
+  const needleRotation = baseNeedleRotation + vibrationOffset;
 
   const isCritical =
     (criticalLow !== undefined && value < criticalLow) ||

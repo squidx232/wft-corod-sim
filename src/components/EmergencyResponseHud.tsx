@@ -20,6 +20,23 @@ interface EmergencyResponseHudProps {
   toast: string | null;
   /** Abort the drill entirely. */
   onCancel: () => void;
+  /**
+   * Fired the moment the operator turns ON the "Show me" hint for a step
+   * (once per activation). Used by the timed assessment to count hint usage
+   * and apply a small scoring penalty. Optional / backwards-compatible.
+   */
+  onHintUsed?: () => void;
+  /**
+   * Realistic difficulty: hide the ordered step list, the current-step detail
+   * and the "Show me" hint. The operator only sees the emergency + severity and
+   * must perform the correct response from memory. Progress is still shown.
+   */
+  hideSteps?: boolean;
+  /**
+   * Assessment react-time deadline (epoch ms). When set, a prominent countdown
+   * is shown; if it hits 0 the run engine fails the event. null = practice mode.
+   */
+  reactDeadline?: number | null;
 }
 
 /**
@@ -34,11 +51,24 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
   state,
   toast,
   onCancel,
+  onHintUsed,
+  hideSteps = false,
+  reactDeadline = null,
 }) => {
   const { t, tData } = useT();
   const [showHint, setShowHint] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [now, setNow] = useState(Date.now());
+
+  // Tick a clock for the react-time countdown (only when a deadline is set).
+  useEffect(() => {
+    if (reactDeadline == null) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [reactDeadline]);
+  const reactLeft = reactDeadline != null ? Math.max(0, (reactDeadline - now) / 1000) : null;
+  const reactCritical = reactLeft != null && reactLeft <= 10;
 
   const scenario = state.emergencyScenarioId
     ? getEmergencyScenario(state.emergencyScenarioId)
@@ -109,31 +139,50 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
       : 'bg-amber-50';
 
   return (
-    <div className="fixed top-20 right-4 z-[90] w-[340px] max-w-[calc(100vw-2rem)] select-none">
+    <div className="fixed top-20 right-4 z-[90] w-[420px] max-w-[calc(100vw-2rem)] select-none">
       {/* Consequence toast */}
       {toast && (
-        <div className="mb-2 rounded-lg bg-red-600 text-white text-[12px] font-bold px-3 py-2 shadow-xl border border-red-300 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <div className="mb-2 rounded-lg bg-red-600 text-white text-[13px] font-bold px-3 py-2.5 shadow-xl border border-red-300 flex items-start gap-2">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <span>{toast}</span>
         </div>
       )}
 
       <div
-        className={`rounded-xl border-2 ${severityColor} bg-white shadow-xl overflow-hidden`}
+        className={`rounded-xl border-4 ${severityColor} bg-white shadow-2xl overflow-hidden ${
+          scenario.severity === 'critical' ? 'ring-2 ring-red-400/60 emg-hud-pulse' : ''
+        }`}
       >
+        {/* React-time countdown banner (assessment only) */}
+        {reactLeft != null && (
+          <div
+            className={`flex items-center justify-between px-3 py-2 text-white ${
+              reactCritical ? 'bg-red-600 animate-pulse' : 'bg-slate-800'
+            }`}
+          >
+            <span className="text-[12px] font-semibold uppercase tracking-wide flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
+              {t('emergencyHud.reactLeft')}
+            </span>
+            <span className="text-2xl font-black font-mono tabular-nums">
+              {Math.ceil(reactLeft)}s
+            </span>
+          </div>
+        )}
+
         {/* Header */}
-        <div className={`flex items-center justify-between gap-2 px-3 py-2 ${headerBg} border-b border-slate-200`}>
+        <div className={`flex items-center justify-between gap-2 px-3 py-2.5 ${headerBg} border-b border-slate-200`}>
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle
-              className={`w-5 h-5 flex-shrink-0 ${
+              className={`w-6 h-6 flex-shrink-0 ${
                 scenario.severity === 'critical' ? 'text-red-700 animate-pulse' : 'text-orange-700'
               }`}
             />
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-slate-800 truncate">
+              <div className="text-[15px] font-bold text-slate-800 truncate">
                 {t('emergencyHud.title', { scenario: tData(scenario.title) })}
               </div>
-              <div className="text-eyebrow text-slate-500 font-mono truncate">
+              <div className="text-[11px] text-slate-500 font-mono truncate">
                 {t('emergencyHud.manual', { section: scenario.manualSection })}
               </div>
             </div>
@@ -163,7 +212,9 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
             {/* Progress */}
             <div className="flex items-center justify-between text-eyebrow font-mono text-slate-500 mb-1">
               <span>
-                {t('emergencyHud.step', { current: stepIndex + 1, total })}
+                {hideSteps
+                  ? t('emergencyHud.realistic.progress')
+                  : t('emergencyHud.step', { current: stepIndex + 1, total })}
               </span>
               {timeLeft !== null && (
                 <span
@@ -176,15 +227,29 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                 </span>
               )}
             </div>
-            <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mb-3">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
-                style={{ width: `${(stepIndex / total) * 100}%` }}
-              />
-            </div>
+            {!hideSteps && (
+              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mb-3">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
+                  style={{ width: `${(stepIndex / total) * 100}%` }}
+                />
+              </div>
+            )}
 
-            {/* Current step */}
-            {step && (
+            {/* Realistic mode: no steps shown — diagnose & respond from memory. */}
+            {hideSteps && (
+              <div className="rounded-xl bg-slate-100 border border-slate-200 p-3 mb-1">
+                <div className="text-[13px] font-semibold text-slate-800 mb-1">
+                  {t('emergencyHud.realistic.title')}
+                </div>
+                <p className="text-2xs text-slate-600 leading-snug">
+                  {t('emergencyHud.realistic.instruction')}
+                </p>
+              </div>
+            )}
+
+            {/* Current step (guided mode only) */}
+            {!hideSteps && step && (
               <div className="rounded-xl bg-slate-100 border border-slate-200 p-3 mb-3">
                 <div className="text-[13px] font-semibold text-slate-800 mb-1">{t('emergencyHud.step.title', { title: tData(step.title) })}</div>
                 <p className="text-2xs text-slate-600 leading-snug">{t('emergencyHud.step.instruction', { instruction: tData(step.instruction) })}</p>
@@ -195,7 +260,13 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowHint((h) => !h)}
+                      onClick={() =>
+                        setShowHint((h) => {
+                          // Count a hint only when turning it ON.
+                          if (!h) onHintUsed?.();
+                          return !h;
+                        })
+                      }
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-2xs font-semibold border transition-all ${
                         showHint
                           ? 'bg-blue-700 border-blue-800 text-white'
@@ -215,40 +286,42 @@ export const EmergencyResponseHud: React.FC<EmergencyResponseHudProps> = ({
               </div>
             )}
 
-            {/* Checklist */}
-            <div className="flex flex-col gap-1">
-              {scenario.steps.map((st, i) => {
-                const done = i < stepIndex;
-                const active = i === stepIndex;
-                return (
-                  <div
-                    key={st.id}
-                    className={`flex items-center gap-2 text-2xs px-2 py-1 rounded ${
-                      active ? 'bg-slate-100' : ''
-                    }`}
-                  >
-                    {done ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-700 flex-shrink-0" />
-                    ) : active ? (
-                      <Circle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 animate-pulse" />
-                    ) : (
-                      <Circle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                    )}
-                    <span
-                      className={
-                        done
-                          ? 'text-green-700 line-through'
-                          : active
-                          ? 'text-slate-900 font-semibold'
-                          : 'text-slate-500'
-                      }
+            {/* Checklist (guided mode only) */}
+            {!hideSteps && (
+              <div className="flex flex-col gap-1">
+                {scenario.steps.map((st, i) => {
+                  const done = i < stepIndex;
+                  const active = i === stepIndex;
+                  return (
+                    <div
+                      key={st.id}
+                      className={`flex items-center gap-2 text-2xs px-2 py-1 rounded ${
+                        active ? 'bg-slate-100' : ''
+                      }`}
                     >
-                      {tData(st.title)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      {done ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-700 flex-shrink-0" />
+                      ) : active ? (
+                        <Circle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 animate-pulse" />
+                      ) : (
+                        <Circle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      )}
+                      <span
+                        className={
+                          done
+                            ? 'text-green-700 line-through'
+                            : active
+                            ? 'text-slate-900 font-semibold'
+                            : 'text-slate-500'
+                        }
+                      >
+                        {tData(st.title)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

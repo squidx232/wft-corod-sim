@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { printCertificate } from '../utils/printCertificate';
 import { SimulatorState, LogbookEntry } from '../types';
 import { soundManager } from '../utils/audio';
 import { useT } from '../i18n';
@@ -36,6 +37,10 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
   const [wellLocation, setWellLocation] = useState('Pembina Cardium 102/04-12-048-09W5');
   const [unitNumber, setUnitNumber] = useState('MG-408');
   const [operatorName, setOperatorName] = useState(performance.operatorName || 'Hassan Hany');
+  // Editable Operator Certification fields (operator can amend before printing).
+  const [certRating, setCertRating] = useState(t('analytics.cert.rating.level'));
+  const [certUnit, setCertUnit] = useState('MG-408');
+  const [certDate, setCertDate] = useState(new Date().toISOString().slice(0, 10));
   const [inspections, setInspections] = useState({
     walkaround: true,
     positiveAirShutdown: true,
@@ -462,32 +467,81 @@ export const PerformanceAnalytics: React.FC<PerformanceAnalyticsProps> = ({
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-white/80 border border-slate-300 text-left space-y-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-slate-500">{t('analytics.cert.operator')}:</span>
-              <span className="font-semibold text-slate-800">{operatorName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{t('analytics.cert.rating')}:</span>
-              <span className="font-semibold text-emerald-700">
-                {t('analytics.cert.rating.level')}
-              </span>
-            </div>
+          {/* Editable certificate fields — the operator can amend name, rating,
+              unit and date before printing. Safety score/reaction come from the
+              live performance record (read-only). */}
+          <div className="p-4 rounded-xl bg-white/80 border border-slate-300 text-left space-y-2.5 text-xs">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-slate-500 flex-shrink-0">{t('analytics.cert.operator')}:</span>
+              <input
+                type="text"
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                className="flex-1 max-w-[60%] text-right font-semibold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-amber-500 focus:outline-none px-1 py-0.5"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-slate-500 flex-shrink-0">{t('analytics.cert.rating')}:</span>
+              <input
+                type="text"
+                value={certRating}
+                onChange={(e) => setCertRating(e.target.value)}
+                className="flex-1 max-w-[60%] text-right font-semibold text-emerald-700 bg-transparent border-b border-dashed border-slate-300 focus:border-amber-500 focus:outline-none px-1 py-0.5"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-slate-500 flex-shrink-0">{t('analytics.cert.unit')}:</span>
+              <input
+                type="text"
+                value={certUnit}
+                onChange={(e) => setCertUnit(e.target.value)}
+                className="flex-1 max-w-[60%] text-right font-semibold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-amber-500 focus:outline-none px-1 py-0.5"
+              />
+            </label>
             <div className="flex justify-between">
               <span className="text-slate-500">{t('analytics.cert.safety')}:</span>
               <span className="font-semibold text-amber-700 font-mono">
                 {performance.safetyScore}% ({performance.emergencyReactionTimeMs} ms)
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{t('analytics.cert.date')}:</span>
-              <span className="font-mono text-slate-600">{new Date().toLocaleDateString()}</span>
-            </div>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-slate-500 flex-shrink-0">{t('analytics.cert.date')}:</span>
+              <input
+                type="date"
+                value={certDate}
+                onChange={(e) => setCertDate(e.target.value)}
+                className="text-right font-mono text-slate-600 bg-transparent border-b border-dashed border-slate-300 focus:border-amber-500 focus:outline-none px-1 py-0.5"
+              />
+            </label>
           </div>
 
           <div className="flex justify-center gap-3 pt-2">
             <button
-              onClick={() => window.print()}
+              onClick={() =>
+                printCertificate({
+                  eyebrow: t('analytics.cert.title'),
+                  title: t('analytics.cert.subtitle'),
+                  protocol: t('analytics.cert.protocol'),
+                  seal: 'CERTIFIED',
+                  fields: [
+                    { label: t('analytics.cert.operator'), value: operatorName },
+                    { label: t('analytics.cert.rating'), value: certRating, accent: '#047857' },
+                    { label: t('analytics.cert.unit'), value: certUnit },
+                    {
+                      label: t('analytics.cert.safety'),
+                      value: `${performance.safetyScore}%  (${performance.emergencyReactionTimeMs} ms)`,
+                      accent: '#b45309',
+                    },
+                    { label: t('analytics.cert.date'), value: new Date(certDate).toLocaleDateString() },
+                  ],
+                  signatories: [
+                    { name: 'Weatherford Training Authority', role: 'Certifying Body' },
+                    { name: operatorName, role: 'Certified Operator' },
+                  ],
+                  footer: 'Weatherford Enterprise Excellence • CoRod® Mobile Gripper Operations',
+                  serial: `GL-PCP-OEPS-L4-11 • Rev 25 • ${certDate}`,
+                })
+              }
               className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-2xs flex items-center gap-1.5 shadow-md active:scale-95"
             >
               <Printer className="w-4 h-4" />

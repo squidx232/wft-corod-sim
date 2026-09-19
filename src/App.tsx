@@ -4,9 +4,26 @@ import {
   SimulatorTab,
   DifficultyLevel,
   TelemetryPoint,
+  AssessmentOperator,
+  AssessmentSession,
+  AssessmentEvent,
+  AssessmentDifficulty,
+  LeaderboardEntry,
+  LogbookEntry,
 } from './types';
 import { ROD_SPECIFICATIONS, SQUEEZE_PRESSURE_CURVES } from './data/manualReference';
-import { EMERGENCY_SCENARIOS, getEmergencyScenario } from './data/emergencyScenarios';
+import {
+  EMERGENCY_SCENARIOS,
+  getEmergencyScenario,
+  getRandomEmergencyQueue,
+} from './data/emergencyScenarios';
+import { computeAssessmentReport } from './utils/assessmentScore';
+import { addLeaderboardEntry } from './utils/leaderboard';
+import { AssessmentPanel } from './components/AssessmentPanel';
+import { AssessmentHud } from './components/AssessmentHud';
+import { AssessmentReportModal } from './components/AssessmentReportModal';
+import { LeaderboardModal } from './components/LeaderboardModal';
+import { IntroSplash } from './components/IntroSplash';
 import { useInputSystem } from './input/useInputSystem';
 import { ControlBindingsPanel } from './components/ControlBindingsPanel';
 import { InputStatusHud } from './components/InputStatusHud';
@@ -44,9 +61,9 @@ import {
 
 const INITIAL_STATE: SimulatorState = {
   hydraulics: {
-    chargePressure: 350,
-    systemPressure: 2450,
-    pickerPressure: 4100,
+    chargePressure: 0,
+    systemPressure: 0,
+    pickerPressure: 0,
     chainTensionPressure: 150,
     squeezePressure: 800,
     safetyPressure: 2800,
@@ -165,6 +182,7 @@ const INITIAL_STATE: SimulatorState = {
   emergencyResolved: false,
   emergencyScenarioId: null,
   emergencyStepIndex: 0,
+  assessment: null,
   airHornSounded: false,
   evacuatedToMuster: false,
   scbaEquipped: false,
@@ -262,6 +280,30 @@ function useMultiScreenSync(
   return { broadcastPatch };
 }
 
+// ---------------------------------------------------------------------------
+// Assessment event helpers (pure) — patch the last/active event record on the
+// live assessment session immutably. Returns input unchanged when no run is
+// active or there are no events yet.
+// ---------------------------------------------------------------------------
+function patchLastEvent(
+  events: AssessmentEvent[],
+  fn: (ev: AssessmentEvent) => AssessmentEvent,
+): AssessmentEvent[] {
+  if (!events.length) return events;
+  const copy = [...events];
+  copy[copy.length - 1] = fn(copy[copy.length - 1]);
+  return copy;
+}
+
+function patchActiveAssessmentEvent(
+  prev: SimulatorState,
+  fn: (ev: AssessmentEvent) => AssessmentEvent,
+): AssessmentSession | null {
+  const a = prev.assessment;
+  if (!a || !a.active || a.ended || a.events.length === 0) return a;
+  return { ...a, events: patchLastEvent(a.events, fn) };
+}
+
 function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' {
   const params = new URLSearchParams(window.location.search);
   const view = params.get('view');
@@ -322,9 +364,18 @@ export default function App() {
           const targetCharge = emgLowCharge ? 180 : joyActive ? 280 : 360;
           hyd.chargePressure = hyd.chargePressure + (targetCharge - hyd.chargePressure) * 0.2;
 
-          // Ramp system & picker pressure dynamically (not instant)
-          hyd.systemPressure = hyd.systemPressure + (2450 - hyd.systemPressure) * 0.15;
-          hyd.pickerPressure = hyd.pickerPressure + (4100 - hyd.pickerPressure) * 0.12;
+          // SYSTEM PRESSURE — the ONLY circuit that builds automatically: it is a
+          // fixed regulated 2500 psi whenever the PTO is engaged AND the (wing)
+          // bleed valve is CLOSED. Opening the bleed valve dumps it to 0. This is
+          // gated purely by the bleed valve — it does NOT scale with depth.
+          {
+            const systemTarget = hyd.safetyBleedValveOpen ? 0 : 2500;
+            hyd.systemPressure = hyd.systemPressure + (systemTarget - hyd.systemPressure) * 0.2;
+          }
+          // PICKER PRESSURE — operator-controlled only. No auto build-up: it holds
+          // its current value (change comes from operator input / emergencies),
+          // never ramps to a fixed value and never scales with depth.
+          // (hyd.pickerPressure left unchanged here.)
           hyd.squeezePressure = hyd.squeezePressureSwitch ? Math.min(hyd.squeezePressureTarget, hyd.systemPressure) : 0;
           // Safety pressure ramps smoothly toward operator-set target (or 150 if bleed open)
           const safetyTarget = hyd.safetyBleedValveOpen ? 150 : hyd.safetyPressureTarget;
@@ -590,14 +641,19 @@ export default function App() {
         const elapsed = (Date.now() - emgStepStartRef.current) / 1000;
         if (elapsed > step.timeLimitSec && !step.validationFn(s)) {
           emgTimedOutRef.current.add(step.id);
-          if (step.onTimeout) {
-            setState((prev) => ({
-              ...prev,
-              hydraulics: { ...prev.hydraulics, ...(step.onTimeout!.hydraulics || {}) },
-              rod: { ...prev.rod, ...(step.onTimeout!.rod || {}) },
-              bop: { ...prev.bop, ...(step.onTimeout!.bop || {}) },
-            }));
-          }
+          setState((prev) => ({
+            ...prev,
+            hydraulics: step.onTimeout
+              ? { ...prev.hydraulics, ...(step.onTimeout.hydraulics || {}) }
+              : prev.hydraulics,
+            rod: step.onTimeout ? { ...prev.rod, ...(step.onTimeout.rod || {}) } : prev.rod,
+            bop: step.onTimeout ? { ...prev.bop, ...(step.onTimeout.bop || {}) } : prev.bop,
+            // Record the timeout against the active assessment event.
+            assessment: patchActiveAssessmentEvent(prev, (ev) => ({
+              ...ev,
+              timedOutSteps: ev.timedOutSteps + 1,
+            })),
+          }));
           if (step.timeoutMessage) {
             soundManager.playBuzzerAlert(1.5);
             setEmergencyToast(step.timeoutMessage);
@@ -610,11 +666,19 @@ export default function App() {
       if (step.validationFn(s)) {
         soundManager.playSuccessChime();
         if (idx + 1 < sc.steps.length) {
-          setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
+          setState((prev) => ({
+            ...prev,
+            emergencyStepIndex: prev.emergencyStepIndex + 1,
+            // First correct action on this event → stamp reaction time.
+            assessment: patchActiveAssessmentEvent(prev, (ev) =>
+              ev.firstActionAt == null ? { ...ev, firstActionAt: Date.now() } : ev,
+            ),
+          }));
         } else {
           // Final step complete — emergency resolved. Restore the pre-drill
           // simulation state so normal operation resumes cleanly.
           const snap = preDrillSnapshotRef.current;
+          const now = Date.now();
           setState((prev) => ({
             ...prev,
             activeEmergency: 'none',
@@ -628,6 +692,22 @@ export default function App() {
             hydraulics: snap ? { ...snap.hydraulics } : prev.hydraulics,
             rod: snap ? { ...snap.rod } : prev.rod,
             bop: snap ? { ...snap.bop } : prev.bop,
+            // Stamp firstAction (if somehow unset) + resolvedAt on the event,
+            // and schedule the NEXT injection after a randomized quiet gap
+            // (5–13s). The continuous orchestrator will fire it when due, unless
+            // the run's hard time limit intervenes first.
+            assessment:
+              prev.assessment && prev.assessment.active && !prev.assessment.ended
+                ? {
+                    ...prev.assessment,
+                    nextInjectAt: now + 5000 + Math.floor(Math.random() * 8000),
+                    events: patchLastEvent(prev.assessment.events, (ev) => ({
+                      ...ev,
+                      firstActionAt: ev.firstActionAt ?? now,
+                      resolvedAt: now,
+                    })),
+                  }
+                : prev.assessment,
           }));
           preDrillSnapshotRef.current = null;
           emgTimedOutRef.current.clear();
@@ -746,7 +826,7 @@ export default function App() {
   // The operator must respond on the real console; steps auto-validate in the
   // physics/validation tick below.
   // =========================================================================
-  const triggerEmergencyScenario = (scenarioId: string) => {
+  const triggerEmergencyScenario = (scenarioId: string, opts: { assessment?: boolean } = {}) => {
     const scenario = getEmergencyScenario(scenarioId);
     if (!scenario) return;
     soundManager.playBuzzerAlert(2.0);
@@ -757,14 +837,36 @@ export default function App() {
       bop: { ...stateRef.current.bop },
       joystickPosition: stateRef.current.joystickPosition,
     };
+    const injectedAt = Date.now();
     setState((prev) => {
       const inj = scenario.inject;
+      // If this injection is part of a live assessment run, append a new event
+      // record and advance the queue pointer.
+      const assessment =
+        opts.assessment && prev.assessment && prev.assessment.active && !prev.assessment.ended
+          ? {
+              ...prev.assessment,
+              // Clear the pending-injection marker now that this one has fired.
+              nextInjectAt: null,
+              events: [
+                ...prev.assessment.events,
+                {
+                  scenarioId: scenario.id,
+                  injectedAt,
+                  firstActionAt: null,
+                  resolvedAt: null,
+                  hintsUsed: 0,
+                  timedOutSteps: 0,
+                } as AssessmentEvent,
+              ],
+            }
+          : prev.assessment;
       return {
         ...prev,
         activeEmergency: scenario.emergencyKey,
         emergencyScenarioId: scenario.id,
         emergencyStepIndex: 0,
-        emergencyTriggerTime: Date.now(),
+        emergencyTriggerTime: injectedAt,
         emergencyResolved: false,
         // Reset drill flags so a fresh response is required each time
         airHornSounded: false,
@@ -773,6 +875,7 @@ export default function App() {
         hydraulics: { ...prev.hydraulics, ...(inj.hydraulics || {}) },
         rod: { ...prev.rod, ...(inj.rod || {}) },
         bop: { ...prev.bop, ...(inj.bop || {}) },
+        assessment,
       };
     });
   };
@@ -814,6 +917,296 @@ export default function App() {
   const advanceEmergencyStep = () => {
     setState((prev) => ({ ...prev, emergencyStepIndex: prev.emergencyStepIndex + 1 }));
   };
+
+  // Increment the hint counter on the active assessment event + run total.
+  const handleAssessmentHintUsed = () => {
+    setState((prev) => {
+      if (!prev.assessment || !prev.assessment.active || prev.assessment.ended) return prev;
+      return {
+        ...prev,
+        assessment: {
+          ...prev.assessment,
+          hintsUsedTotal: prev.assessment.hintsUsedTotal + 1,
+          events: patchLastEvent(prev.assessment.events, (ev) => ({
+            ...ev,
+            hintsUsed: ev.hintsUsed + 1,
+          })),
+        },
+      };
+    });
+  };
+
+  // =========================================================================
+  // TIMED ASSESSMENT RUN ("Start Simulation")
+  // Builds a randomized queue of emergencies sized to the target duration,
+  // injects them one at a time with quiet monitoring gaps between events, and
+  // finalizes with a scored report + auto logbook entry once the queue is done
+  // and the minimum duration has elapsed.
+  // =========================================================================
+  // Recently-injected scenario ids (to avoid back-to-back repeats during a run).
+  const assessmentRecentRef = useRef<string[]>([]);
+
+  // Pick a random emergency that isn't one of the last couple injected.
+  const pickNextAssessmentScenario = (): string => {
+    const recent = assessmentRecentRef.current;
+    const [id] = getRandomEmergencyQueue(1, { excludeIds: recent.slice(-2) });
+    const chosen = id ?? getRandomEmergencyQueue(1)[0];
+    assessmentRecentRef.current = [...recent, chosen].slice(-4);
+    return chosen;
+  };
+
+  const startAssessment = (
+    operator: AssessmentOperator,
+    durationMinutes: number,
+    difficulty: AssessmentDifficulty,
+  ) => {
+    // Gate on engine start like normal operation.
+    if (!stateRef.current.engineStartSequenceComplete || !stateRef.current.hydraulics.engineRunning) {
+      soundManager.playBuzzerAlert(0.5);
+      setShowEngineStartModal(true);
+      return;
+    }
+    const now = Date.now();
+    const targetSec = Math.max(300, durationMinutes * 60); // ≥ 5 minutes
+    assessmentRecentRef.current = [];
+
+    const session: AssessmentSession = {
+      active: true,
+      operator,
+      difficulty,
+      startedAt: now,
+      targetDurationSec: targetSec,
+      // First emergency injects ~3s after the run begins.
+      nextInjectAt: now + 3000,
+      events: [],
+      hintsUsedTotal: 0,
+      ended: false,
+      endedAt: null,
+    };
+    soundManager.playMetalTap();
+    setState((prev) => ({ ...prev, assessment: session, activeTab: 'console' }));
+    // The continuous orchestration effect (below) drives all injections + the
+    // hard end-of-run cutoff from here — no per-event timers required.
+  };
+
+  // Ref guard so the finalize side-effects (leaderboard/logbook writes) run
+  // EXACTLY once even under React StrictMode's double-invoked updaters or a
+  // hard-timer/End-Run race. This was the cause of duplicate leaderboard rows.
+  const assessmentFinalizedRef = useRef<number | null>(null);
+
+  const endAssessment = () => {
+    const cur = stateRef.current.assessment;
+    // Guard against double-finalization (hard timer + manual End Run racing, or
+    // StrictMode re-invocation).
+    if (!cur || cur.ended || !cur.active) return;
+    if (assessmentFinalizedRef.current === cur.startedAt) return;
+    assessmentFinalizedRef.current = cur.startedAt;
+
+    const snap = preDrillSnapshotRef.current;
+    const now = Date.now();
+
+    // --- Compute EVERYTHING once, OUTSIDE setState, so persistence side effects
+    //     (localStorage leaderboard write) never run twice. ---
+    const finishedSession: AssessmentSession = {
+      ...cur,
+      active: false,
+      ended: true,
+      endedAt: now,
+      nextInjectAt: null,
+    };
+    const report = computeAssessmentReport(finishedSession);
+
+    const lbEntry: LeaderboardEntry = {
+      id: `lb-${finishedSession.startedAt}`,
+      name: finishedSession.operator.name || 'Trainee',
+      role: finishedSession.operator.role || '',
+      unit: finishedSession.operator.unit || '',
+      score: report.overallScore,
+      grade: report.grade,
+      difficulty: finishedSession.difficulty,
+      eventsResolved: report.eventsResolved,
+      eventsHandled: report.eventsHandled,
+      avgReactionSec: report.avgReactionSec,
+      hintsUsed: report.hintsUsedTotal,
+      durationSec: report.durationSec,
+      timestamp: now,
+    };
+    addLeaderboardEntry(lbEntry); // single call — the only side effect
+
+    const drills = Array.from(
+      new Set(
+        finishedSession.events
+          .map((e) => getEmergencyScenario(e.scenarioId)?.title)
+          .filter((x): x is string => !!x),
+      ),
+    );
+    const logEntry: LogbookEntry = {
+      id: `log-assess-${finishedSession.startedAt}`,
+      date: new Date(now).toISOString().slice(0, 10),
+      wellLocation: 'Assessment Simulation',
+      unitNumber: finishedSession.operator.unit || 'N/A',
+      operatorName: finishedSession.operator.name || 'Trainee',
+      jobType: 'surface',
+      rodType: stateRef.current.rod.rodShape
+        ? `${stateRef.current.rod.rodSize} ${stateRef.current.rod.rodShape}`
+        : 'N/A',
+      maxDepthFt: Math.round(stateRef.current.rod.currentDepthFt),
+      totalWeightLbs: Math.round(stateRef.current.rod.totalStringWeightLbs),
+      inspectionsCompleted: {
+        walkaround: false,
+        positiveAirShutdown: false,
+        rodSafetyAccumulator10MinTest: false,
+        bopTest1250Psi: false,
+        knucklePickerInspection: false,
+        rodElevatorsCheck: false,
+        hydraulicFluidUnivisN32: false,
+        wireRopesSlings: false,
+      },
+      drillsConducted: drills,
+      safetyScore: report.overallScore,
+      comments: `Timed assessment (${finishedSession.operator.role || 'operator'}, ${finishedSession.difficulty}): ${report.eventsResolved}/${report.eventsHandled} events resolved, ${report.hintsUsedTotal} hints used, avg reaction ${report.avgReactionSec ? report.avgReactionSec.toFixed(1) : '—'}s. Grade: ${report.grade}.`,
+      certifiedStamp: report.overallScore >= 75,
+    };
+
+    // Updater is now PURE (idempotent) — safe under StrictMode double-invoke,
+    // and de-dupes the logbook by id in case it does run twice.
+    setState((prev) => {
+      if (!prev.assessment || prev.assessment.ended) return prev;
+      const logbook = prev.logbook.some((l) => l.id === logEntry.id)
+        ? prev.logbook
+        : [logEntry, ...prev.logbook];
+      return {
+        ...prev,
+        assessment: finishedSession,
+        activeEmergency: 'none',
+        emergencyScenarioId: null,
+        emergencyStepIndex: 0,
+        airHornSounded: false,
+        evacuatedToMuster: false,
+        scbaEquipped: false,
+        joystickPosition: snap ? snap.joystickPosition : prev.joystickPosition,
+        hydraulics: snap ? { ...snap.hydraulics } : prev.hydraulics,
+        rod: snap ? { ...snap.rod } : prev.rod,
+        bop: snap ? { ...snap.bop } : prev.bop,
+        logbook,
+        performance: {
+          ...prev.performance,
+          emergencyReactionTimeMs: report.avgReactionSec
+            ? Math.round(report.avgReactionSec * 1000)
+            : prev.performance.emergencyReactionTimeMs,
+        },
+      };
+    });
+    preDrillSnapshotRef.current = null;
+    emgTimedOutRef.current.clear();
+    soundManager.playSuccessChime();
+  };
+
+  const dismissAssessmentReport = () => {
+    setState((prev) => ({ ...prev, assessment: null, activeTab: 'drills' }));
+  };
+
+  // React-time timeout: the operator failed to resolve the active emergency in
+  // time. Abort it (restoring sim state), mark the event as FAILED (unresolved +
+  // a timeout strike so it scores 0-ish), flash a message, and schedule the next.
+  const failActiveAssessmentEmergency = () => {
+    const snap = preDrillSnapshotRef.current;
+    const now = Date.now();
+    soundManager.playBuzzerAlert(1.8);
+    setEmergencyToast(t('emergencyHud.reactFail'));
+    setTimeout(() => setEmergencyToast(null), 4000);
+    setState((prev) => {
+      if (!prev.assessment || !prev.assessment.active || prev.assessment.ended) return prev;
+      return {
+        ...prev,
+        // Abort the emergency & restore the pre-drill snapshot.
+        activeEmergency: 'none',
+        emergencyScenarioId: null,
+        emergencyStepIndex: 0,
+        airHornSounded: false,
+        evacuatedToMuster: false,
+        scbaEquipped: false,
+        joystickPosition: snap ? snap.joystickPosition : prev.joystickPosition,
+        hydraulics: snap ? { ...snap.hydraulics } : prev.hydraulics,
+        rod: snap ? { ...snap.rod } : prev.rod,
+        bop: snap ? { ...snap.bop } : prev.bop,
+        assessment: {
+          ...prev.assessment,
+          // Schedule the next after a short gap; mark this event failed.
+          nextInjectAt: now + 3000 + Math.floor(Math.random() * 5000),
+          events: patchLastEvent(prev.assessment.events, (ev) => ({
+            ...ev,
+            resolvedAt: null,
+            timedOutSteps: ev.timedOutSteps + 1,
+          })),
+        },
+      };
+    });
+    preDrillSnapshotRef.current = null;
+    emgTimedOutRef.current.clear();
+  };
+
+  // Continuous assessment orchestrator (single master tick @ 1s).
+  // Responsibilities while a run is active:
+  //   1. HARD-END the run the instant the target duration is reached — even if
+  //      an emergency is still in progress (fixes "7 min passed, never ended").
+  //   2. Inject a fresh RANDOM emergency whenever `nextInjectAt` is due AND no
+  //      emergency is currently active — an endless stream at random intervals
+  //      (fixes "only 4 emergencies then it stopped").
+  // Emergencies keep coming right up until the cutoff; the last one may be
+  // interrupted by the end-of-run, which is expected certification behaviour.
+  // Per-difficulty maximum reaction time (seconds) to FULLY resolve an emergency
+  // before it is counted as a failure and the run moves on.
+  const MAX_REACT_SEC = { guided: 60, realistic: 30 } as const;
+  // Stop injecting NEW emergencies once fewer than this many seconds remain, so a
+  // late emergency isn't unfairly cut off by the hard end-of-run.
+  const NO_INJECT_TAIL_SEC = 20;
+
+  const isAssessmentRunning = !!state.assessment && state.assessment.active && !state.assessment.ended;
+  useEffect(() => {
+    if (!isAssessmentRunning) return;
+    const tick = () => {
+      const a = stateRef.current.assessment;
+      if (!a || !a.active || a.ended) return;
+      const now = Date.now();
+      const remainingSec = a.targetDurationSec - (now - a.startedAt) / 1000;
+
+      // 1. Hard time-limit cutoff.
+      if (remainingSec <= 0) {
+        endAssessment();
+        return;
+      }
+
+      const emergencyActive = !!stateRef.current.emergencyScenarioId;
+
+      // 2. React-time FAIL: if an emergency has been active longer than the
+      //    difficulty's max reaction window without being resolved, fail it and
+      //    move on (records timedOutSteps + resolvedAt=null so it scores as failed).
+      if (emergencyActive) {
+        const maxReact = MAX_REACT_SEC[a.difficulty];
+        const activeEv = a.events[a.events.length - 1];
+        if (activeEv && !activeEv.resolvedAt && (now - activeEv.injectedAt) / 1000 > maxReact) {
+          failActiveAssessmentEmergency();
+          return;
+        }
+      }
+
+      // 3. Inject the next emergency when due, the console is clear, and there is
+      //    enough time left for a fair attempt (skip the final tail seconds).
+      if (
+        !emergencyActive &&
+        a.nextInjectAt != null &&
+        now >= a.nextInjectAt &&
+        remainingSec > NO_INJECT_TAIL_SEC
+      ) {
+        triggerEmergencyScenario(pickNextAssessmentScenario(), { assessment: true });
+      }
+    };
+    const id = setInterval(tick, 1000);
+    tick(); // run once immediately so the first injection isn't delayed a full second
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAssessmentRunning]);
 
   // Air horn: play the sound AND record that the horn was sounded (so emergency
   // response steps that require an air-horn blast are satisfied).
@@ -972,6 +1365,9 @@ export default function App() {
   // default bindings, and the polling hook.
   // =========================================================================
   const [showBindings, setShowBindings] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  // Intro/buffer splash — shown once on the primary window before the dashboard.
+  const [showIntro, setShowIntro] = useState(viewMode === 'full');
   const [showGlossary, setShowGlossary] = useState(false);
 
   // Read the current value of an analog control (for +/- stepping & axis base).
@@ -1093,6 +1489,38 @@ export default function App() {
 
   const input = useInputSystem(dispatchControl, getAnalogValue);
 
+  // React-time deadline (epoch ms) for the currently-active assessment emergency,
+  // shown as a countdown in the HUD. null outside an assessment / when idle.
+  const assessmentReactDeadline: number | null = (() => {
+    const a = state.assessment;
+    if (!a || !a.active || a.ended || !state.emergencyScenarioId) return null;
+    const ev = a.events[a.events.length - 1];
+    if (!ev || ev.resolvedAt) return null;
+    const maxReact = a.difficulty === 'realistic' ? 30 : 60;
+    return ev.injectedAt + maxReact * 1000;
+  })();
+
+  // Whether an emergency is currently active (drives the full-screen red alert
+  // overlay + looping alert tone).
+  const emergencyOverlayActive = !!state.emergencyScenarioId;
+
+  // Slight, non-annoying looping alert tone while an emergency is unhandled.
+  useEffect(() => {
+    if (!emergencyOverlayActive) return;
+    let cancelled = false;
+    const beep = () => {
+      if (cancelled) return;
+      // Short, quiet warning blip (soundManager respects the global mute).
+      soundManager.playBuzzerAlert(0.25);
+    };
+    beep();
+    const id = setInterval(beep, 2600);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [emergencyOverlayActive]);
+
   // =========================================================================
   // SECONDARY WINDOW RENDERING — pop-out views for multi-monitor setup
   // =========================================================================
@@ -1148,14 +1576,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col justify-between font-sans selection:bg-red-600 selection:text-white">
+      {/* Intro / buffer splash (primary window only) */}
+      {showIntro && <IntroSplash onEnter={() => setShowIntro(false)} />}
+
       {/* Top Main App Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-300 px-4 py-2.5 shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Logo & Manual Spec Title */}
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-red-700 flex items-center justify-center font-bold text-lg text-white shadow">
-              W
-            </div>
+            <img
+              src="/branding/wft-logo.jfif"
+              alt="Weatherford"
+              className="h-9 w-9 rounded-lg object-cover shadow bg-white"
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-semibold tracking-tight text-slate-800">
@@ -1507,6 +1940,13 @@ export default function App() {
         {/* TAB 3: EMERGENCY RESPONSE DRILLS */}
         {state.activeTab === 'drills' && (
           <div className="space-y-6">
+            {/* Timed "Start Simulation" assessment run */}
+            <AssessmentPanel
+              running={!!state.assessment && state.assessment.active && !state.assessment.ended}
+              onStart={startAssessment}
+              onShowLeaderboard={() => setShowLeaderboard(true)}
+            />
+
             <div className="p-6 rounded-xl bg-white border-2 border-slate-300 shadow-2xl space-y-4">
               <div className="flex items-center gap-3 border-b border-slate-300 pb-3">
                 <div className="p-2 rounded-xl bg-red-600 text-white">
@@ -1625,7 +2065,21 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-slate-100 border-t border-slate-300 px-4 py-3 text-center text-xs text-slate-500 font-mono">
-        Weatherford Enterprise Excellence • GL-PCP-OEPS-L4-11 • COROD® Mobile Gripper™ Operator Training System
+        <div>
+          Weatherford Enterprise Excellence • GL-PCP-OEPS-L4-11 • COROD® Mobile Gripper™ Operator Training System
+        </div>
+        <div className="mt-1 text-slate-400">
+          Developed by{' '}
+          <a
+            href="https://linkedin.com/in/whereishassan"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-red-600 hover:text-red-700 hover:underline font-semibold"
+          >
+            @whereishassan
+          </a>{' '}
+          — ALS Egypt Team
+        </div>
       </footer>
 
       {/* Emergency Drill Modal */}
@@ -1662,12 +2116,58 @@ export default function App() {
       {/* Reference Manual Modal */}
       {showManualModal && <ManualReferenceModal onClose={() => setShowManualModal(false)} />}
 
+      {/* Full-screen EMERGENCY alert overlay — a pulsing red vignette + banner so
+          it's unmistakable an emergency is active. pointer-events-none keeps the
+          console fully usable underneath. */}
+      {emergencyOverlayActive && (
+        <div className="fixed inset-0 z-[80] pointer-events-none emg-screen-alert">
+          <div className="emg-screen-vignette" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-600/90 text-white text-xs font-bold uppercase tracking-widest shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            {t('emergencyHud.alertBanner')}
+          </div>
+        </div>
+      )}
+
       {/* Interactive Emergency Response HUD (floating, non-blocking) */}
       {state.emergencyScenarioId && (
         <EmergencyResponseHud
           state={state}
           toast={emergencyToast}
           onCancel={cancelEmergencyScenario}
+          onHintUsed={handleAssessmentHintUsed}
+          hideSteps={state.assessment?.active && state.assessment.difficulty === 'realistic'}
+          reactDeadline={assessmentReactDeadline}
+        />
+      )}
+
+      {/* Timed Assessment status HUD (floating, top-left) */}
+      {state.assessment && state.assessment.active && !state.assessment.ended && (
+        <AssessmentHud state={state} onEnd={endAssessment} />
+      )}
+
+      {/* End-of-run scored report */}
+      {state.assessment && state.assessment.ended && (
+        <AssessmentReportModal
+          session={state.assessment}
+          onClose={dismissAssessmentReport}
+          onShowLeaderboard={() => setShowLeaderboard(true)}
+          onRestart={() => {
+            const op = state.assessment!.operator;
+            const mins = Math.round(state.assessment!.targetDurationSec / 60);
+            const diff = state.assessment!.difficulty;
+            dismissAssessmentReport();
+            // Re-arm on the next tick so state.assessment is cleared first.
+            setTimeout(() => startAssessment(op, mins, diff), 50);
+          }}
+        />
+      )}
+
+      {/* Assessment leaderboard */}
+      {showLeaderboard && (
+        <LeaderboardModal
+          onClose={() => setShowLeaderboard(false)}
+          highlightId={state.assessment?.ended ? `lb-${state.assessment.endedAt}` : undefined}
         />
       )}
 

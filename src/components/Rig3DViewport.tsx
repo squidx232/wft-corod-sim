@@ -317,6 +317,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // Meshes of the LIVE over-well rod guide (only), highlighted by operation mode:
   // blue on RIH, green on POOH, red on slip. The storage-rack guides are excluded.
   const injectorGuideMeshesRef = useRef<THREE.Mesh[]>([]);
+  // Rest positions of the live-guide section tubes, so we can shake them slightly
+  // in sympathy with the rod (physical vibration, not just the emissive glow).
+  const guideMeshRestRef = useRef<Array<{ x: number; y: number }>>([]);
   // Background pumpjacks: each entry drives a nodding-beam animation. `phase`
   // offsets each unit so they don't all nod in unison.
   const pumpjacksRef = useRef<Array<{ walkingBeam: THREE.Group; crank: THREE.Group; phase: number; rate: number }>>([]);
@@ -720,10 +723,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const gSpeed = rodS.rodSpeedFtPerMin;
         const gSpeedRatio = Math.min(1, Math.abs(gSpeed) / 85); // 0..1 (matches rod)
         const gPulse = 0.5 + 0.5 * Math.sin(time * 0.02);       // SAME pulse as the rod
-        // The guide flashes with the SAME colours, frequency & pulse as the rod,
-        // but at 70% LOWER intensity (× 0.3) so it reads as a subtler sympathetic
-        // twitch rather than matching the rod's brightness.
-        const GUIDE_FACTOR = 0.3;                 // 70% lower than the rod
+        // The guide flashes with the SAME colours, frequency & pulse as the rod.
+        // Bumped from 0.3 → 0.55 for a more pronounced sympathetic glow (user
+        // requested stronger guide vibration/highlight).
+        const GUIDE_FACTOR = 0.55;
         let emissiveHex = 0x000000;
         let targetIntensity = 0;
         if (rodS.rodGripSlipping || clampOn) {
@@ -736,12 +739,30 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           emissiveHex = 0x22c55e;                 // POOH (pulling out / up) → green
           targetIntensity = gSpeedRatio * 0.5 * gPulse * GUIDE_FACTOR; // rod POOH × 0.3
         }
-        for (const gm of injectorGuideMeshesRef.current) {
+        // Small physical vibration of the guide sections, in sympathy with the
+        // rod (same frequency as injector/BOP). Kept subtle so the rod stays
+        // visually inside the channel; scales with rod speed.
+        const guideRunning = Math.abs(gSpeed) > 0.5;
+        const gf = time * 0.09;
+        const gShake = guideRunning ? (0.012 * gSpeedRatio + 0.004) * 0.8 : 0;
+        for (let gi = 0; gi < injectorGuideMeshesRef.current.length; gi++) {
+          const gm = injectorGuideMeshesRef.current[gi];
           const gmat = gm.material as THREE.MeshStandardMaterial;
           gmat.color.setHex(0x111827);            // base stays dark steel
           gmat.emissive.setHex(emissiveHex);
           // Ease intensity toward target so it twitches on/off smoothly with speed.
           gmat.emissiveIntensity = THREE.MathUtils.lerp(gmat.emissiveIntensity, targetIntensity, 0.3);
+          const rest = guideMeshRestRef.current[gi];
+          if (rest) {
+            if (guideRunning) {
+              // Phase-offset per section so the guide ripples rather than shifting rigidly.
+              gm.position.x = rest.x + Math.sin(gf * 1.1 + gi * 0.6) * gShake;
+              gm.position.y = rest.y + Math.cos(gf * 1.4 + gi * 0.9) * gShake * 0.7;
+            } else {
+              gm.position.x = THREE.MathUtils.lerp(gm.position.x, rest.x, 0.2);
+              gm.position.y = THREE.MathUtils.lerp(gm.position.y, rest.y, 0.2);
+            }
+          }
         }
       }
 
@@ -827,10 +848,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       if (containmentArmRef.current) {
         const rest = containmentArmRestRef.current;
         if (isRunning) {
-          const shake = (0.012 * speedRatio + 0.004) * 0.5; // ~50% of injector amplitude
+          const shake = (0.012 * speedRatio + 0.004) * 1.1; // ~110% of injector amplitude (increased)
           const f = time * 0.09;                            // matched frequency
           containmentArmRef.current.position.x = rest.x + Math.sin(f * 1.1) * shake;
-          containmentArmRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.35;
+          containmentArmRef.current.position.y = rest.y + Math.cos(f * 1.7) * shake * 0.6;
+          containmentArmRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.5;
         } else {
           containmentArmRef.current.position.x = THREE.MathUtils.lerp(containmentArmRef.current.position.x, rest.x, 0.2);
           containmentArmRef.current.rotation.z = THREE.MathUtils.lerp(containmentArmRef.current.rotation.z, 0, 0.2);
@@ -3281,6 +3303,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // 0.18 square-section beam reads as a box-beam; the rod (radius ~0.045) runs
     // through the same curve so it stays visually within the guide.
     buildGuideAlongCurve(scene, getRodGuideCurve(), injectorGuideMeshesRef.current, 0.18);
+    // Snapshot each section's rest position for the sympathetic physical shake.
+    guideMeshRestRef.current = injectorGuideMeshesRef.current.map((m) => ({ x: m.position.x, y: m.position.y }));
   }
 
   // Portable field welder skid (red Weatherford-style unit): steel skid base,

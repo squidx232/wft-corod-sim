@@ -52,6 +52,9 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
   const isChargePressureCritical =
     hydraulics.chargePressure < 250 && hydraulics.engineRunning;
   const isSafetyEngaged = hydraulics.safetyClampLever === 'ON';
+  // Rod running (RIH/POOH/any operation) → gauges vibrate harder.
+  const operationActive =
+    Math.abs(state.rod.rodSpeedFtPerMin) > 0.5 || Math.abs(joystickPosition) > 0.05;
 
   const handleSafetyReliefClick = () => {
     soundManager.playMetalTap();
@@ -167,6 +170,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
               <div className="grid grid-cols-3 gap-2 sm:gap-3 items-center">
                 {/* 1. CHARGE PRESSURE — hydraulic charge/freewheel circuit (0-600) */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-charge-press"
                   letterLabel="E"
                   title="CHARGE PRESSURE"
@@ -188,6 +192,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
 
                 {/* 2. SYSTEM PRESSURE — main regulated circuit, max 2500 PSI       */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-system-press"
                   letterLabel="F"
                   title="SYSTEM PRESSURE"
@@ -209,6 +214,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
 
                 {/* 3. PICKER PRESSURE — picker/crane hydraulic circuit (0-5000)     */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-picker-press"
                   title="PICKER PRESSURE"
                   subtitle="0 - 5000 PSI"
@@ -231,6 +237,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
               <div className="grid grid-cols-3 gap-2 sm:gap-4 items-center">
                 {/* 4. CHAIN TENSION — 100-200 PSI standard, 400-600 PSI heavy-duty */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-chain-tension"
                   letterLabel="G"
                   title="CHAIN TENSION"
@@ -252,6 +259,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
 
                 {/* 5. SQUEEZE PRESSURE — gripper block clamp, 0-2500 PSI           */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-squeeze-press"
                   letterLabel="I"
                   title="SQUEEZE PRESSURE"
@@ -278,6 +286,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
 
                 {/* 6. SAFETY PRESSURE — accumulator/safety-clamp circuit (nom 2800) */}
                 <AnalogGauge
+                  operationActive={operationActive}
                   id="gauge-safety-press"
                   letterLabel="H"
                   title="SAFETY PRESSURE"
@@ -310,6 +319,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 {/* Large Gauge: DOWN PRESSURE */}
                 <div className="flex flex-col items-center">
                   <AnalogGauge
+                    operationActive={operationActive}
                     id="gauge-down-press-large"
                     letterLabel="M"
                     title="DOWN PRESSURE"
@@ -333,6 +343,7 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 {/* Large Gauge: UP PRESSURE */}
                 <div className="flex flex-col items-center">
                   <AnalogGauge
+                    operationActive={operationActive}
                     id="gauge-up-press-large"
                     letterLabel="L"
                     title="UP PRESSURE"

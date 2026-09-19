@@ -12,7 +12,12 @@ export const en: Record<string, string> = {
 
   // --- App header ---
   'header.title': 'COROD® Mobile Gripper™ Simulator',
-  'header.subtitle': 'Weatherford Continuous Sucker Rod & Wellsite Operations Trainer',
+  'header.subtitle': 'Weatherford Continuous Rod & Wellsite Operations Trainer',
+  // --- Intro splash ---
+  'intro.eyebrow': 'Wellsite Operations Training',
+  'intro.title': 'COROD® Mobile Gripper™ Operator Simulator',
+  'intro.subtitle': 'An immersive Weatherford continuous-rod & wellsite operations trainer with realistic hydraulics, authentic console controls, and timed emergency-response assessment.',
+  'intro.start': 'Start',
   'header.rev': 'Rev 25',
   'header.level': 'Level',
   'header.level.trainee': 'Trainee',
