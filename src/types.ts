@@ -5,7 +5,16 @@
 
 export type DifficultyLevel = 'trainee' | 'operator' | 'specialist';
 
-export type SimulatorTab = 'simulator' | 'console' | 'auxiliary' | 'scenarios' | 'drills' | 'logbook' | 'manual';
+export type SimulatorTab = 'simulator' | 'console' | 'auxiliary' | 'scenarios' | 'drills' | 'logbook' | 'manual' | 'setup';
+
+/**
+ * Multi-tiered squeeze-pressure alarm state (Slip & Free-Fall detection).
+ * - 'none'      : squeeze pressure is within tolerance of the required value.
+ * - 'slip'      : Tier 1 — actual squeeze is ≥50 psi below required (minor slip).
+ * - 'freefall'  : Tier 2 — discrepancy widened to ≥100 psi (free-fall risk).
+ * - 'emergency' : Tier 3 — operator failed to react within 20 s → system lockout.
+ */
+export type AlarmTier = 'none' | 'slip' | 'freefall' | 'emergency';
 
 export type JobType = 'install' | 'surface' | 'rerun' | 'fishing' | 'pump_change' | 'slant';
 
@@ -303,6 +312,16 @@ export interface LeaderboardEntry {
   timestamp: number;
 }
 
+/**
+ * Equipment configuration selected by the operator (Injector Profiles + units).
+ * The active injector profile dictates the required-squeeze curve and the hard
+ * squeeze ceiling; measurement units drive gauge/label formatting.
+ */
+export interface EquipmentConfig {
+  activeInjectorProfileId: string | null;
+  measurementUnits: 'imperial' | 'metric';
+}
+
 export interface SimulatorState {
   hydraulics: HydraulicState;
   bop: BOPState;
@@ -311,6 +330,19 @@ export interface SimulatorState {
   picker: KnucklePickerState;
   yTool: YToolState;
   joystickPosition: number; // -1.0 (full down) to 1.0 (full up)
+
+  // Equipment configuration (Injector Profiles + measurement units).
+  equipmentConfig: EquipmentConfig;
+  // Id of the currently-applied well design (null = none / manual setup).
+  activeWellDesignId: string | null;
+
+  // Multi-tiered squeeze-pressure alarm (Slip / Free-Fall / Emergency).
+  alarmTier: AlarmTier;
+  // epoch ms when the current (non-'none') alarm condition first began; used to
+  // drive the Tier-3 20-second escalation timeout. null when no alarm active.
+  alarmSince: number | null;
+  // True once Tier 3 has latched a critical system lockout (cleared on reset).
+  alarmLockout: boolean;
   
   // Global & Simulation Meta
   activeTab: SimulatorTab;

@@ -209,6 +209,27 @@ html, body {
   animation: emgHudPulse 1.4s ease-in-out infinite;
 }
 
+/* ===== Squeeze-pressure alarm: subtle, NON-BLOCKING screen-edge highlight ===== */
+@keyframes alarmEdgePulse {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 0.6; }
+}
+@keyframes alarmEdgePulseCritical {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.9; }
+}
+.alarm-screen-highlight {
+  /* Red glow at the edges only; centre stays fully transparent & interactive. */
+  box-shadow: inset 0 0 90px 22px rgba(220, 38, 38, 0.5);
+  border: 2px solid rgba(220, 38, 38, 0.5);
+  animation: alarmEdgePulse 1.5s ease-in-out infinite;
+}
+.alarm-screen-highlight--critical {
+  box-shadow: inset 0 0 130px 34px rgba(185, 28, 28, 0.7);
+  border: 3px solid rgba(185, 28, 28, 0.75);
+  animation: alarmEdgePulseCritical 0.7s ease-in-out infinite;
+}
+
 /* ===== Intro / buffer splash page ===== */
 .intro-splash {
   position: fixed;

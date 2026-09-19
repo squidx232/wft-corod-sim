@@ -15,5 +15,6 @@ import { station } from './station';
 import { modals } from './modals';
 import { scenarios } from './scenarios';
 import { auxiliary } from './auxiliary';
+import { setup } from './setup';
 
-export const PARTS: TranslationPart[] = [station, modals, scenarios, auxiliary];
+export const PARTS: TranslationPart[] = [station, modals, scenarios, auxiliary, setup];

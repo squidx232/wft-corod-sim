@@ -12,6 +12,24 @@ import {
   LogbookEntry,
 } from './types';
 import { ROD_SPECIFICATIONS, SQUEEZE_PRESSURE_CURVES } from './data/manualReference';
+import { requiredSqueezeForWeight } from './data/injectorProfiles';
+import {
+  loadAllInjectorProfiles,
+  loadEquipmentSelection,
+  saveEquipmentSelection,
+} from './utils/equipmentConfig';
+import {
+  loadAllWellDesigns,
+  loadActiveWellDesignId,
+  saveActiveWellDesignId,
+} from './utils/wellDesigns';
+import {
+  wellDesignTotalDepthFt,
+  weightAtDepth,
+  stringWeightAtDepth,
+  currentWellStage,
+} from './data/wellDesigns';
+import { WellSetupPanel } from './components/WellSetupPanel';
 import {
   EMERGENCY_SCENARIOS,
   getEmergencyScenario,
@@ -167,6 +185,14 @@ const INITIAL_STATE: SimulatorState = {
     depthReadingFt: 0,
   },
   joystickPosition: 0,
+  equipmentConfig: {
+    activeInjectorProfileId: 'preset-standard-mg',
+    measurementUnits: 'imperial',
+  },
+  activeWellDesignId: null,
+  alarmTier: 'none',
+  alarmSince: null,
+  alarmLockout: false,
   activeTab: 'console',
   difficulty: 'operator',
   activeScenarioId: 'scenario-4-install',
@@ -249,15 +275,33 @@ function useMultiScreenSync(
 ) {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const lastBroadcastRef = useRef(0);
+  const isSecondaryRef = useRef(isSecondary);
+  isSecondaryRef.current = isSecondary;
 
   useEffect(() => {
     const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     channelRef.current = ch;
     ch.onmessage = (e) => {
       if (e.data?.type === 'state-update') {
-        setState(e.data.state);
+        // Only SECONDARY windows accept full-state snapshots (from the primary).
+        // The primary must never overwrite its own authoritative state with an
+        // echo (which could arrive from another window).
+        if (isSecondaryRef.current) setState(e.data.state);
       } else if (e.data?.type === 'state-patch') {
-        setState((prev) => ({ ...prev, ...e.data.patch }));
+        // Only the PRIMARY applies control patches sent by secondary windows.
+        // It then re-broadcasts authoritative state on its next tick. Secondary
+        // windows ignore patches (they never receive their own echo, and should
+        // not act on other secondaries' patches).
+        if (!isSecondaryRef.current) {
+          setState((prev) => ({ ...prev, ...e.data.patch }));
+          // Immediately re-broadcast so the originating pop-up sees the applied
+          // value without waiting up to a full tick (prevents the visible
+          // "snap back then apply" flicker).
+          setState((prev) => {
+            channelRef.current?.postMessage({ type: 'state-update', state: prev });
+            return prev;
+          });
+        }
       }
     };
     return () => ch.close();
@@ -317,6 +361,13 @@ export default function App() {
   const viewMode = useRef(getViewMode()).current;
   const isSecondary = viewMode !== 'full';
   const { broadcastPatch } = useMultiScreenSync(state, setState, isSecondary);
+
+  // Per-WINDOW (local) audio enable. This is NOT synced across windows, so each
+  // pop-up (3D / console / gauges) and the main dashboard can be muted
+  // independently — otherwise running multiple windows plays every sound 2–3×.
+  // Secondary pop-ups default to MUTED so opening them doesn't stack audio; the
+  // operator can enable sound on whichever window they want to hear.
+  const [localAudioOn, setLocalAudioOn] = useState<boolean>(viewMode === 'full');
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
   const [showJsaModal, setShowJsaModal] = useState<boolean>(false);
   const [showEngineStartModal, setShowEngineStartModal] = useState<boolean>(false);
@@ -325,13 +376,75 @@ export default function App() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Sound muting
+  // Available injector profiles (presets + saved custom), loaded once and kept
+  // in a ref so the physics tick can read the active profile's curve without
+  // re-subscribing. Refreshed when the operator saves/deletes profiles.
+  const injectorProfilesRef = useRef(loadAllInjectorProfiles());
+  const [injectorProfiles, setInjectorProfiles] = useState(injectorProfilesRef.current);
+  injectorProfilesRef.current = injectorProfiles;
+
+  const [wellDesigns, setWellDesigns] = useState(loadAllWellDesigns());
+  // Ref mirror so the physics tick can resolve the active (possibly tapered)
+  // design without re-subscribing.
+  const wellDesignsRef = useRef(wellDesigns);
+  wellDesignsRef.current = wellDesigns;
+
+  // epoch ms of the operator's most recent squeeze/clamp control action, used to
+  // decide whether they "engaged the controls" in time for the Tier-3 timeout.
+  const lastControlActionRef = useRef<number>(0);
+
+  // Hydrate the persisted equipment config + active well design on mount.
   useEffect(() => {
-    soundManager.setMuted(!state.soundEnabled);
-  }, [state.soundEnabled]);
+    const sel = loadEquipmentSelection();
+    const activeWell = loadActiveWellDesignId();
+    setState((prev) => ({
+      ...prev,
+      equipmentConfig: {
+        activeInjectorProfileId: sel.activeInjectorProfileId,
+        measurementUnits: sel.measurementUnits,
+      },
+      activeWellDesignId: activeWell,
+    }));
+  }, []);
+
+  // Sound muting — combine the GLOBAL toggle (synced across windows) with this
+  // window's LOCAL toggle. This window is audible only when both are enabled, so
+  // each pop-up can be silenced independently to avoid stacked/tripled audio.
+  useEffect(() => {
+    soundManager.setMuted(!(state.soundEnabled && localAudioOn));
+  }, [state.soundEnabled, localAudioOn]);
+
+  // Drive the looping alarm audio from the current alarm tier. Streams the slip
+  // loop for Tier 1 and the free-fall loop for Tier 2 (both at 50% volume), and
+  // fires a critical lockout burst on Tier 3. Only streams while the condition
+  // holds (respects global mute inside the soundManager).
+  const prevAlarmTierRef = useRef(state.alarmTier);
+  useEffect(() => {
+    const tier = state.alarmTier;
+    if (tier === 'slip') {
+      soundManager.stopAlarmLoop('freefall');
+      soundManager.startAlarmLoop('slip');
+    } else if (tier === 'freefall' || tier === 'emergency') {
+      soundManager.stopAlarmLoop('slip');
+      soundManager.startAlarmLoop('freefall');
+    } else {
+      soundManager.stopAllAlarmLoops();
+    }
+    // Escalation to emergency → one-shot critical lockout burst.
+    if (tier === 'emergency' && prevAlarmTierRef.current !== 'emergency') {
+      soundManager.playCriticalLockoutAlarm();
+    }
+    prevAlarmTierRef.current = tier;
+  }, [state.alarmTier]);
 
   // Main Physics & Hydraulic Simulation Tick (100ms interval)
+  //
+  // Only the PRIMARY window runs the simulation. Secondary pop-ups receive the
+  // authoritative state via BroadcastChannel; running physics in a secondary too
+  // would double-simulate and fight the primary's broadcasts (a cause of pop-up
+  // controls appearing to "reset").
   useEffect(() => {
+    if (isSecondary) return;
     const timer = setInterval(() => {
       setState((prev) => {
         if (!prev.isSimulating) return prev;
@@ -437,11 +550,19 @@ export default function App() {
             bop.handPumpStrokes = 0;
           }
         } else if (bop.bopPumpSwitch) {
-          // Per manual: "pump up the Reagan to 1250psi" — auto pump caps at 1250
-          hyd.bopPressure = Math.min(1250, hyd.bopPressure + 80);
-          if (hyd.bopPressure >= 1000) {
-            bop.reganBopClosed = true;
+          // Auto pump ramps BOP pressure up toward the OPERATOR-SET regulator
+          // target (bopRegulatorPsi), not a fixed value. The regulator is clamped
+          // to the equipment ceiling (1500 psi) so it can't be driven unsafely.
+          const target = Math.max(0, Math.min(1500, bop.bopRegulatorPsi));
+          if (hyd.bopPressure < target) {
+            hyd.bopPressure = Math.min(target, hyd.bopPressure + 80);
+          } else if (hyd.bopPressure > target) {
+            // If the operator lowers the regulator below current pressure, the
+            // pump stops adding and pressure eases down toward the new setpoint.
+            hyd.bopPressure = Math.max(target, hyd.bopPressure - 40);
           }
+          // The Regan bag is considered sealed once at/above the 1000 psi minimum.
+          bop.reganBopClosed = hyd.bopPressure >= 1000;
         } else {
           // BUG FIX: BOP pressure leaks slowly when pump is off (no perfect seal)
           hyd.bopPressure = Math.max(0, hyd.bopPressure - 2);
@@ -451,13 +572,27 @@ export default function App() {
         }
 
         // 3. String Dynamics & Speed Calculations
+        // Resolve the active well design (if any) so tapered strings compute the
+        // correct per-depth linear weight and total string weight.
+        const activeDesign = prev.activeWellDesignId
+          ? wellDesignsRef.current.find((d) => d.id === prev.activeWellDesignId)
+          : undefined;
+        const isTapered = !!(activeDesign && activeDesign.segments && activeDesign.segments.length > 1);
+
+        // Linear weight at the gripper: for a tapered string this is the section
+        // currently at the surface/gripper; otherwise the single rod spec weight.
         const spec = ROD_SPECIFICATIONS[rod.rodSize] || ROD_SPECIFICATIONS['#6R'];
-        rod.linearWeightLbsPerFt = spec.weightLbsPerFt;
+        rod.linearWeightLbsPerFt = activeDesign
+          ? weightAtDepth(activeDesign, rod.currentDepthFt)
+          : spec.weightLbsPerFt;
 
         // Tag bar weight: ramp gradually when lifting off bottom (per manual:
         // weight depends on "amount of COROD which is down hole at any point").
         // Avoid sudden snap from 0→full that would spike squeeze requirement.
-        const calculatedWeight = rod.currentDepthFt * rod.linearWeightLbsPerFt;
+        // For tapered strings, sum each section's contribution up to depth.
+        const calculatedWeight = isTapered
+          ? stringWeightAtDepth(activeDesign!, rod.currentDepthFt)
+          : rod.currentDepthFt * rod.linearWeightLbsPerFt;
         if (rod.isLandedOnTagBar) {
           // While on tag bar, weight is zero (string is supported by the well)
           rod.totalStringWeightLbs = 0;
@@ -583,6 +718,86 @@ export default function App() {
           newTelemetry = [...prev.telemetry.slice(-(30 - 1)), pt];
         }
 
+        // ---------------------------------------------------------------------
+        // SQUEEZE-PRESSURE ALARM (Slip & Free-Fall detection) — Tiers 1/2/3
+        // ---------------------------------------------------------------------
+        // Required squeeze comes from the ACTIVE INJECTOR PROFILE when one is
+        // selected (its curve + head geometry), otherwise falls back to the
+        // manual reference curve already computed above.
+        let requiredSqueeze = rod.calculatedSqueezeRequiredPsi;
+        const activeProfile =
+          prev.equipmentConfig.activeInjectorProfileId != null
+            ? injectorProfilesRef.current.find(
+                (p) => p.id === prev.equipmentConfig.activeInjectorProfileId,
+              )
+            : undefined;
+        if (activeProfile) {
+          requiredSqueeze = requiredSqueezeForWeight(activeProfile, rod.totalStringWeightLbs);
+          rod.calculatedSqueezeRequiredPsi = requiredSqueeze;
+        }
+
+        // The alarm only makes sense while actually gripping/operating: PTO
+        // engaged, squeeze circuit switched on, string under load at depth, and
+        // the rod not secured by the safety clamp / mechanical clamps.
+        const alarmArmed =
+          hyd.ptoEngaged &&
+          hyd.squeezePressureSwitch &&
+          !hyd.emergencyStopTripped &&
+          rod.currentDepthFt > 100 &&
+          rod.totalStringWeightLbs > 200 &&
+          !(hyd.safetyClampLever === 'ON') &&
+          !(rod.mechanicalClampsInstalled > 0 && rod.clampTorqueFtLbs >= 400);
+
+        const discrepancy = alarmArmed
+          ? Math.max(0, requiredSqueeze - hyd.squeezePressure)
+          : 0;
+
+        // Hitting the safety relief (bleeding hydraulic pressure) DURING an
+        // operation dumps the squeeze circuit → immediate free-fall condition.
+        // This forces the free-fall tier regardless of the measured discrepancy.
+        const safetyReliefDuringOp =
+          hyd.ptoEngaged &&
+          hyd.safetyBleedValveOpen &&
+          rod.currentDepthFt > 100 &&
+          rod.totalStringWeightLbs > 200 &&
+          !(hyd.safetyClampLever === 'ON') &&
+          !(rod.mechanicalClampsInstalled > 0 && rod.clampTorqueFtLbs >= 400);
+        // Effective discrepancy used for tiering: at least 100 (free-fall) if the
+        // relief was hit during an operation.
+        const effectiveDiscrepancy = safetyReliefDuringOp
+          ? Math.max(discrepancy, 100)
+          : discrepancy;
+
+        const now = Date.now();
+        let alarmTier = prev.alarmTier;
+        let alarmSince = prev.alarmSince;
+        // Whether the alarm is currently "active" (a discrepancy exists).
+        const alarmActive = effectiveDiscrepancy >= 50;
+
+        if (alarmActive) {
+          // Record when this alarm episode began (for the Tier-3 20s timeout).
+          if (prev.alarmTier === 'none' || alarmSince == null) alarmSince = now;
+
+          // Base tier from the discrepancy magnitude (both slip & free-fall are
+          // shown in red to match the rod/guide highlight ranges).
+          const baseTier: 'slip' | 'freefall' = effectiveDiscrepancy >= 100 ? 'freefall' : 'slip';
+          alarmTier = baseTier;
+
+          // Tier 3 — Emergency timeout: operator failed to engage controls within
+          // 20 s of the trigger. "Engaging controls" = raising the squeeze target
+          // or moving the safety clamp since the alarm began. This is NON-BLOCKING
+          // and auto-clears the instant the squeeze is corrected below.
+          const reacted = lastControlActionRef.current > (alarmSince ?? now);
+          if (!reacted && now - alarmSince >= 20000) {
+            alarmTier = 'emergency';
+          }
+        } else {
+          // Within tolerance — operator has corrected. Clear everything.
+          alarmTier = 'none';
+          alarmSince = null;
+        }
+        const alarmLockout = false;
+
         // Audio updates
         soundManager.updateEngineSound(hyd.engineRunning, hyd.engineRpm, hyd.ptoEngaged);
         soundManager.updateHydraulicSound(hyd.ptoEngaged, hyd.systemPressure);
@@ -595,6 +810,9 @@ export default function App() {
           yTool,
           telemetry: newTelemetry,
           scenarioTimeElapsedSeconds: timeElapsed,
+          alarmTier,
+          alarmSince,
+          alarmLockout,
         };
       });
     }, 100);
@@ -723,40 +941,123 @@ export default function App() {
     return () => clearInterval(interval);
   }, [state.emergencyScenarioId]);
 
-  // Update handlers
-  const updateHydraulics = (updates: Partial<SimulatorState['hydraulics']>) => {
+  // ---------------------------------------------------------------------------
+  // Equipment configuration & Well design handlers
+  // ---------------------------------------------------------------------------
+  const handleSelectInjectorProfile = (id: string) => {
     setState((prev) => ({
       ...prev,
-      hydraulics: { ...prev.hydraulics, ...updates },
+      equipmentConfig: { ...prev.equipmentConfig, activeInjectorProfileId: id },
     }));
+    saveEquipmentSelection({
+      activeInjectorProfileId: id,
+      measurementUnits: stateRef.current.equipmentConfig.measurementUnits,
+    });
+  };
+
+  const handleSetMeasurementUnits = (units: 'imperial' | 'metric') => {
+    setState((prev) => ({
+      ...prev,
+      equipmentConfig: { ...prev.equipmentConfig, measurementUnits: units },
+    }));
+    saveEquipmentSelection({
+      activeInjectorProfileId: stateRef.current.equipmentConfig.activeInjectorProfileId,
+      measurementUnits: units,
+    });
+  };
+
+  // Apply a well design to the live simulation: set total (possibly tapered)
+  // depth, and the rod size / linear weight for the section currently at the
+  // gripper. For tapered strings these track depth in the physics loop.
+  const handleApplyWellDesign = (design: import('./data/wellDesigns').WellDesign) => {
+    saveActiveWellDesignId(design.id);
+    const totalDepth = wellDesignTotalDepthFt(design);
+    setState((prev) => {
+      const depth = Math.min(prev.rod.currentDepthFt, totalDepth);
+      return {
+        ...prev,
+        activeWellDesignId: design.id,
+        rod: {
+          ...prev.rod,
+          totalWellDepthFt: totalDepth,
+          currentDepthFt: depth,
+          rodSize: design.activeRodSize,
+          linearWeightLbsPerFt: weightAtDepth(design, depth),
+        },
+      };
+    });
+    soundManager.playSuccessChime();
+  };
+
+  // Safety interlock: mechanical clamps may ONLY be installed to secure the well
+  // when the string is held (gripper brake OR safety clamp engaged) AND the reel
+  // is 100% stationary (no rod movement). Installing clamps while the injector /
+  // operation is running is unsafe and is blocked.
+  const canInstallMechanicalClamp = (s: SimulatorState): boolean => {
+    const held = s.hydraulics.gripperBrakeSwitch || s.hydraulics.safetyClampLever === 'ON';
+    const reelStationary = Math.abs(s.rod.rodSpeedFtPerMin) < 0.01;
+    return held && reelStationary;
+  };
+
+  // Update handlers
+  //
+  // MULTI-WINDOW SYNC: the PRIMARY window runs the physics tick and broadcasts
+  // the full state ~20fps. SECONDARY pop-ups (?view=console etc.) must NOT rely
+  // on their own local setState for sub-object edits, because the next primary
+  // broadcast would immediately overwrite them (this caused pop-up controls to
+  // "reset" — e.g. squeeze 800→850 snapping back to 800). Instead, a secondary
+  // window sends a merged PATCH of the whole sub-object to the primary, which
+  // applies it and re-broadcasts it as authoritative state. We also apply it
+  // locally for instant feedback.
+  const applySubUpdate = <K extends keyof SimulatorState>(
+    key: K,
+    updates: Partial<SimulatorState[K]>,
+  ) => {
+    if (isSecondary) {
+      // Secondary windows are NOT authoritative: send a merged patch to the
+      // primary and let its immediate re-broadcast update us. Applying locally
+      // here too would cause a visible "snap back then re-apply" as the primary's
+      // in-flight full-state broadcast (with the old value) races the patch.
+      const merged = {
+        ...(stateRef.current[key] as object),
+        ...(updates as object),
+      } as SimulatorState[K];
+      broadcastPatch({ [key]: merged } as Partial<SimulatorState>);
+      return;
+    }
+    setState((prev) => ({ ...prev, [key]: { ...(prev[key] as object), ...(updates as object) } }));
+  };
+
+  const updateHydraulics = (updates: Partial<SimulatorState['hydraulics']>) => {
+    // Track corrective control actions for the Tier-3 squeeze-alarm timeout:
+    // raising the squeeze target or engaging the safety clamp counts as the
+    // operator "engaging the controls" in response to a slip / free-fall alarm.
+    const prevHyd = stateRef.current.hydraulics;
+    const raisedSqueeze =
+      updates.squeezePressureTarget != null &&
+      updates.squeezePressureTarget > prevHyd.squeezePressureTarget;
+    const engagedSafety =
+      updates.safetyClampLever === 'ON' && prevHyd.safetyClampLever !== 'ON';
+    if (raisedSqueeze || engagedSafety) {
+      lastControlActionRef.current = Date.now();
+    }
+    applySubUpdate('hydraulics', updates);
   };
 
   const updateBop = (updates: Partial<SimulatorState['bop']>) => {
-    setState((prev) => ({
-      ...prev,
-      bop: { ...prev.bop, ...updates },
-    }));
+    applySubUpdate('bop', updates);
   };
 
   const updateYTool = (updates: Partial<SimulatorState['yTool']>) => {
-    setState((prev) => ({
-      ...prev,
-      yTool: { ...prev.yTool, ...updates },
-    }));
+    applySubUpdate('yTool', updates);
   };
 
   const updateOutriggers = (updates: Partial<SimulatorState['outriggers']>) => {
-    setState((prev) => ({
-      ...prev,
-      outriggers: { ...prev.outriggers, ...updates },
-    }));
+    applySubUpdate('outriggers', updates);
   };
 
   const updatePicker = (updates: Partial<SimulatorState['picker']>) => {
-    setState((prev) => ({
-      ...prev,
-      picker: { ...prev.picker, ...updates },
-    }));
+    applySubUpdate('picker', updates);
   };
 
   const handleJoystickChange = (pos: number) => {
@@ -784,6 +1085,10 @@ export default function App() {
         soundManager.playBuzzerAlert(0.5);
         // Allow but warn — per manual: "NEVER move COROD with < 400 psi squeeze"
       }
+    }
+    if (isSecondary) {
+      broadcastPatch({ joystickPosition: pos });
+      return;
     }
     setState((prev) => ({ ...prev, joystickPosition: pos }));
   };
@@ -1411,6 +1716,10 @@ export default function App() {
 
       // ----- Gripper / Clamp -----
       case 'clamp.install': {
+        if (!canInstallMechanicalClamp(s)) {
+          soundManager.playBuzzerAlert(0.5);
+          break;
+        }
         const count = Math.min(2, s.rod.mechanicalClampsInstalled + 1);
         setState((prev) => ({ ...prev, rod: { ...prev.rod, mechanicalClampsInstalled: count, clampTorqueFtLbs: count > 0 ? 550 : 0 } }));
         break;
@@ -1468,7 +1777,16 @@ export default function App() {
 
       // ----- Misc & Emergency Drill Actions -----
       case 'airHorn': soundManager.playAirHorn?.(); setState((prev) => ({ ...prev, airHornSounded: true })); break;
-      case 'sound.toggle': setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled })); break;
+      case 'sound.toggle':
+        // Toggle THIS window's local audio (enabling also flips global master on).
+        setLocalAudioOn((v) => {
+          const next = !v;
+          if (next && !stateRef.current.soundEnabled) {
+            setState((prev) => ({ ...prev, soundEnabled: true }));
+          }
+          return next;
+        });
+        break;
       case 'evacuate.muster': setState((prev) => ({ ...prev, evacuatedToMuster: true })); break;
       case 'scba.equip': setState((prev) => ({ ...prev, scbaEquipped: true })); break;
       case 'fishing.assembleSocket': setState((prev) => ({ ...prev, fishingSocketAssembled: true })); break;
@@ -1515,9 +1833,29 @@ export default function App() {
   // =========================================================================
   // SECONDARY WINDOW RENDERING — pop-out views for multi-monitor setup
   // =========================================================================
+  // Floating per-window audio toggle for the secondary pop-ups. Controls ONLY
+  // this window's sound so each pop-up can be muted independently.
+  const localAudioToggle = (
+    <button
+      onClick={() => setLocalAudioOn((v) => !v)}
+      className={cx(
+        'fixed top-3 right-3 z-[200] inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border shadow-lg transition-colors text-xs font-semibold',
+        localAudioOn
+          ? 'bg-green-700 border-green-300 text-white'
+          : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50',
+      )}
+      title={localAudioOn ? 'Mute this window' : 'Unmute this window'}
+      aria-label={localAudioOn ? 'Mute this window' : 'Unmute this window'}
+    >
+      {localAudioOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+      <span>{localAudioOn ? 'Sound: This window' : 'Muted'}</span>
+    </button>
+  );
+
   if (viewMode === '3d') {
     return (
       <div className="h-screen w-screen bg-slate-100 overflow-hidden">
+        {localAudioToggle}
         <Rig3DViewport
           state={state}
           fillHeight={true}
@@ -1529,6 +1867,7 @@ export default function App() {
   if (viewMode === 'console') {
     return (
       <div className="min-h-screen bg-slate-100 text-slate-800 p-4 overflow-auto">
+        {localAudioToggle}
         <div className="text-center text-xs text-slate-500 mb-2 font-mono">
           COROD® MG CONTROL CONSOLE — SECONDARY MONITOR
         </div>
@@ -1548,6 +1887,7 @@ export default function App() {
   if (viewMode === 'gauges') {
     return (
       <div className="min-h-screen bg-slate-100 text-slate-800 p-4 overflow-auto">
+        {localAudioToggle}
         <div className="text-center text-xs text-slate-500 mb-2 font-mono">
           COROD® MG GAUGE PANEL — SECONDARY MONITOR
         </div>
@@ -1620,19 +1960,31 @@ export default function App() {
               <span>{lang === 'en' ? 'العربية' : 'English'}</span>
             </button>
 
-            {/* Sound Toggle */}
+            {/* Sound Toggle — controls THIS window's audio only (local), so the
+                main dashboard can be muted independently of the pop-outs. The
+                first time it is enabled it also flips the global master on. */}
             <button
-              onClick={() => setState((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
+              onClick={() =>
+                setLocalAudioOn((v) => {
+                  const next = !v;
+                  // Enabling local audio also ensures the global master is on so
+                  // sound can actually play in this window.
+                  if (next && !stateRef.current.soundEnabled) {
+                    setState((prev) => ({ ...prev, soundEnabled: true }));
+                  }
+                  return next;
+                })
+              }
               className={cx(
                 'p-2 rounded-lg border transition-colors',
-                state.soundEnabled
+                localAudioOn && state.soundEnabled
                   ? 'bg-green-700 border-green-300 text-white'
                   : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50',
               )}
-              title={state.soundEnabled ? t('header.sound.on') : t('header.sound.off')}
-              aria-label={state.soundEnabled ? t('header.sound.on') : t('header.sound.off')}
+              title={localAudioOn ? t('header.sound.on') : t('header.sound.off')}
+              aria-label={localAudioOn ? t('header.sound.on') : t('header.sound.off')}
             >
-              {state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {localAudioOn && state.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
 
             <Button
@@ -1666,6 +2018,7 @@ export default function App() {
         <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-300">
           {[
             { id: 'console', label: t('tabs.3dview'), icon: Boxes },
+            { id: 'setup', label: t('tabs.setup'), icon: Sliders },
             { id: 'scenarios', label: t('tabs.procedures'), icon: BookOpen },
             { id: 'drills', label: t('tabs.emergency'), icon: ShieldAlert },
             { id: 'logbook', label: t('tabs.logbook'), icon: Activity },
@@ -1704,6 +2057,46 @@ export default function App() {
         {state.activeTab === 'console' && (
           <div className="space-y-4">
             <StatusBanner state={state} />
+            {(() => {
+              // Well-design stage banner above the 3D view: shows total string
+              // weight and, for tapered designs, which segment is being run.
+              const design = state.activeWellDesignId
+                ? wellDesigns.find((d) => d.id === state.activeWellDesignId)
+                : undefined;
+              if (!design) return null;
+              const stage = currentWellStage(design, state.rod.currentDepthFt);
+              const pct = stage && stage.segmentLengthFt > 0
+                ? Math.round((stage.runInSegmentFt / stage.segmentLengthFt) * 100)
+                : 0;
+              return (
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border hairline surface-2 px-4 py-2.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Boxes className="w-4 h-4 text-amber-600" />
+                    <span className="font-semibold text-slate-700">{design.name}</span>
+                  </div>
+                  {stage && stage.segmentCount > 1 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-500">Stage:</span>
+                      <span className="font-mono font-bold text-emerald-700">
+                        Segment {stage.segmentIndex + 1} / {stage.segmentCount} ({stage.rodSize})
+                      </span>
+                      <span className="text-slate-500 font-mono text-xs">
+                        {Math.round(stage.runInSegmentFt).toLocaleString()} / {Math.round(stage.segmentLengthFt).toLocaleString()} ft ({pct}%)
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-slate-500">String weight:</span>
+                    <span className="font-mono font-bold text-blue-700">
+                      {Math.round(stringWeightAtDepth(design, state.rod.currentDepthFt)).toLocaleString()} lbs
+                    </span>
+                    <span className="text-slate-400 text-xs">
+                      / {Math.round(stringWeightAtDepth(design, wellDesignTotalDepthFt(design))).toLocaleString()} lbs @ TD
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
             <OperatorStationView
               state={state}
               onUpdateHydraulics={updateHydraulics}
@@ -1715,6 +2108,10 @@ export default function App() {
               onSetTripMode={handleSetTripMode}
               onSetDepth={handleSetDepth}
               onInstallClamp={() => {
+                if (!canInstallMechanicalClamp(state)) {
+                  soundManager.playBuzzerAlert(0.5);
+                  return;
+                }
                 const count = Math.min(2, state.rod.mechanicalClampsInstalled + 1);
                 soundManager.playMetalTap();
                 setState((prev) => ({
@@ -1823,6 +2220,20 @@ export default function App() {
               />
             </div>
           </div>
+        )}
+
+        {/* TAB: WELL SETUP — equipment config (injector profiles) + well design */}
+        {state.activeTab === 'setup' && (
+          <WellSetupPanel
+            state={state}
+            injectorProfiles={injectorProfiles}
+            wellDesigns={wellDesigns}
+            onSelectInjectorProfile={handleSelectInjectorProfile}
+            onSetMeasurementUnits={handleSetMeasurementUnits}
+            onInjectorProfilesChanged={setInjectorProfiles}
+            onWellDesignsChanged={setWellDesigns}
+            onApplyWellDesign={handleApplyWellDesign}
+          />
         )}
 
         {/* TAB 2: STRUCTURED SCENARIOS (8 IN-DEPTH MODULES) */}
@@ -2119,6 +2530,55 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Squeeze-pressure alarm — NON-BLOCKING. All three tiers render as a
+          subtle pulsing screen-edge highlight plus a small corner pill that
+          shows the live squeeze discrepancy. No acknowledgement required: it
+          clears automatically the moment the operator corrects the squeeze. */}
+      {state.alarmTier !== 'none' && (() => {
+        const psi = Math.round(
+          Math.max(0, state.rod.calculatedSqueezeRequiredPsi - state.hydraulics.squeezePressure),
+        );
+        // Slip & Free-Fall both use RED to match the rod/guide highlight ranges;
+        // Tier 3 (emergency) is a deeper red and pulses faster.
+        const isEmergency = state.alarmTier === 'emergency';
+        const title =
+          state.alarmTier === 'slip'
+            ? t('alarm.slip.title')
+            : state.alarmTier === 'freefall'
+            ? t('alarm.freefall.title')
+            : t('alarm.lockout.title');
+        return (
+          <>
+            {/* Pulsing red screen-edge vignette (non-interactive). */}
+            <div
+              className={cx(
+                'fixed inset-0 z-[80] pointer-events-none alarm-screen-highlight',
+                isEmergency ? 'alarm-screen-highlight--critical' : '',
+              )}
+            />
+            {/* Small pill with the live discrepancy (no ack button). Anchored at
+                bottom-CENTER and above the input-status HUD (z-150) so it is never
+                hidden behind the bindings indicator in the bottom-right corner. */}
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[160] pointer-events-none">
+              <div
+                className={cx(
+                  'flex items-center gap-2.5 px-3.5 py-2 rounded-lg shadow-xl text-white',
+                  isEmergency ? 'bg-red-800 animate-pulse' : 'bg-red-700',
+                )}
+              >
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                <div className="leading-tight">
+                  <div className="text-[11px] font-bold uppercase tracking-wide">{title}</div>
+                  <div className="text-[10px] font-mono opacity-90">
+                    {t('alarm.discrepancy', { psi })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Interactive Emergency Response HUD (floating, non-blocking) */}
       {state.emergencyScenarioId && (

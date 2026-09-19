@@ -330,9 +330,10 @@ export const AuxiliaryPanels: React.FC<AuxiliaryPanelsProps> = ({
                 id="btn-bop-pump-switch"
                 onClick={() => {
                   soundManager.playMetalTap();
-                  if (!bop.bopPumpSwitch) {
-                    onUpdateHydraulics({ bopPressure: Math.max(hydraulics.bopPressure, bop.bopRegulatorPsi) });
-                  }
+                  // Just flip the pump switch — the physics loop ramps BOP
+                  // pressure toward the operator-set regulator target. (Previously
+                  // this snapped pressure instantly, making the regulator look
+                  // like it had no effect.)
                   onUpdateBop({ bopPumpSwitch: !bop.bopPumpSwitch });
                 }}
                 className={`px-3 py-1.5 rounded text-xs font-bold uppercase transition-all ${

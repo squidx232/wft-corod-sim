@@ -14,6 +14,15 @@ export const station: TranslationPart = {
     'banner.fault.detail': 'The simulator has injected an emergency condition.',
     'banner.fault.action': 'Follow the on-screen emergency prompt, or hit the red Emergency Stop.',
 
+    // Squeeze-pressure alarm (Slip / Free-Fall / Emergency timeout)
+    'banner.alarm.slip.title': 'SLIP DETECTED — the string is starting to slip.',
+    'banner.alarm.slip.detail': 'Squeeze pressure is ${psi} PSI below what the string weight requires.',
+    'banner.alarm.freefall.title': 'FREE-FALL RISK — squeeze pressure is critically low!',
+    'banner.alarm.freefall.detail': 'Squeeze is ${psi} PSI short. The string may free-fall into the well.',
+    'banner.alarm.emergency.title': 'EMERGENCY — no correction made in time (system lockout).',
+    'banner.alarm.emergency.detail': 'Squeeze deficit ${psi} PSI persisted past the 20-second window.',
+    'banner.alarm.action': 'Raise the squeeze pressure now and/or engage the safety clamp to hold the string.',
+
     'banner.startup.engineOff.title': 'Engine is off — nothing will move yet.',
     'banner.startup.engineOff.detail': "Pressures are low because the pump isn't turning. This is normal before startup.",
     'banner.startup.engineOff.action': 'Start the engine (press E) to build up pressure.',
@@ -46,11 +55,9 @@ export const station: TranslationPart = {
 
     // --- DynamicRigSightline: Depth controls ---
     'sightline.depth': 'Depth',
-    'sightline.depthPreset.surface': "0' (Surface)",
-    'sightline.depthPreset.1000': "1000'",
-    'sightline.depthPreset.mid': "2250' (Mid)",
-    'sightline.depthPreset.3500': "3500'",
-    'sightline.depthPreset.bottom': "4500' (Bottom)",
+    'sightline.depthPreset.surface': 'Surface',
+    'sightline.depthPreset.mid': 'Mid',
+    'sightline.depthPreset.bottom': 'Bottom',
     'sightline.adjustDepth': 'Adjust Depth: ${depth} ft',
 
     // --- DynamicRigSightline: Display mode selector ---
@@ -99,6 +106,15 @@ export const station: TranslationPart = {
     'banner.fault.detail': 'المحاكاة حقنت شرط طوارئ.',
     'banner.fault.action': 'تابع النص اللي ظهر على الشاشة، أو اضغط على الزرار الأحمر للطوارئ.',
 
+    // إنذار ضغط القبضة (انزلاق / سقوط حر / طوارئ)
+    'banner.alarm.slip.title': 'انزلاق! — الخيط بدأ يزحلق.',
+    'banner.alarm.slip.detail': 'ضغط القبضة أقل بمقدار ${psi} PSI من المطلوب لوزن الخيط.',
+    'banner.alarm.freefall.title': 'خطر سقوط حر — ضغط القبضة منخفض جدًا!',
+    'banner.alarm.freefall.detail': 'ضغط القبضة ناقص ${psi} PSI. الخيط ممكن يسقط في البئر.',
+    'banner.alarm.emergency.title': 'طوارئ — ما تمّش التصحيح في الوقت (قفل النظام).',
+    'banner.alarm.emergency.detail': 'عجز ضغط القبضة ${psi} PSI استمر بعد نافذة الـ 20 ثانية.',
+    'banner.alarm.action': 'ارفع ضغط القبضة دلوقتي و/أو شغّل مشبك الأمان عشان تمسك الخيط.',
+
     'banner.startup.engineOff.title': 'الموتور مطفي — حاجة ما بتتحرك دلوقتي.',
     'banner.startup.engineOff.detail': 'الضغط منخفض لأن المضخة ما تشتغلش. ده عادي قبل التشغيل.',
     'banner.startup.engineOff.action': 'شغّل الموتور (اضغط E) عشان تجيب ضغط.',
@@ -131,11 +147,9 @@ export const station: TranslationPart = {
 
     // --- DynamicRigSightline: Depth controls ---
     'sightline.depth': 'العمق',
-    'sightline.depthPreset.surface': "0' (السطح)",
-    'sightline.depthPreset.1000': "1000'",
-    'sightline.depthPreset.mid': "2250' (النص)",
-    'sightline.depthPreset.3500': "3500'",
-    'sightline.depthPreset.bottom': "4500' (النهاية)",
+    'sightline.depthPreset.surface': 'السطح',
+    'sightline.depthPreset.mid': 'النص',
+    'sightline.depthPreset.bottom': 'النهاية',
     'sightline.adjustDepth': 'حرّك العمق: ${depth} ft',
 
     // --- DynamicRigSightline: Display mode selector ---

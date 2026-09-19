@@ -3,6 +3,9 @@
  * Uses native Web Audio API with safe lazy initialization on user gesture.
  */
 
+/** Keys for the recorded looping clips managed by the sound manager. */
+type LoopKey = 'slip' | 'freefall' | 'pumpjack' | 'reel';
+
 class SoundSynthesizer {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = true; // Safe default
@@ -39,6 +42,79 @@ class SoundSynthesizer {
   private engineStartDecoding = false;
   private readonly ENGINE_START_URL =
     '/sounds/freesound_community-car-engine-starting-43705.mp3';
+
+  // ---------------------------------------------------------------------------
+  // Looping alarm clips (Slip / Free-Fall). These are recorded MP3 loops streamed
+  // via persistent looping AudioBufferSourceNodes (same gapless technique as the
+  // engine loop). Each is controlled purely via its own gain node and, per the
+  // spec, plays at 50% of the source volume.
+  // ---------------------------------------------------------------------------
+  private readonly ALARM_LOOP_VOLUME = 0.5; // 50% of source volume
+
+  // ---------------------------------------------------------------------------
+  // Proximity gain (0..1). Driven by the 3D camera distance so sounds get
+  // louder as the camera moves closer to the relevant equipment:
+  //   - mgProximity      → engine / PTO / hydraulic (Mobile Gripper unit)
+  //   - injectorProximity → slip / free-fall alarms (injector head)
+  // Both default to 1 (full volume) so audio still works when the 3D viewport
+  // isn't driving them (e.g. secondary windows / gauge-only views).
+  // ---------------------------------------------------------------------------
+  private mgProximity = 1;
+  private injectorProximity = 1;
+  // Proximity for reel-side equipment (reel rotation + background pumpjacks).
+  private reelProximity = 1;
+
+  // Which proximity channel scales each loop's volume.
+  // 'injector' → injectorProximity; 'reel' → reelProximity; 'none' → no scaling.
+  private loopProxChannel(key: LoopKey): 'injector' | 'reel' | 'none' {
+    if (key === 'slip' || key === 'freefall') return 'injector';
+    if (key === 'reel' || key === 'pumpjack') return 'reel';
+    return 'none';
+  }
+  private proxFor(channel: 'injector' | 'reel' | 'none'): number {
+    if (channel === 'injector') return this.injectorProximity;
+    if (channel === 'reel') return this.reelProximity;
+    return 1;
+  }
+
+  private readonly loops: Record<
+    LoopKey,
+    {
+      url: string;
+      /** Base (pre-proximity) volume for this loop. */
+      baseVolume: number;
+      buffer: AudioBuffer | null;
+      source: AudioBufferSourceNode | null;
+      gain: GainNode | null;
+      started: boolean;
+      failed: boolean;
+      decoding: boolean;
+      wanted: boolean;
+    }
+  > = {
+    slip: {
+      url: '/sounds/slip-alarm.mp3', baseVolume: this.ALARM_LOOP_VOLUME,
+      buffer: null, source: null, gain: null,
+      started: false, failed: false, decoding: false, wanted: false,
+    },
+    freefall: {
+      url: '/sounds/freefall-alarm.mp3', baseVolume: this.ALARM_LOOP_VOLUME,
+      buffer: null, source: null, gain: null,
+      started: false, failed: false, decoding: false, wanted: false,
+    },
+    // Background pump-jacks: a very low, steady distant ambience.
+    pumpjack: {
+      url: '/sounds/pumpjack-loop.mp3', baseVolume: 0.08,
+      buffer: null, source: null, gain: null,
+      started: false, failed: false, decoding: false, wanted: false,
+    },
+    // Reel rotation: only audible while the reel is actually turning.
+    reel: {
+      url: '/sounds/reel-loop.mp3', baseVolume: 0.45,
+      buffer: null, source: null, gain: null,
+      started: false, failed: false, decoding: false, wanted: false,
+    },
+  };
 
   /**
    * Fetch + decode the engine loop into an AudioBuffer (once). Safe to call
@@ -194,6 +270,7 @@ class SoundSynthesizer {
     if (muted) {
       // Stop the recorded engine loop and silence synth nodes.
       this.stopEngineBufferSource();
+      this.stopAllLoops();
       if (this.ctx) {
         try {
           if (this.engineGain) this.engineGain.gain.setValueAtTime(0, this.ctx.currentTime);
@@ -204,6 +281,36 @@ class SoundSynthesizer {
       }
     } else {
       this.initContext();
+    }
+  }
+
+  /**
+   * Set proximity gain factors (0..1) from the 3D camera distance. Called each
+   * frame by the 3D viewport. Smoothly re-applies live gains so volume tracks
+   * the camera as it moves toward/away from the MG unit / injector.
+   */
+  public setProximity(mgProximity: number, injectorProximity: number, reelProximity?: number): void {
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    this.mgProximity = clamp01(mgProximity);
+    this.injectorProximity = clamp01(injectorProximity);
+    if (reelProximity != null) this.reelProximity = clamp01(reelProximity);
+    if (this.isMuted || !this.ctx) return;
+    // Re-apply live loop gains immediately so volume tracks the camera without
+    // waiting for the next physics/alarm tick. (Engine/hydraulic pick up the new
+    // mgProximity on their next update call.)
+    try {
+      (Object.keys(this.loops) as LoopKey[]).forEach((k) => {
+        const L = this.loops[k];
+        if (L.gain && L.wanted) {
+          L.gain.gain.setTargetAtTime(
+            L.baseVolume * this.proxFor(this.loopProxChannel(k)),
+            this.ctx!.currentTime,
+            0.08,
+          );
+        }
+      });
+    } catch {
+      /* noop */
     }
   }
 
@@ -225,7 +332,8 @@ class SoundSynthesizer {
         }
         if (this.ensureEngineSourcePlaying() && this.engineLoopGain && this.engineSource) {
           // Louder under load (PTO engaged); pitch/speed rises with rpm.
-          const targetVol = ptoEngaged ? 0.55 : 0.4;
+          // Scaled by MG-unit camera proximity so it swells as you approach.
+          const targetVol = (ptoEngaged ? 0.3 : 0.2) * this.mgProximity;
           const rate = Math.max(0.7, Math.min(1.6, 0.75 + (rpm / 1300) * 0.6));
           this.engineLoopGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.15);
           this.engineSource.playbackRate.setTargetAtTime(rate, this.ctx.currentTime, 0.15);
@@ -249,7 +357,7 @@ class SoundSynthesizer {
         return;
       }
       const baseFreq = 32 + (rpm / 1300) * 45;
-      const targetGain = ptoEngaged ? 0.15 : 0.08;
+      const targetGain = (ptoEngaged ? 0.08 : 0.04) * this.mgProximity;
       if (!this.engineOsc) {
         this.engineOsc = this.ctx.createOscillator();
         this.engineOsc.type = 'sawtooth';
@@ -285,7 +393,7 @@ class SoundSynthesizer {
       }
 
       const freq = 220 + (pressurePsi / 5000) * 500;
-      const targetGain = Math.min(0.12, (pressurePsi / 4000) * 0.12);
+      const targetGain = Math.min(0.12, (pressurePsi / 4000) * 0.12) * this.mgProximity;
 
       if (!this.hydraulicOsc) {
         this.hydraulicOsc = this.ctx.createOscillator();
@@ -558,9 +666,164 @@ class SoundSynthesizer {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Generic looping-clip control (Slip / Free-Fall alarms, pump-jacks, reel)
+  // ---------------------------------------------------------------------------
+
+  /** Fetch + decode a named loop into an AudioBuffer (once). */
+  private ensureLoopBuffer(key: LoopKey): void {
+    const L = this.loops[key];
+    if (L.buffer || L.failed || L.decoding || !this.ctx) return;
+    L.decoding = true;
+    fetch(L.url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => {
+        if (!this.ctx) throw new Error('no audio context');
+        return this.ctx.decodeAudioData(data);
+      })
+      .then((buffer) => {
+        L.buffer = buffer;
+        L.decoding = false;
+        // If the loop was requested while decoding, start it now.
+        if (L.wanted && !this.isMuted) this.startLoop(key);
+      })
+      .catch(() => {
+        L.failed = true;
+        L.decoding = false;
+      });
+  }
+
+  /**
+   * Start (or resume) a looping clip at its base volume × proximity. Uses a
+   * single persistent looping source per clip, controlled via its gain node —
+   * the same gapless technique as the engine loop.
+   */
+  public startLoop(key: LoopKey): void {
+    const L = this.loops[key];
+    L.wanted = true;
+    if (this.isMuted) return;
+    if (!this.initContext() || !this.ctx) return;
+    if (!L.buffer) {
+      this.ensureLoopBuffer(key);
+      return; // will auto-start once decoded
+    }
+    try {
+      if (!L.started || !L.source || !L.gain) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = L.buffer;
+        src.loop = true;
+        const dur = L.buffer.duration;
+        const edge = Math.min(0.02, dur * 0.02);
+        if (dur > edge * 2 + 0.05) {
+          src.loopStart = edge;
+          src.loopEnd = dur - edge;
+        }
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        src.connect(gain);
+        gain.connect(this.ctx.destination);
+        src.start(0, src.loopStart || 0);
+        L.source = src;
+        L.gain = gain;
+        L.started = true;
+      }
+      L.gain.gain.setTargetAtTime(
+        L.baseVolume * this.proxFor(this.loopProxChannel(key)),
+        this.ctx.currentTime,
+        0.05,
+      );
+    } catch {
+      // Safe catch
+    }
+  }
+
+  /** Stop a looping clip (fade to silence and tear down). */
+  public stopLoop(key: LoopKey): void {
+    const L = this.loops[key];
+    L.wanted = false;
+    try {
+      if (L.gain && this.ctx) {
+        L.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      }
+      if (L.source) {
+        const src = L.source;
+        setTimeout(() => {
+          try { src.stop(); } catch { /* noop */ }
+          try { src.disconnect(); } catch { /* noop */ }
+        }, 200);
+      }
+      L.source = null;
+      L.gain = null;
+      L.started = false;
+    } catch {
+      // Safe catch
+    }
+  }
+
+  // Backwards-compatible aliases for the alarm loops.
+  public startAlarmLoop(key: 'slip' | 'freefall'): void { this.startLoop(key); }
+  public stopAlarmLoop(key: 'slip' | 'freefall'): void { this.stopLoop(key); }
+
+  /**
+   * Drive the reel-rotation and pump-jack ambience loops. Called from the sim:
+   *  - reelRotating: true only while the reel is actually turning (>0 speed).
+   *  - pumpjacksActive: background pump-jack ambience (typically always on while
+   *    the scene is live).
+   */
+  public updateReelSound(reelRotating: boolean): void {
+    if (reelRotating && !this.isMuted) this.startLoop('reel');
+    else this.stopLoop('reel');
+  }
+  public updatePumpjackSound(active: boolean): void {
+    if (active && !this.isMuted) this.startLoop('pumpjack');
+    else this.stopLoop('pumpjack');
+  }
+
+  /** Stop all looping alarms (used by mute / shutdown / reset). */
+  public stopAllAlarmLoops(): void {
+    this.stopLoop('slip');
+    this.stopLoop('freefall');
+  }
+
+  /** Stop every managed loop (alarms + ambience). */
+  public stopAllLoops(): void {
+    (Object.keys(this.loops) as LoopKey[]).forEach((k) => this.stopLoop(k));
+  }
+
+  /**
+   * Tier-3 critical lockout alarm: a harsh, unmistakable multi-tone burst.
+   * Layered on TOP of any active looping alarm.
+   */
+  public playCriticalLockoutAlarm(): void {
+    if (this.isMuted || !this.initContext() || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Three descending harsh tones.
+      [880, 660, 440].forEach((freq, i) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now + i * 0.22);
+        gain.gain.setValueAtTime(0, now + i * 0.22);
+        gain.gain.linearRampToValueAtTime(0.35, now + i * 0.22 + 0.02);
+        gain.gain.linearRampToValueAtTime(0, now + i * 0.22 + 0.2);
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+        osc.start(now + i * 0.22);
+        osc.stop(now + i * 0.22 + 0.22);
+      });
+    } catch {
+      // Safe catch
+    }
+  }
+
   public stopAll() {
     try {
       this.stopEngineBufferSource();
+      this.stopAllLoops();
       if (this.engineGain && this.ctx) this.engineGain.gain.setValueAtTime(0, this.ctx.currentTime);
       if (this.hydraulicGain && this.ctx) this.hydraulicGain.gain.setValueAtTime(0, this.ctx.currentTime);
     } catch {

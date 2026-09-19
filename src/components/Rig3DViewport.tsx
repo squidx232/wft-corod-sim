@@ -331,6 +331,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
   // Reusable Vector3 for orbit camera (avoids per-frame allocation / GC pressure)
   const _orbitCamPos = useRef(new THREE.Vector3());
+  // Reusable Vector3s for the per-frame audio-proximity distance calculation.
+  const _mgPos = useRef(new THREE.Vector3(MG_UNIT_X, 2, 0));
+  const _injPos = useRef(new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + INJECTOR_MODEL_H * 0.5, 0));
+  const _reelPos = useRef(new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z));
 
   // Pointer interaction for Free Orbit & Pan
   const isDraggingRef = useRef(false);
@@ -719,7 +723,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // rod running through it. Idle → the glow fades back to dark steel.
       if (injectorGuideMeshesRef.current.length) {
         const rodS = stateRef.current.rod;
-        const clampOn = stateRef.current.hydraulics.safetyClampLever === 'ON';
+        // Any active squeeze-pressure alarm (slip / free-fall / emergency) drives
+        // the RED highlight, so the guide colour matches the alarm ranges exactly.
+        const gAlarmActive = stateRef.current.alarmTier !== 'none';
         const gSpeed = rodS.rodSpeedFtPerMin;
         const gSpeedRatio = Math.min(1, Math.abs(gSpeed) / 85); // 0..1 (matches rod)
         const gPulse = 0.5 + 0.5 * Math.sin(time * 0.02);       // SAME pulse as the rod
@@ -729,15 +735,19 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const GUIDE_FACTOR = 0.55;
         let emissiveHex = 0x000000;
         let targetIntensity = 0;
-        if (rodS.rodGripSlipping || clampOn) {
-          emissiveHex = 0xdc2626;                 // red alert — slip/clamp
+        // RED only for a genuine ALARM/slip condition. NOTE: engaging the safety
+        // clamp must NOT force red — a secured (clamped) well with no alarm should
+        // return to its neutral colour. (Previously `clampOn` latched the guide
+        // red until the rod moved or the clamp was toggled off/on.)
+        if (gAlarmActive || rodS.rodGripSlipping) {
+          emissiveHex = 0xdc2626;                 // red alert — slip / free-fall
           targetIntensity = (0.6 * gPulse + 0.3) * GUIDE_FACTOR; // rod freefall × 0.3
         } else if (gSpeed < -0.1) {
-          emissiveHex = 0x3b82f6;                 // RIH (running in / down) → blue
-          targetIntensity = gSpeedRatio * 0.5 * gPulse * GUIDE_FACTOR; // rod RIH × 0.3
+          emissiveHex = 0x60a5fa;                 // RIH (running in / down) → bright blue
+          targetIntensity = (gSpeedRatio * 0.9 * gPulse + 0.25) * GUIDE_FACTOR;
         } else if (gSpeed > 0.1) {
-          emissiveHex = 0x22c55e;                 // POOH (pulling out / up) → green
-          targetIntensity = gSpeedRatio * 0.5 * gPulse * GUIDE_FACTOR; // rod POOH × 0.3
+          emissiveHex = 0x4ade80;                 // POOH (pulling out / up) → bright green
+          targetIntensity = (gSpeedRatio * 0.9 * gPulse + 0.25) * GUIDE_FACTOR;
         }
         // Small physical vibration of the guide sections, in sympathy with the
         // rod (same frequency as injector/BOP). Kept subtle so the rod stays
@@ -796,17 +806,18 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         rodStrandRef.current.scale.set(1, 1, 1);
 
         // Directional emissive pulse: green when POOH (up), blue when RIH (down),
-        // red when freefalling; intensity scales with speed.
+        // red when freefalling OR when any squeeze-pressure alarm is active (so
+        // the rod colour matches the alarm ranges — slip & free-fall both red).
         const pulse = 0.5 + 0.5 * Math.sin(time * 0.02);
-        if (liveState.rod.rodInTensionOrCompression === 'freefall') {
+        if (liveState.rod.rodInTensionOrCompression === 'freefall' || liveState.alarmTier !== 'none') {
           rodMat.emissive.setHex(0xef4444);
           rodMat.emissiveIntensity = 0.6 * pulse + 0.3;
         } else if (speed > 0.5) {
-          rodMat.emissive.setHex(0x22c55e); // POOH up
-          rodMat.emissiveIntensity = speedRatio * 0.5 * pulse;
+          rodMat.emissive.setHex(0x4ade80); // POOH up → bright green
+          rodMat.emissiveIntensity = speedRatio * 0.9 * pulse + 0.25;
         } else if (speed < -0.5) {
-          rodMat.emissive.setHex(0x3b82f6); // RIH down
-          rodMat.emissiveIntensity = speedRatio * 0.5 * pulse;
+          rodMat.emissive.setHex(0x60a5fa); // RIH down → bright blue
+          rodMat.emissiveIntensity = speedRatio * 0.9 * pulse + 0.25;
         } else {
           rodMat.emissiveIntensity = THREE.MathUtils.lerp(rodMat.emissiveIntensity, 0, 0.2);
         }
@@ -997,6 +1008,33 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           cameraRef.current.position.lerp(_orbitCamPos.current.set(x, y, z), 0.12);
           cameraRef.current.lookAt(targetLookAt.current);
         }
+      }
+
+      // 11b. Audio proximity: scale engine/PTO/hydraulic volume by how close the
+      // camera is to the MG unit, and slip/free-fall alarm volume by how close it
+      // is to the injector head. Only the primary full viewport drives this (cab
+      // secondary windows are excluded to avoid two viewports fighting).
+      if (cameraRef.current && !cabMode && !soundManager.isAudioMuted()) {
+        const camPos = cameraRef.current.position;
+        // Map distance → gain: full (1.0) when within NEAR, tapering to a FLOOR
+        // at/after FAR so distant equipment is quieter but never fully silent.
+        const NEAR = 8;
+        const FAR = 45;
+        const FLOOR = 0.25;
+        const proxFromDist = (d: number) => {
+          if (d <= NEAR) return 1;
+          if (d >= FAR) return FLOOR;
+          const t = (d - NEAR) / (FAR - NEAR); // 0..1
+          return 1 - t * (1 - FLOOR);
+        };
+        const mgProx = proxFromDist(camPos.distanceTo(_mgPos.current));
+        const injProx = proxFromDist(camPos.distanceTo(_injPos.current));
+        const reelProx = proxFromDist(camPos.distanceTo(_reelPos.current));
+        soundManager.setProximity(mgProx, injProx, reelProx);
+
+        // Pump-jack ambience runs (very quietly) whenever the engine is running.
+        // (Reel-rotation sound intentionally disabled per operator request.)
+        soundManager.updatePumpjackSound(stateRef.current.hydraulics.engineRunning);
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {

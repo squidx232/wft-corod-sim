@@ -6,8 +6,8 @@ import { PhysicalEmergencyShutdown } from './PhysicalEmergencyShutdown';
 import { PhysicalJoystick } from './PhysicalJoystick';
 import { PhysicalWingBleedValve } from './PhysicalWingBleedValve';
 import { PhysicalBopValve } from './PhysicalBopValve';
-import { PhysicalPanelLightsSwitch } from './PhysicalPanelLightsSwitch';
 import { PhysicalChainOilerSwitch } from './PhysicalChainOilerSwitch';
+import { PhysicalPressureRegulatorBlock } from './PhysicalPressureRegulatorBlock';
 import { SimulatorState } from '../types';
 import {
   ShieldAlert,
@@ -717,24 +717,68 @@ export const WeatherfordControlConsole: React.FC<WeatherfordControlConsoleProps>
                 />
               </div>
 
-              {/* BOP Valve (O) */}
+              {/* BOP Valve (O) — CLOSE = run the pump to seal the Regan bag,
+                  OPEN = bleed pressure off. (Directly setting reganBopClosed was
+                  a no-op because the physics loop re-derives it from BOP pressure
+                  every tick, so the button appeared to do nothing.) */}
               <div className="flex flex-col items-center bg-neutral-900 p-2 rounded-lg border border-neutral-800">
                 <PhysicalBopValve
                   id="ctrl-bop-valve-o"
                   letterLabel="O"
                   isClosed={bop.reganBopClosed}
-                  onToggle={() => onUpdateBOP({ reganBopClosed: !bop.reganBopClosed })}
+                  onToggle={() => {
+                    if (bop.reganBopClosed) {
+                      // Currently sealed → OPEN it: stop the pump and bleed down.
+                      onUpdateBOP({ bopPumpSwitch: false, bopBleedOpen: true, reganBopClosed: false });
+                    } else {
+                      // Currently open → CLOSE it: stop bleeding and pump up to seal.
+                      onUpdateBOP({ bopBleedOpen: false, bopPumpSwitch: true });
+                    }
+                  }}
                 />
               </div>
 
-              {/* Panel Lights (D) */}
-              <div className="flex flex-col items-center bg-neutral-900 p-2 rounded-lg border border-neutral-800">
-                <PhysicalPanelLightsSwitch
-                  id="ctrl-panel-lights-d"
+              {/* BOP Regulator (D) — sets the target pressure the BOP pump ramps
+                  to. Replaces the old Panel Lights toggle. Includes a live BOP
+                  pressure readout and an integrated pump ON/OFF so the operator
+                  can set-and-run the Regan bag from this panel. */}
+              <div className="flex flex-col items-center bg-neutral-900 p-2 rounded-lg border border-neutral-800 gap-1">
+                <PhysicalPressureRegulatorBlock
+                  id="ctrl-bop-regulator-d"
                   letterLabel="D"
-                  isOn={hydraulics.panelLightsOn ?? true}
-                  onToggle={() => onUpdateHydraulics({ panelLightsOn: !hydraulics.panelLightsOn })}
+                  title="BOP REGULATOR"
+                  value={bop.bopRegulatorPsi}
+                  min={0}
+                  max={1500}
+                  step={50}
+                  onChange={(v) => onUpdateBOP({ bopRegulatorPsi: v })}
                 />
+                {/* Live BOP pressure + pump toggle */}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span
+                    className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold border ${
+                      hydraulics.bopPressure >= 1000
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                        : 'bg-neutral-950 text-amber-300 border-neutral-700'
+                    }`}
+                    title="Live BOP pressure"
+                  >
+                    {Math.round(hydraulics.bopPressure)} PSI
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playMetalTap();
+                      onUpdateBOP({ bopPumpSwitch: !bop.bopPumpSwitch });
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${
+                      bop.bopPumpSwitch ? 'bg-emerald-600 text-white' : 'bg-neutral-700 text-neutral-300'
+                    }`}
+                    title="Toggle the automatic BOP pump"
+                  >
+                    {bop.bopPumpSwitch ? 'PUMP ON' : 'PUMP OFF'}
+                  </button>
+                </div>
               </div>
 
               {/* Chain Oiler (K) */}

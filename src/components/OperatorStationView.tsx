@@ -572,22 +572,33 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
                     </button>
                   );
                 })}
-                {onSetDepth && (
-                  <select
-                    value={[0, 1000, 2250, 3500, 4500].reduce((prev, curr) =>
-                      Math.abs(curr - rod.currentDepthFt) < Math.abs(prev - rod.currentDepthFt) ? curr : prev,
-                    )}
-                    onChange={(e) => onSetDepth(Number(e.target.value))}
-                    className="ml-0.5 bg-slate-900 text-slate-200 text-[10px] font-mono rounded-md border border-slate-700 px-1 py-1 outline-none"
-                    title="Jump to depth"
-                  >
-                    <option value={0}>0' Surface</option>
-                    <option value={1000}>1,000'</option>
-                    <option value={2250}>2,250' Mid</option>
-                    <option value={3500}>3,500'</option>
-                    <option value={4500}>4,500' Btm</option>
-                  </select>
-                )}
+                {onSetDepth && (() => {
+                  // Depth presets derived from the ACTIVE well depth (so a 9,500 ft
+                  // design shows 9,500 at bottom, not a hardcoded 4,500).
+                  const td = Math.max(1, Math.round(rod.totalWellDepthFt));
+                  const marks = [
+                    { v: 0, label: "0' Surface" },
+                    { v: Math.round(td * 0.25), label: `${Math.round(td * 0.25).toLocaleString()}'` },
+                    { v: Math.round(td * 0.5), label: `${Math.round(td * 0.5).toLocaleString()}' Mid` },
+                    { v: Math.round(td * 0.75), label: `${Math.round(td * 0.75).toLocaleString()}'` },
+                    { v: td, label: `${td.toLocaleString()}' Btm` },
+                  ];
+                  const nearest = marks.reduce((prev, curr) =>
+                    Math.abs(curr.v - rod.currentDepthFt) < Math.abs(prev.v - rod.currentDepthFt) ? curr : prev,
+                  ).v;
+                  return (
+                    <select
+                      value={nearest}
+                      onChange={(e) => onSetDepth(Number(e.target.value))}
+                      className="ml-0.5 bg-slate-900 text-slate-200 text-[10px] font-mono rounded-md border border-slate-700 px-1 py-1 outline-none"
+                      title="Jump to depth"
+                    >
+                      {marks.map((m) => (
+                        <option key={m.v} value={m.v}>{m.label}</option>
+                      ))}
+                    </select>
+                  );
+                })()}
               </div>
             </div>
           </div>

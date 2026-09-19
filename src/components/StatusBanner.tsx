@@ -50,6 +50,22 @@ function assess(state: SimulatorState, t: (key: string, vars?: Record<string, st
     };
   }
 
+  // 1b) Squeeze-pressure alarm (Slip / Free-Fall / Emergency timeout). This must
+  // take precedence over the normal "moving/ready" states so the banner reflects
+  // the danger instead of reporting "All good" during a slip or free-fall.
+  if (state.alarmTier && state.alarmTier !== 'none') {
+    const deficit = Math.max(
+      0,
+      Math.round(state.rod.calculatedSqueezeRequiredPsi - state.hydraulics.squeezePressure),
+    );
+    return {
+      health: 'danger',
+      title: t(`banner.alarm.${state.alarmTier}.title`),
+      detail: t(`banner.alarm.${state.alarmTier}.detail`, { psi: deficit }),
+      nextAction: t('banner.alarm.action'),
+    };
+  }
+
   // 2) Startup sequence
   if (!h.engineRunning) {
     return {

@@ -105,26 +105,33 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             {t('sightline.depth')}:
           </span>
           <div className="flex items-center gap-1">
-            {[
-              { labelKey: 'sightline.depthPreset.surface', depth: 0 },
-              { labelKey: 'sightline.depthPreset.1000', depth: 1000 },
-              { labelKey: 'sightline.depthPreset.mid', depth: 2250 },
-              { labelKey: 'sightline.depthPreset.3500', depth: 3500 },
-              { labelKey: 'sightline.depthPreset.bottom', depth: 4500 },
-            ].map((preset) => (
-              <button
-                key={preset.depth}
-                type="button"
-                onClick={() => onSetDepth && onSetDepth(preset.depth)}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
-                  Math.abs(rod.currentDepthFt - preset.depth) < 50
-                    ? 'bg-red-700 text-white shadow'
-                    : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                }`}
-              >
-                {t(preset.labelKey)}
-              </button>
-            ))}
+            {(() => {
+              // Depth presets are derived from the ACTIVE well depth so they track
+              // the applied well design (e.g. 9,500 ft TD) instead of fixed values.
+              const td = Math.max(1, Math.round(rod.totalWellDepthFt));
+              const q = (f: number) => Math.round(td * f);
+              const presets = [
+                { label: `0' (${t('sightline.depthPreset.surface')})`, depth: 0 },
+                { label: `${q(0.25).toLocaleString()}'`, depth: q(0.25) },
+                { label: `${q(0.5).toLocaleString()}' (${t('sightline.depthPreset.mid')})`, depth: q(0.5) },
+                { label: `${q(0.75).toLocaleString()}'`, depth: q(0.75) },
+                { label: `${td.toLocaleString()}' (${t('sightline.depthPreset.bottom')})`, depth: td },
+              ];
+              return presets.map((preset) => (
+                <button
+                  key={preset.depth}
+                  type="button"
+                  onClick={() => onSetDepth && onSetDepth(preset.depth)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
+                    Math.abs(rod.currentDepthFt - preset.depth) < 50
+                      ? 'bg-red-700 text-white shadow'
+                      : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ));
+            })()}
           </div>
 
           {/* Depth Scrubbing Slider */}
