@@ -372,10 +372,14 @@ export default function App() {
             const systemTarget = hyd.safetyBleedValveOpen ? 0 : 2500;
             hyd.systemPressure = hyd.systemPressure + (systemTarget - hyd.systemPressure) * 0.2;
           }
-          // PICKER PRESSURE — operator-controlled only. No auto build-up: it holds
-          // its current value (change comes from operator input / emergencies),
-          // never ramps to a fixed value and never scales with depth.
-          // (hyd.pickerPressure left unchanged here.)
+          // PICKER PRESSURE — driven by the operator's Crane Lockout Valve, NOT by
+          // depth. When the operator OPENS the lockout valve the auxiliary crane
+          // pump charges the picker circuit to full output (~4100 psi, manual
+          // 3800-4200). Closing the valve bleeds it back to 0.
+          {
+            const pickerTarget = prev.picker.craneLockoutValveOpen ? 4100 : 0;
+            hyd.pickerPressure = hyd.pickerPressure + (pickerTarget - hyd.pickerPressure) * 0.12;
+          }
           hyd.squeezePressure = hyd.squeezePressureSwitch ? Math.min(hyd.squeezePressureTarget, hyd.systemPressure) : 0;
           // Safety pressure ramps smoothly toward operator-set target (or 150 if bleed open)
           const safetyTarget = hyd.safetyBleedValveOpen ? 150 : hyd.safetyPressureTarget;
@@ -1249,12 +1253,8 @@ export default function App() {
         },
         hydraulics: {
           ...prev.hydraulics,
-          downPressureTarget: 1500,
-          downPressure: 1500,
-          upPressureTarget: 1200,
-          upPressure: 1200,
-          squeezePressureTarget: 800,
-          squeezePressure: 800,
+          // Trip mode no longer forces drive/squeeze pressures — the operator
+          // sets these via the knobs. Only the brake is released for tripping.
           gripperBrakeSwitch: false,
         },
         yTool: {
@@ -1284,12 +1284,7 @@ export default function App() {
         },
         hydraulics: {
           ...prev.hydraulics,
-          downPressureTarget: 200,
-          downPressure: 200,
-          upPressureTarget: 3200,
-          upPressure: 3200,
-          squeezePressureTarget: 2350,
-          squeezePressure: 2350,
+          // Operator sets drive/squeeze pressures via the knobs (not trip mode).
           gripperBrakeSwitch: false,
         },
         yTool: {
@@ -1312,12 +1307,7 @@ export default function App() {
         },
         hydraulics: {
           ...prev.hydraulics,
-          downPressureTarget: 1400,
-          downPressure: 1400,
-          upPressureTarget: 2800,
-          upPressure: 2800,
-          squeezePressureTarget: 1400,
-          squeezePressure: 1400,
+          // Operator sets drive/squeeze pressures via the knobs (not trip mode).
           gripperBrakeSwitch: false,
         },
         yTool: {
@@ -1344,13 +1334,14 @@ export default function App() {
           ...prev.rod,
           currentDepthFt: clampedDepth,
           totalStringWeightLbs: stringWeight,
+          // `calculatedSqueezeRequiredPsi` is only a REFERENCE readout of the
+          // squeeze the operator SHOULD dial in for this depth — it does NOT set
+          // the actual squeeze pressure. The operator controls squeeze via the knob.
           calculatedSqueezeRequiredPsi: minSqueeze,
           isLandedOnTagBar: clampedDepth >= prev.rod.totalWellDepthFt,
         },
-        hydraulics: {
-          ...prev.hydraulics,
-          squeezePressureTarget: Math.max(prev.hydraulics.squeezePressureTarget, minSqueeze),
-        },
+        // NOTE: squeezePressureTarget is intentionally NOT changed here — pressure
+        // is operator-set only and must not rise automatically with depth.
         yTool: {
           ...prev.yTool,
           depthReadingFt: clampedDepth,
