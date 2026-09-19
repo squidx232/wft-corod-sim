@@ -55,6 +55,7 @@ export const station: TranslationPart = {
 
     // --- DynamicRigSightline: Depth controls ---
     'sightline.depth': 'Depth',
+    'sightline.engineRequired': 'Start the engine first',
     'sightline.depthPreset.surface': 'Surface',
     'sightline.depthPreset.mid': 'Mid',
     'sightline.depthPreset.bottom': 'Bottom',
@@ -147,6 +148,7 @@ export const station: TranslationPart = {
 
     // --- DynamicRigSightline: Depth controls ---
     'sightline.depth': 'العمق',
+    'sightline.engineRequired': 'شغّل الموتور الأول',
     'sightline.depthPreset.surface': 'السطح',
     'sightline.depthPreset.mid': 'النص',
     'sightline.depthPreset.bottom': 'النهاية',

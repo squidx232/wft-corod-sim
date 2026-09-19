@@ -1625,6 +1625,15 @@ export default function App() {
 
   // Direct Depth adjustment handler
   const handleSetDepth = (targetDepthFt: number) => {
+    // PREREQUISITE: the engine must be running (and the start sequence complete)
+    // before the string can be positioned. Block + warn otherwise. This backs up
+    // the UI-level disabling so keybinds / other entry points can't bypass it.
+    const s = stateRef.current;
+    if (!s.hydraulics.engineRunning || !s.engineStartSequenceComplete) {
+      soundManager.playBuzzerAlert(0.4);
+      setShowEngineStartModal(true);
+      return;
+    }
     setState((prev) => {
       const clampedDepth = Math.max(0, Math.min(prev.rod.totalWellDepthFt, targetDepthFt));
       const stringWeight = clampedDepth * prev.rod.linearWeightLbsPerFt;

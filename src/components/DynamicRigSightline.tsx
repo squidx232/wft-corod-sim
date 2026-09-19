@@ -67,6 +67,11 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   const isSlipping = rod.rodGripSlipping;
   const reelRpm = Math.abs(Math.round((rod.rodSpeedFtPerMin / 15) * 10) / 10);
 
+  // Depth positioning (RIH/POOH via the presets & slider) requires the engine to
+  // be running and the start sequence complete — nothing hydraulic can move the
+  // string otherwise. This gates the depth presets + scrubbing slider below.
+  const engineReady = hydraulics.engineRunning && state.engineStartSequenceComplete;
+
   return (
     <div className="rounded-xl surface border hairline shadow-sm relative overflow-hidden flex flex-col">
       {/* 1. Live Status & Depth Selector Header Bar (trip-mode buttons removed) */}
@@ -99,8 +104,15 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
           )}
         </div>
 
-        {/* Quick Depth Presets & Slider */}
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border hairline">
+        {/* Quick Depth Presets & Slider — DISABLED until the engine is running.
+            The whole cluster is dimmed and clicks are blocked, with a tooltip
+            explaining the prerequisite. */}
+        <div
+          className={`flex items-center gap-2 bg-white p-1.5 rounded-xl border hairline transition-opacity ${
+            engineReady ? '' : 'opacity-50'
+          }`}
+          title={engineReady ? undefined : t('sightline.engineRequired')}
+        >
           <span className="eyebrow">
             {t('sightline.depth')}:
           </span>
@@ -121,9 +133,12 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
                 <button
                   key={preset.depth}
                   type="button"
-                  onClick={() => onSetDepth && onSetDepth(preset.depth)}
+                  disabled={!engineReady}
+                  onClick={() => engineReady && onSetDepth && onSetDepth(preset.depth)}
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
-                    Math.abs(rod.currentDepthFt - preset.depth) < 50
+                    !engineReady
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : Math.abs(rod.currentDepthFt - preset.depth) < 50
                       ? 'bg-red-700 text-white shadow'
                       : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                   }`}
@@ -141,15 +156,26 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
               min={0}
               max={rod.totalWellDepthFt || 4500}
               step={25}
+              disabled={!engineReady}
               value={Math.round(rod.currentDepthFt)}
-              onChange={(e) => onSetDepth && onSetDepth(Number(e.target.value))}
-              className="w-24 accent-red-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-              title={t('sightline.adjustDepth', { depth: Math.round(rod.currentDepthFt) })}
+              onChange={(e) => engineReady && onSetDepth && onSetDepth(Number(e.target.value))}
+              className={`w-24 accent-red-600 h-1.5 bg-slate-200 rounded-lg ${
+                engineReady ? 'cursor-pointer' : 'cursor-not-allowed'
+              }`}
+              title={engineReady ? t('sightline.adjustDepth', { depth: Math.round(rod.currentDepthFt) }) : t('sightline.engineRequired')}
             />
             <span className="text-xs font-mono font-bold text-amber-700 min-w-[50px] text-right">
               {Math.round(rod.currentDepthFt)}'
             </span>
           </div>
+
+          {/* Engine-off hint badge */}
+          {!engineReady && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 text-[10px] font-bold">
+              <ShieldAlert className="w-3 h-3" />
+              {t('sightline.engineRequired')}
+            </span>
+          )}
         </div>
       </div>
 
