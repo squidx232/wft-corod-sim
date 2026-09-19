@@ -752,9 +752,15 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         // Small physical vibration of the guide sections, in sympathy with the
         // rod (same frequency as injector/BOP). Kept subtle so the rod stays
         // visually inside the channel; scales with rod speed.
-        const guideRunning = Math.abs(gSpeed) > 0.5;
-        const gf = time * 0.09;
-        const gShake = guideRunning ? (0.012 * gSpeedRatio + 0.004) * 0.8 : 0;
+        // Guide shake is boosted during a slip/free-fall alarm (matches rod/injector).
+        const gAlarm = stateRef.current.alarmTier;
+        const gAlarmMul =
+          gAlarm === 'freefall' || gAlarm === 'emergency' ? 3.2 : gAlarm === 'slip' ? 1.9 : 1;
+        const gAlarmActiveShake = gAlarm !== 'none';
+        const guideRunning = Math.abs(gSpeed) > 0.5 || gAlarmActiveShake;
+        const gf = time * (gAlarmActiveShake ? 0.16 : 0.09);
+        const gEffRatio = Math.min(1.4, Math.max(gSpeedRatio, gAlarmActiveShake ? 0.6 : 0) * gAlarmMul);
+        const gShake = guideRunning ? (0.012 * gEffRatio + 0.004) * 0.8 : 0;
         for (let gi = 0; gi < injectorGuideMeshesRef.current.length; gi++) {
           const gm = injectorGuideMeshesRef.current[gi];
           const gmat = gm.material as THREE.MeshStandardMaterial;
@@ -789,8 +795,21 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // 4. Rod Texture & Catenary Sag / Tension Dynamics
       const absSpeed = Math.abs(speed);
-      const isRunning = absSpeed > 0.5;
+      // ALARM VIBRATION BOOST: a live squeeze-pressure alarm makes ALL the shake
+      // (rod, guide, injector, BOP, needles) much more violent. Slip shakes more
+      // than normal running; free-fall / emergency shakes even more. This is added
+      // on top of the normal speed-driven shake so the operator FEELS the fault.
+      const alarmTier = liveState.alarmTier;
+      const alarmShakeMul =
+        alarmTier === 'freefall' || alarmTier === 'emergency' ? 3.2 : alarmTier === 'slip' ? 1.9 : 1;
+      const alarmActive = alarmTier !== 'none';
+      // Force the shake to run even if speed is momentarily low, so a slip that is
+      // just starting still visibly rattles the equipment.
+      const isRunning = absSpeed > 0.5 || alarmActive;
       const speedRatio = Math.min(1, absSpeed / 85); // 0..1 (freefall/max ≈ 85 ft/min)
+      // Effective shake ratio: at least a strong floor while alarming so the rig
+      // rattles hard even before the rod builds full freefall speed.
+      const shakeRatio = Math.min(1.4, Math.max(speedRatio, alarmActive ? 0.6 : 0) * alarmShakeMul);
       if (rodStrandRef.current && (rodStrandRef.current.material as THREE.MeshStandardMaterial).map) {
         rodTextureOffset.current += speed * delta * 0.025;
         const rodMat = rodStrandRef.current.material as THREE.MeshStandardMaterial;
@@ -823,11 +842,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         }
       }
 
-      // 4b. Injector head mechanical vibration under load (shake ∝ speed)
+      // 4b. Injector head mechanical vibration under load (shake ∝ speed, boosted
+      // hard during a slip/free-fall alarm).
       if (injectorGroupRef.current) {
         if (isRunning) {
-          const shake = 0.012 * speedRatio + 0.004;
-          const f = time * 0.09;
+          const shake = 0.012 * shakeRatio + 0.004;
+          // Faster rattle frequency while alarming for a more violent read.
+          const f = time * (alarmActive ? 0.16 : 0.09);
           injectorGroupRef.current.position.x = WELL_X + Math.sin(f) * shake;
           injectorGroupRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.4;
         } else {
@@ -843,8 +864,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       if (bopModelHolderRef.current) {
         const restX = bopHolderRestXRef.current;
         if (isRunning) {
-          const shake = (0.012 * speedRatio + 0.004) * 0.6; // ~60% of injector amplitude
-          const f = time * 0.09;                            // matched frequency
+          const shake = (0.012 * shakeRatio + 0.004) * 0.6; // ~60% of injector amplitude
+          const f = time * (alarmActive ? 0.16 : 0.09);     // matched frequency
           bopModelHolderRef.current.position.x = restX + Math.sin(f) * shake;
           bopModelHolderRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.4;
         } else {
@@ -859,8 +880,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       if (containmentArmRef.current) {
         const rest = containmentArmRestRef.current;
         if (isRunning) {
-          const shake = (0.012 * speedRatio + 0.004) * 1.1; // ~110% of injector amplitude (increased)
-          const f = time * 0.09;                            // matched frequency
+          const shake = (0.012 * shakeRatio + 0.004) * 1.1; // ~110% of injector amplitude (increased)
+          const f = time * (alarmActive ? 0.16 : 0.09);     // matched frequency
           containmentArmRef.current.position.x = rest.x + Math.sin(f * 1.1) * shake;
           containmentArmRef.current.position.y = rest.y + Math.cos(f * 1.7) * shake * 0.6;
           containmentArmRef.current.rotation.z = Math.cos(f * 1.3) * shake * 0.5;
@@ -935,10 +956,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // 6. Live 3D Gauge Needles Update
       const needles = needlesMapRef.current;
+      // Needle tremble during a slip/free-fall alarm — the gauges visibly shake,
+      // more violently for free-fall/emergency than for a slip.
+      const needleJitter = alarmActive
+        ? Math.sin(time * (alarmTier === 'slip' ? 0.28 : 0.5)) *
+          (alarmTier === 'slip' ? 0.05 : 0.11)
+        : 0;
       const setNeedleAngle = (needle: THREE.Mesh | undefined, val: number, max: number) => {
         if (!needle) return;
         const ratio = Math.max(0, Math.min(1, val / max));
-        const angle = -Math.PI * 0.75 + ratio * (Math.PI * 1.5);
+        const angle = -Math.PI * 0.75 + ratio * (Math.PI * 1.5) + needleJitter;
         needle.rotation.z = angle;
       };
 

@@ -614,11 +614,36 @@ export default function App() {
         const isSafetyOn = hyd.safetyClampLever === 'ON';
         const isClampedMech = rod.mechanicalClampsInstalled > 0 && rod.clampTorqueFtLbs >= 400;
 
+        // SQUEEZE-ALARM CONTROL LOCK: once the string starts slipping (squeeze
+        // deficit ≥ the slip threshold), the operator has LOST control of the
+        // string — the reel keeps paying out and the rod keeps falling. They
+        // must REGAIN control (raise squeeze back within tolerance, or engage
+        // the safety/mechanical clamp) before STOP or POOH will respond again.
+        // This mirrors real life: you can't just "pull out" of a live slip.
+        const squeezeDeficitNow = Math.max(
+          0,
+          rod.calculatedSqueezeRequiredPsi - hyd.squeezePressure,
+        );
+        const alarmControlLost =
+          hyd.squeezePressureSwitch &&
+          rod.currentDepthFt > 100 &&
+          rod.totalStringWeightLbs > 200 &&
+          squeezeDeficitNow >= 50; // Tier-1 (slip) threshold
+
         let targetSpeed = 0;
         if (isSafetyOn || isClampedMech) {
           targetSpeed = 0;
           rod.rodInTensionOrCompression = 'neutral';
           rod.rodGripSlipping = false;
+        } else if (alarmControlLost) {
+          // Control is lost due to a slip/free-fall squeeze deficit. The string
+          // freewheels downhole and STOP/POOH are ignored until squeeze recovers
+          // or a clamp is engaged (handled by the branches above). Fall severity
+          // scales with the deficit (worse deficit = faster fall).
+          const severity = Math.min(1, squeezeDeficitNow / 200); // 50→0.25, 200+→1
+          targetSpeed = -60 - 60 * severity; // ~ -75 (slip) → -120 (deep free-fall)
+          rod.rodInTensionOrCompression = 'freefall';
+          rod.rodGripSlipping = true;
         } else if (isBrakeOn) {
           targetSpeed = 0;
           rod.rodInTensionOrCompression = 'tension';
@@ -1086,6 +1111,20 @@ export default function App() {
         // Allow but warn — per manual: "NEVER move COROD with < 400 psi squeeze"
       }
     }
+
+    // CONTROL LOCK during a live slip / free-fall: the operator cannot STOP
+    // (pos === 0) or POOH / pull up (pos > 0) until they REGAIN control by
+    // raising the squeeze pressure back within tolerance (or engaging a clamp).
+    // RUN/RIH (pos < 0) is still allowed. This matches the physics: the string
+    // freewheels downhole regardless of the drive stick until control returns.
+    const alarmActiveNow = s.alarmTier === 'slip' || s.alarmTier === 'freefall' || s.alarmTier === 'emergency';
+    const secured = s.hydraulics.safetyClampLever === 'ON' ||
+      (s.rod.mechanicalClampsInstalled > 0 && s.rod.clampTorqueFtLbs >= 400);
+    if (alarmActiveNow && !secured && pos >= 0) {
+      soundManager.playBuzzerAlert(0.5);
+      return; // STOP / POOH ignored — regain control first (raise squeeze / clamp)
+    }
+
     if (isSecondary) {
       broadcastPatch({ joystickPosition: pos });
       return;
