@@ -11,6 +11,7 @@ import {
   TankBatteryLayout,
 } from './three/productionEquipment';
 import { addOilfieldSiteDetails } from './three/oilfieldSite';
+import { createOperatorCharacter, OperatorCharacter } from './three/operatorCharacter';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SimulatorState } from '../types';
@@ -359,6 +360,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const bopModelHolderRef = useRef<THREE.Group | null>(null);
   const bopHolderRestXRef = useRef<number>(0);
   const joyShaftMeshRef = useRef<THREE.Mesh | null>(null);
+  // Animated operator standing at the MG-unit console.
+  const operatorRef = useRef<OperatorCharacter | null>(null);
   const exhaustParticlesRef = useRef<THREE.Mesh[]>([]);
   const floodLightRef = useRef<THREE.SpotLight | null>(null);
   const consoleLightRef = useRef<THREE.PointLight | null>(null);
@@ -1042,7 +1045,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 7. Live 3D Joystick Tilt Movement
       if (joyShaftMeshRef.current) {
         const joyVal = liveState.joystickPosition;
-        joyShaftMeshRef.current.rotation.x = joyVal * 0.42;
+        // Tilt toward/away from the operator (who faces +X): pulled back for
+        // POOH (up, +), pushed forward for RIH (down, −).
+        joyShaftMeshRef.current.rotation.z = joyVal * 0.42;
+      }
+
+      // 7b. Console operator: posture, gaze and hands follow the operation.
+      if (operatorRef.current) {
+        const opSpeed = liveState.rod.rodSpeedFtPerMin;
+        operatorRef.current.update({
+          time: time / 1000,
+          delta,
+          activity: opSpeed < -0.1 ? 'rih' : opSpeed > 0.1 ? 'pooh' : 'idle',
+          speedRatio: Math.min(1, Math.abs(opSpeed) / 85),
+          alarm: alarmActive,
+          engineOn: isEngineOn,
+        });
       }
 
       // 8. Squeeze Pressure Clamping Hydraulics
@@ -2707,6 +2725,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
     consoleStandGroup.add(joyShaftGroup);
     joyShaftMeshRef.current = joyShaftGroup as unknown as THREE.Mesh;
+    // Grip point on the knob for the operator's left hand (tilts with the stick).
+    const joystickGrip = new THREE.Object3D();
+    joystickGrip.position.set(0, 0.27, 0);
+    joyShaftGroup.add(joystickGrip);
 
     // SAFETY RELIEF WHEEL VALVE ON ARCHED RISER PIPE
     const reliefDeckPlate = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.015, 0.24), blackMat);
@@ -2930,8 +2952,25 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     });
 
     // =========================================================================
-    // (Operator figure removed per request — no stylised human at the console.)
+    // CONSOLE OPERATOR — Weatherford coverall, procedurally animated (RIH/POOH)
     // =========================================================================
+    // Stands on the platform behind the console deck, facing +X (console/well).
+    const squeezeLeverGrip = new THREE.Object3D();
+    squeezeLeverGrip.position.set(-0.61, 0.35, 0.48); // 'R' SQUEEZE PRESS. ball lever
+    consoleStandGroup.add(squeezeLeverGrip);
+    const gaugeLookPoint = new THREE.Object3D();
+    gaugeLookPoint.position.set(-0.42, 0.38, 0.3);
+    consoleStandGroup.add(gaugeLookPoint);
+    const operator = createOperatorCharacter(createMeshKit(), {
+      joystickHandle: joystickGrip,
+      squeezeLever: squeezeLeverGrip,
+      gauges: gaugeLookPoint,
+      well: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 2.5, 0),
+      reel: new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z),
+    });
+    operator.root.position.set(-0.34, 0.06, 0.08); // on the platform floor
+    opPlatformGroup.add(operator.root);
+    operatorRef.current = operator;
 
     // --- Swap in the imported MG Truck model (with its own console) ----------
     // Hide the procedural truck body, then load the detailed Blender model into
