@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { addServiceReelDetails } from './three/serviceReelDetails';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SimulatorState } from '../types';
@@ -2954,8 +2955,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
     // Simple flatbed trailer under the reel (per the field diagram).
     const trailerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.4, roughness: 0.6 });
-    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.4, 3.0), trailerMat);
-    trailerDeck.position.set(0, -2.0, 0);
+    // Low-profile deck clears the flange bottom (local Y = -2.365).
+    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 3.0), trailerMat);
+    trailerDeck.position.set(0, -2.65, 0);
     trailerDeck.castShadow = true;
     trailerDeck.receiveShadow = true;
     reelGroup.add(trailerDeck);
@@ -2972,25 +2974,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       reelGroup.add(w);
     });
 
-    // Reel A-Frame Heavy Support Cradle (weathered dark structural steel).
-    const aFrameMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.5 });
-    const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3.6, 8), aFrameMat);
-    leftLeg.rotation.z = 0.32;
-    leftLeg.position.set(-0.55, -1.1, 1.5);
-    reelGroup.add(leftLeg);
-
-    const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3.6, 8), aFrameMat);
-    rightLeg.rotation.z = -0.32;
-    rightLeg.position.set(0.55, -1.1, 1.5);
-    reelGroup.add(rightLeg);
-
-    const leftLegR = leftLeg.clone();
-    leftLegR.position.z = -1.5;
-    reelGroup.add(leftLegR);
-
-    const rightLegR = rightLeg.clone();
-    rightLegR.position.z = -1.5;
-    reelGroup.add(rightLegR);
+    // Detailed fixed cradle and rotating flange hardware are built separately below.
 
     // Spool Rotating Assembly
     const spool = new THREE.Group();
@@ -3000,29 +2984,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     axle.rotation.x = Math.PI / 2;
     spool.add(axle);
 
-    // Reel flange rings + spokes (the circular STEEL BOUNDARIES of the spool) are
-    // a silverish galvanised steel — distinct from the RED cradle/A-frame and the
-    // BLACK wound rod, matching the reference photo.
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0xc4c9d0, metalness: 0.85, roughness: 0.35 });
-    const rimLeft = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.08, 12, 48), rimMat);
-    rimLeft.position.z = 1.25;
-    spool.add(rimLeft);
-
-    const rimRight = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.08, 12, 48), rimMat);
-    rimRight.position.z = -1.25;
-    spool.add(rimRight);
-
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.3, 8), rimMat);
-      spoke.position.set(Math.cos(angle) * 1.15, Math.sin(angle) * 1.15, 1.25);
-      spoke.rotation.z = angle + Math.PI / 2;
-      spool.add(spoke);
-
-      const spokeR = spoke.clone();
-      spokeR.position.z = -1.25;
-      spool.add(spokeR);
-    }
+    addServiceReelDetails(reelGroup, spool);
 
     // --- Continuous Coiled Rod Pack (ONE rod wound like rope on a spool) ------
     // Real transport-reel behaviour (the "rope wrapped around a hook" model): a
@@ -3084,7 +3046,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
     // Initial build at FULL spool. The render loop rebuilds this geometry as the
     // rod pays off during RIH so the coil shrinks live.
-    const coilMat = new THREE.MeshStandardMaterial({ color: 0x45403a, metalness: 0.75, roughness: 0.45 });
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0x343a40, metalness: 0.7, roughness: 0.4 });
     const initialGeo = buildCoilGeometry(1);
     const coilTube = new THREE.Mesh(initialGeo ?? new THREE.BufferGeometry(), coilMat);
     coilTube.castShadow = true;
@@ -3123,23 +3085,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     hitchRing.position.set(-6.0, -2.7, 0);
     reelGroup.add(hitchRing);
 
-    // Item 57: Trailer fenders over wheels (LOCAL coords)
-    const fenderMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.8 });
-    const fenderGeo = new THREE.BoxGeometry(1.2, 0.06, 0.8);
-    [-1.5, 1.5].forEach((ox) => {
-      [-1.8, 1.8].forEach((fz) => {
-        const fender = new THREE.Mesh(fenderGeo, fenderMat);
-        fender.position.set(ox, -2.15, fz); // above wheel tops in local space
-        reelGroup.add(fender);
-      });
-    });
-
-    // Item 55: A-frame cross-bracing (LOCAL coords)
+    // Fenders and outboard cradle bracing are supplied by addServiceReelDetails.
+    // Keep braces outside the spinning pack instead of crossing through its bore.
     const crossBraceMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.3 });
-    const crossBrace = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.8, 8), crossBraceMat);
-    crossBrace.position.set(0, -0.3, 0); // mid-height of A-frame in local space
-    crossBrace.rotation.x = Math.PI / 2;
-    reelGroup.add(crossBrace);
 
     // --- AUXILIARY EQUIPMENT at the FRONT BASE (−X, tongue side) --------------
     // Heavy red structural skid, deployment hydraulic cylinders, and twin fire
