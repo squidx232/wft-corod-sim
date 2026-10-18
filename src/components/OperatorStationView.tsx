@@ -335,7 +335,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
           <SegmentedControl
             label={t('station.view')}
             value={layoutMode}
-            onChange={setLayoutMode}
+            onChange={(id) => setLayoutMode(id as StationLayoutMode)}
             segments={[
               { id: 'split', label: <span className="hidden lg:inline">{t('station.view.split')}</span>, icon: <Columns className="w-3.5 h-3.5" />, title: t('station.view.split') },
               { id: 'rig-focus', label: <span className="hidden lg:inline">{t('station.view.windshield')}</span>, icon: <Maximize2 className="w-3.5 h-3.5" />, title: t('station.view.windshield') },
@@ -671,7 +671,6 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               onInstallClamp={onInstallClamp}
               onRemoveClamp={onRemoveClamp}
               onSetClampCount={onSetClampCount}
-            onEmergencyAction={onEmergencyAction}
               onTapTest={onTapTest}
               onAttachContainment={onAttachContainment}
               onToggleReelSafetyFork={onToggleReelSafetyFork}
@@ -719,7 +718,6 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             onInstallClamp={onInstallClamp}
             onRemoveClamp={onRemoveClamp}
             onSetClampCount={onSetClampCount}
-            onEmergencyAction={onEmergencyAction}
             onTapTest={onTapTest}
             onAttachContainment={onAttachContainment}
             onToggleReelSafetyFork={onToggleReelSafetyFork}

@@ -60,7 +60,6 @@ export const auxiliary: TranslationPart = {
     'aux.gripperChainOiler': '1. Gripper Chain Oiler Lever',
     'aux.dispenseLubeOil': 'Dispense Lube Oil',
     'aux.rigLevelingPad': 'Rig Leveling & Pad Safety (Section 5.6)',
-    'aux.woodenPads': 'Wooden Pads Under Legs',
     'aux.trucklevel': 'Truck Level (Spirit Bubble)',
 
     // Picker Tab
@@ -242,7 +241,6 @@ export const auxiliary: TranslationPart = {
     'aux.gripperChainOiler': '1. ذراع مزيت سلسلة القابض',
     'aux.dispenseLubeOil': 'توزيع زيت التزييت',
     'aux.rigLevelingPad': 'مستويات الحفّار والوسادات الآمنة (القسم 5.6)',
-    'aux.woodenPads': 'وسادات خشبية تحت الأرجل',
     'aux.trucklevel': 'مستوى الشاحنة (فقاعة الروح)',
 
     // Picker Tab

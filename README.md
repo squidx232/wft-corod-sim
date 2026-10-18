@@ -72,7 +72,7 @@ supports English and Arabic (RTL).
 
 ## Tech Stack
 
-- **React 18 + TypeScript**
+- **React 19 + TypeScript**
 - **Vite** (dev server & build)
 - **Three.js** for the 3D viewport
 - **Tailwind-style utility classes** for UI

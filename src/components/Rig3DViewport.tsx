@@ -3094,8 +3094,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     coilMatRef.current = coilMat;
     coilFillRef.current = 1;
     // Expose the builder on the mesh so the render loop can regenerate geometry.
-    (coilTube as THREE.Mesh & { userData: { buildCoilGeometry: (f: number) => THREE.TubeGeometry | null } })
-      .userData.buildCoilGeometry = buildCoilGeometry;
+    coilTube.userData.buildCoilGeometry = buildCoilGeometry;
 
     // Dark barrel cylinder under the innermost wrap so no gap shows to the axle.
     const core = new THREE.Mesh(
@@ -3996,8 +3995,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const rodMesh = new THREE.Mesh(buildRodStrandGeometry(1), rodMat);
     rodMesh.castShadow = true;
     // Expose the builder so the render loop can regenerate the strand on fill change.
-    (rodMesh as THREE.Mesh & { userData: { buildRodStrandGeometry: (f: number) => THREE.TubeGeometry } })
-      .userData.buildRodStrandGeometry = buildRodStrandGeometry;
+    rodMesh.userData.buildRodStrandGeometry = buildRodStrandGeometry;
     scene.add(rodMesh);
     rodStrandRef.current = rodMesh;
   }
