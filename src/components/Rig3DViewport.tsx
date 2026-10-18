@@ -1,5 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { addServiceReelDetails } from './three/serviceReelDetails';
+import { createMeshKit } from './three/meshKit';
+import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
+import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
+import {
+  addPumpjackDetails,
+  addProductionFacility,
+  addTankBatteryDetails,
+  PUMPJACK_HORSEHEAD_REACH,
+  TankBatteryLayout,
+} from './three/productionEquipment';
+import { addOilfieldSiteDetails } from './three/oilfieldSite';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SimulatorState } from '../types';
@@ -115,6 +126,45 @@ function coilOuterRadius(fill: number): number {
   const f = Math.max(0, Math.min(1, fill));
   return COIL_BARREL_R + f * (COIL_MAX_OUTER_R - COIL_BARREL_R);
 }
+
+// ---------------------------------------------------------------------------
+// Lease layout for the outlying production equipment. Shared by the props and
+// the terrain grading so every facility sits on a level, graded pad.
+// ---------------------------------------------------------------------------
+const PUMPJACK_SITES: Array<{ x: number; z: number; ry: number; s: number; paint: number; rate: number }> = [
+  { x: WELL_X + 26, z: -20, ry: -0.5, s: 1.0, paint: 0xb45309, rate: 0.9 },
+  { x: WELL_X + 40, z: 6, ry: -1.9, s: 1.15, paint: 0x1f6feb, rate: 0.7 },
+  { x: MG_UNIT_X - 30, z: 22, ry: 0.7, s: 0.9, paint: 0x15803d, rate: 1.1 },
+  { x: MG_UNIT_X - 44, z: -14, ry: 2.2, s: 1.25, paint: 0xb91c1c, rate: 0.8 },
+  // Clear of the tank battery (which spans ~X 36..68, Z ≈ −30 ± 3).
+  { x: WELL_X + 70, z: -52, ry: -0.9, s: 1.1, paint: 0xca8a04, rate: 0.6 },
+];
+const TANK_BATTERY: TankBatteryLayout = {
+  startX: WELL_X + 30,
+  z: -30,
+  radius: 2.6,
+  height: 7.5,
+  baseY: 1.05,
+  count: 5,
+  spacing: 2.6 * 2 + 1.4,
+};
+const PRODUCTION_FACILITY = {
+  x: TANK_BATTERY.startX + (TANK_BATTERY.count - 1) * TANK_BATTERY.spacing + TANK_BATTERY.radius + 9,
+  z: TANK_BATTERY.z,
+};
+const GRADED_PADS: GradedPad[] = [
+  { kind: 'circle', x: 0, z: 0, radius: 42, blend: 60 }, // main lease (original flat site)
+  {
+    kind: 'rect',
+    minX: TANK_BATTERY.startX - TANK_BATTERY.radius - 10,
+    maxX: PRODUCTION_FACILITY.x + 9,
+    minZ: TANK_BATTERY.z - 8,
+    maxZ: TANK_BATTERY.z + 9,
+    blend: 22,
+  },
+  ...PUMPJACK_SITES.map((p): GradedPad => ({ kind: 'circle', x: p.x, z: p.z, radius: 8 * p.s, blend: 18 })),
+];
+const terrain = createTerrainSampler(GRADED_PADS);
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -323,7 +373,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const guideMeshRestRef = useRef<Array<{ x: number; y: number }>>([]);
   // Background pumpjacks: each entry drives a nodding-beam animation. `phase`
   // offsets each unit so they don't all nod in unison.
-  const pumpjacksRef = useRef<Array<{ walkingBeam: THREE.Group; crank: THREE.Group; phase: number; rate: number }>>([]);
+  const pumpjacksRef = useRef<Array<{
+    walkingBeam: THREE.Group;
+    crank: THREE.Group;
+    phase: number;
+    rate: number;
+    hanger: THREE.Group;
+    hangerRestY: number;
+  }>>([]);
   const wellheadSprayRef = useRef<THREE.Mesh[]>([]);
   const rodClampRefs = useRef<THREE.Group[]>([]);
 
@@ -714,6 +771,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const ang = t * pj.rate + pj.phase;
         pj.crank.rotation.z = ang;              // crank+counterweights spin
         pj.walkingBeam.rotation.z = Math.sin(ang) * 0.16; // beam nods ±0.16 rad
+        // The horsehead arc keeps the bridle vertical: the rod hanger only moves in Y.
+        pj.hanger.position.y = pj.hangerRestY + Math.sin(pj.walkingBeam.rotation.z) * PUMPJACK_HORSEHEAD_REACH;
       });
 
       // 2c. LIVE ROD-GUIDE highlight — TWITCHES with the rod, not a fixed colour.
@@ -1168,7 +1227,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // and lighten the rises for a natural, non-uniform prairie look.
     const TERRAIN_SIZE = 620;
     const TERRAIN_SEG = 160;
-    const FLAT_RADIUS = 42; // keep the worksite area flat
     const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG);
     const tPos = terrainGeo.attributes.position as THREE.BufferAttribute;
     // SAND palette matching the lease pad (not green). Day vs night variants.
@@ -1180,19 +1238,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     for (let i = 0; i < tPos.count; i++) {
       const x = tPos.getX(i);
       const y = tPos.getY(i); // plane-local Y maps to world −Z after rotation
-      const dist = Math.hypot(x, y);
       // Layered sine dunes → smooth pseudo-random relief with MORE height
       // variation, and rising sharply toward the horizon to blend into mountains.
-      let h =
-        Math.sin(x * 0.014) * Math.cos(y * 0.017) * 11.0 +
-        Math.sin(x * 0.035 + 1.7) * Math.cos(y * 0.03 + 0.6) * 5.0 +
-        Math.sin(x * 0.08 + 3.1) * Math.cos(y * 0.065 + 2.2) * 2.0;
-      // Ramp terrain upward far from the site so it climbs into the mountain ring.
-      const rise = THREE.MathUtils.smoothstep(dist, 120, 300) * 26.0;
-      h += rise;
-      // Fade the relief to zero across the flat worksite so nothing floats.
-      const fade = THREE.MathUtils.smoothstep(dist, FLAT_RADIUS, FLAT_RADIUS + 60);
-      h *= fade;
+      // Shared dune relief, levelled across the lease and every graded facility
+      // pad (tank battery, production facility, pump jacks) so nothing is buried.
+      let h = terrain.relief(x, -y);
       // CELLAR CUTOUT: sink any terrain vertex that falls within the cellar
       // opening far below the pit floor so the ground plane doesn't cap the pit
       // (leaving the open cellar visible when you look down into it). Local x ≈
@@ -1265,11 +1315,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const silMat = new THREE.MeshStandardMaterial({ color: silCol, roughness: 1.0, metalness: 0.0 });
     let dSeed = 4242;
     const dRnd = () => { dSeed = (dSeed * 1103515245 + 12345) & 0x7fffffff; return dSeed / 0x7fffffff; };
-    const groundAt = (px: number, pz: number) => {
-      // Match the terrain height formula (rise ramp) so props sit ON the ground.
-      const dist = Math.hypot(px, pz);
-      return THREE.MathUtils.smoothstep(dist, 120, 300) * 26.0 - 0.15;
-    };
+    // Sample the real terrain surface so the silhouettes sit ON the dunes.
+    const groundAt = terrain.groundAt;
     // Distant cluster sites at varied bearings/distances (kept OUTSIDE the pad).
     const distantSites: Array<{ x: number; z: number; kind: 'tanks' | 'pumpjack' | 'unit' }> = [
       { x: 120, z: -70, kind: 'tanks' },
@@ -1559,10 +1606,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       stack.position.set(-9.2, 3.2, sz); stack.castShadow = true; truck.add(stack);
     });
     // Saddle fuel tank + battery box along the frame between axles.
-    const fuelTank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 16), chromeMat2);
-    fuelTank.rotation.z = Math.PI / 2; fuelTank.position.set(-8.4, 1.15, 1.25); truck.add(fuelTank);
+    // Saddle tank sits between the steer and drive axles (clear of both tyre sets).
+    const fuelTank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16), chromeMat2);
+    fuelTank.rotation.z = Math.PI / 2; fuelTank.position.set(-10.65, 1.15, 1.25); truck.add(fuelTank);
     const battBox = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.7), frameMat);
-    battBox.position.set(-8.4, 1.2, -1.25); truck.add(battBox);
+    battBox.position.set(-10.65, 1.2, -1.25); truck.add(battBox);
 
     // --- Wheels: steer axle up front + drive axles + REAR trailer axles spread
     // along the long bed. Duals on the load-bearing axles for a heavy unit. ---
@@ -1602,6 +1650,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       const foot = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), frameMat);
       foot.position.set(lx, 0.06, lz); truck.add(foot);
     });
+    const puKit = createMeshKit();
+    addPullingUnitCarrierDetails(truck, puKit);
     pu.add(truck);
 
     // --- Lattice mast: 4 straight vertical corner chords with rungs & real
@@ -1685,6 +1735,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const boardRail = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 0.06), steel(0xd4a017, 0.7, 0.3));
     boardRail.position.set(0, 0.3, -1.05); board.add(boardRail);
     mast.add(board);
+    // Telescoping sleeve, caged ladder, crown platform, floodlights, racking-board
+    // fingers, aviation light and derrickman's escape line.
+    addMastDetails(mast, puKit, MAST_H, legHalf);
 
     pu.add(mast);
     // Ensure the mast's local matrix reflects its lean rotation so we can read
@@ -1781,6 +1834,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // fence & scattered equipment for a fully-populated oil & gas lease.
   // =========================================================================
   function buildBackgroundProps(scene: THREE.Scene) {
+    const pjKit = createMeshKit();
     const steel = (c: number, r = 0.7, m = 0.4) =>
       new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
 
@@ -1792,6 +1846,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       group: THREE.Group;
       walkingBeam: THREE.Group;
       crank: THREE.Group;
+      hanger: THREE.Group;
+      hangerRestY: number;
     } => {
       const g = new THREE.Group();
       const paintMat = steel(paint, 0.55, 0.45);
@@ -1844,9 +1900,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       const headBrow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.4, 0.5), paintMat);
       headBrow.position.set(0.1, -0.5, 0); headGroup.add(headBrow);
       walkingBeam.add(headGroup);
-      // Bridle / carrier bar + polished-rod hanger down to the wellhead
-      const bridle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3.6, 6), darkMat);
-      bridle.position.set(5.2, -1.8, 0); walkingBeam.add(bridle);
+      // (Bridle/carrier bar/polished rod are a separate hanger — addPumpjackDetails.)
       // Equalizer at the tail (−X)
       const tailBox = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 1.0), darkMat);
       tailBox.position.set(-4.2, 0, 0); walkingBeam.add(tailBox);
@@ -1857,14 +1911,15 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       gearbox.position.set(-4.6, 1.4, 0); gearbox.castShadow = true; g.add(gearbox);
       const crank = new THREE.Group();
       crank.position.set(-4.6, 1.9, 0);
-      [-0.65, 0.65].forEach((cz) => {
+      // Crank arms run OUTBOARD of the gearbox (±0.9) so they don't pass through it.
+      [-1.08, 1.08].forEach((cz) => {
         const crankArm = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.35, 0.18), darkMat);
         crankArm.position.set(0, 0, cz); crank.add(crankArm);
         const cw = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.1, 0.3), steel(0x1c1917, 0.6, 0.4));
         cw.position.set(-1.0, 0, cz); crank.add(cw);
       });
       // Pitman arms linking crank pin up to the beam tail (visual only)
-      [-0.65, 0.65].forEach((cz) => {
+      [-1.08, 1.08].forEach((cz) => {
         const pitman = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6), railMat);
         pitman.position.set(-1.0, 1.3, cz); crank.add(pitman);
       });
@@ -1872,24 +1927,17 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // Motor + belt guard beside the gearbox
       const motor = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.7), steel(0x2563eb, 0.5, 0.5));
-      motor.position.set(-5.9, 1.0, 0.9); g.add(motor);
+      motor.position.set(-7.0, 1.0, 0.9); g.add(motor); // clear of the crank sweep
 
-      return { group: g, walkingBeam, crank };
+      const { hanger, hangerRestY } = addPumpjackDetails(g, pjKit, postTopY);
+      return { group: g, walkingBeam, crank, hanger, hangerRestY };
     };
 
-    // Scatter several pumpjacks around the lease at varied positions/rotations.
-    const pjPlacements: Array<{ x: number; z: number; ry: number; s: number; paint: number; rate: number }> = [
-      { x: WELL_X + 26, z: -20, ry: -0.5, s: 1.0, paint: 0xb45309, rate: 0.9 },
-      { x: WELL_X + 40, z: 6, ry: -1.9, s: 1.15, paint: 0x1f6feb, rate: 0.7 },
-      { x: MG_UNIT_X - 30, z: 22, ry: 0.7, s: 0.9, paint: 0x15803d, rate: 1.1 },
-      { x: MG_UNIT_X - 44, z: -14, ry: 2.2, s: 1.25, paint: 0xb91c1c, rate: 0.8 },
-      // Moved well CLEAR of the tank farm (which spans ~X 36..68, Z ≈ −30 ± 3).
-      // Previously (WELL_X+55=64, −34) sat inside/behind the tank row, clipping it.
-      { x: WELL_X + 70, z: -52, ry: -0.9, s: 1.1, paint: 0xca8a04, rate: 0.6 },
-    ];
+    // Pump jacks around the lease (layout shared with the terrain grading).
+    const pjPlacements = PUMPJACK_SITES;
     pumpjacksRef.current = [];
     pjPlacements.forEach((p, i) => {
-      const { group, walkingBeam, crank } = buildPumpjack(p.paint);
+      const { group, walkingBeam, crank, hanger, hangerRestY } = buildPumpjack(p.paint);
       group.position.set(p.x, 0, p.z);
       group.rotation.y = p.ry;
       group.scale.setScalar(p.s);
@@ -1897,6 +1945,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       pumpjacksRef.current.push({
         walkingBeam,
         crank,
+        hanger,
+        hangerRestY,
         phase: (i / pjPlacements.length) * Math.PI * 2,
         rate: p.rate,
       });
@@ -1905,12 +1955,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // --- TANK FARM — a row of large production/storage tanks inside a low
     // containment berm, with a connecting manifold pipe. Positioned off to the
     // side of the lease so it reads as a bulk battery. ---
-    const FARM_X = WELL_X + 30;
-    const FARM_Z = -30;
-    const TANK_R = 2.6;
-    const TANK_H = 7.5;
-    const tankCount = 5;
-    const tankSpacing = TANK_R * 2 + 1.4;
+    const FARM_X = TANK_BATTERY.startX;
+    const FARM_Z = TANK_BATTERY.z;
+    const TANK_R = TANK_BATTERY.radius;
+    const TANK_H = TANK_BATTERY.height;
+    const tankCount = TANK_BATTERY.count;
+    const tankSpacing = TANK_BATTERY.spacing;
     const farmWidth = (tankCount - 1) * tankSpacing;
 
     // Containment berm (a low earthen wall ring around the tanks).
@@ -1986,6 +2036,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       riser.position.set(x, 1.9, z + TANK_R + 0.6);
       scene.add(riser);
     });
+    // Stair tower, roof catwalk, hatches/vents, gauge boards, placards, load-out
+    // stands and signage; then the separator/heater-treater/flare pad beside it.
+    addTankBatteryDetails(scene, pjKit, TANK_BATTERY);
+    addProductionFacility(scene, pjKit, PRODUCTION_FACILITY.x, PRODUCTION_FACILITY.z,
+      Math.max(terrain.groundAt(PRODUCTION_FACILITY.x, PRODUCTION_FACILITY.z), 0));
 
     // --- Power line poles receding across the field ---
     const woodMat = steel(0x5c4326, 0.95, 0.0);
@@ -2032,6 +2087,25 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const wireGeo = new THREE.BufferGeometry().setFromPoints(pts);
         scene.add(new THREE.Line(wireGeo, wireMat));
       });
+    });
+
+    // Lease road, scrub/rocks, light towers, doghouse, pipe rack, windsock, signage.
+    addOilfieldSiteDetails(scene, pjKit, {
+      groundAt: terrain.groundAt,
+      isNight: isNightMode,
+      pad: { minX: siteCenterX - 45, maxX: siteCenterX + 45, minZ: -26, maxZ: 26 },
+      keepClear: [
+        ...PUMPJACK_SITES.map((p) => ({ x: p.x, z: p.z, r: 9 * p.s })),
+        // Distant neighbouring-facility silhouettes (see buildEnvironment).
+        ...[[120, -70], [-140, 40], [60, 150], [-90, -150], [170, 60], [-60, 170], [200, -30], [-180, -90]]
+          .map(([x, z]) => ({ x, z, r: 16 })),
+      ],
+      keepClearRects: [{
+        minX: TANK_BATTERY.startX - TANK_BATTERY.radius - 10,
+        maxX: PRODUCTION_FACILITY.x + 9,
+        minZ: TANK_BATTERY.z - 8,
+        maxZ: TANK_BATTERY.z + 9,
+      }],
     });
 
     // (Removed the scattered ground pipe-joint stack that used to sit beside the
