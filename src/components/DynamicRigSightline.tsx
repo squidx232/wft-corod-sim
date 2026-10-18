@@ -417,14 +417,14 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             type="button"
             onClick={onToggleReelSafetyFork}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
-              hydraulics.reelSafetyForkEngaged
+              rod.reelSafetyForksInPlace
                 ? 'bg-amber-950/80 border-amber-600 text-amber-300 hover:bg-amber-900'
                 : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
             <span>
-              {t('sightline.reelFork')}: {hydraulics.reelSafetyForkEngaged ? t('sightline.reelForkEngaged') : t('sightline.reelForkDisengaged')}
+              {t('sightline.reelFork')}: {rod.reelSafetyForksInPlace ? t('sightline.reelForkEngaged') : t('sightline.reelForkDisengaged')}
             </span>
           </button>
 

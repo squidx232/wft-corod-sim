@@ -519,7 +519,7 @@ export default function App() {
           // and warn at critical overheat threshold
           hyd.hydraulicFluidTempC = Math.max(-10, Math.min(85, hyd.hydraulicFluidTempC));
           if (hyd.hydraulicFluidTempC >= 70 && prev.hydraulics.hydraulicFluidTempC < 70) {
-            soundManager.playBuzzerAlert(2.0);
+            soundManager.playBuzzerAlert();
           }
         } else {
           // Engine RUNNING but PTO NOT engaged (idle). The charge pump is driven
@@ -677,7 +677,7 @@ export default function App() {
         // Per manual: freefall audio alert — "Signal the emergency to personnel
         // (If possible use one long horn blast)"
         if (rod.rodInTensionOrCompression === 'freefall' && prev.rod.rodInTensionOrCompression !== 'freefall') {
-          soundManager.playBuzzerAlert(2.0);
+          soundManager.playBuzzerAlert();
         }
 
         rod.rodSpeedFtPerMin = rod.rodSpeedFtPerMin + (targetSpeed - rod.rodSpeedFtPerMin) * 0.3;
@@ -702,7 +702,7 @@ export default function App() {
         // Per manual WARNING: "CHARGE PRESSURE IS CRITICAL. IF THE CHARGE
         // PRESSURE FALLS BELOW 250psi THE ROD SAFETY CLAMP SHOULD BE ENGAGED"
         if (hyd.chargePressure < 250 && prev.hydraulics.chargePressure >= 250) {
-          soundManager.playBuzzerAlert(1.5);
+          soundManager.playBuzzerAlert();
         }
 
         // Y-Tool Diameter variations with depth
@@ -902,7 +902,7 @@ export default function App() {
             })),
           }));
           if (step.timeoutMessage) {
-            soundManager.playBuzzerAlert(1.5);
+            soundManager.playBuzzerAlert();
             setEmergencyToast(step.timeoutMessage);
             setTimeout(() => setEmergencyToast(null), 5000);
           }
@@ -1094,20 +1094,20 @@ export default function App() {
     if (pos !== 0) {
       // GATE: operation is locked until the engine start sequence is complete
       if (!s.engineStartSequenceComplete || !s.hydraulics.engineRunning) {
-        soundManager.playBuzzerAlert(0.4);
+        soundManager.playBuzzerAlert();
         setShowEngineStartModal(true);
         return; // Must start the engine first
       }
       if (s.hydraulics.safetyClampLever === 'ON') {
-        soundManager.playBuzzerAlert(0.3);
+        soundManager.playBuzzerAlert();
         return; // Safety clamp blocks all rod movement
       }
       if (s.hydraulics.gripperBrakeSwitch) {
-        soundManager.playBuzzerAlert(0.3);
+        soundManager.playBuzzerAlert();
         return; // Gripper brake blocks rod movement
       }
       if (s.hydraulics.squeezePressure < 400 && s.hydraulics.squeezePressureSwitch) {
-        soundManager.playBuzzerAlert(0.5);
+        soundManager.playBuzzerAlert();
         // Allow but warn — per manual: "NEVER move COROD with < 400 psi squeeze"
       }
     }
@@ -1121,7 +1121,7 @@ export default function App() {
     const secured = s.hydraulics.safetyClampLever === 'ON' ||
       (s.rod.mechanicalClampsInstalled > 0 && s.rod.clampTorqueFtLbs >= 400);
     if (alarmActiveNow && !secured && pos >= 0) {
-      soundManager.playBuzzerAlert(0.5);
+      soundManager.playBuzzerAlert();
       return; // STOP / POOH ignored — regain control first (raise squeeze / clamp)
     }
 
@@ -1136,7 +1136,7 @@ export default function App() {
     // Per manual: "Before activating the Emergency Shut Down, the Rod Safety
     // Clamp must be activated first." Warn if safety clamp is not engaged.
     if (stateRef.current.hydraulics.safetyClampLever !== 'ON') {
-      soundManager.playBuzzerAlert(0.5);
+      soundManager.playBuzzerAlert();
     }
     soundManager.playHiss(0.8);
     // BUG FIX: Emergency shutdown must also zero the joystick and engage
@@ -1177,7 +1177,7 @@ export default function App() {
   const triggerEmergencyScenario = (scenarioId: string, opts: { assessment?: boolean } = {}) => {
     const scenario = getEmergencyScenario(scenarioId);
     if (!scenario) return;
-    soundManager.playBuzzerAlert(2.0);
+    soundManager.playBuzzerAlert();
     // Capture pre-drill conditions for restoration on completion.
     preDrillSnapshotRef.current = {
       hydraulics: { ...stateRef.current.hydraulics },
@@ -1310,7 +1310,7 @@ export default function App() {
   ) => {
     // Gate on engine start like normal operation.
     if (!stateRef.current.engineStartSequenceComplete || !stateRef.current.hydraulics.engineRunning) {
-      soundManager.playBuzzerAlert(0.5);
+      soundManager.playBuzzerAlert();
       setShowEngineStartModal(true);
       return;
     }
@@ -1460,7 +1460,7 @@ export default function App() {
   const failActiveAssessmentEmergency = () => {
     const snap = preDrillSnapshotRef.current;
     const now = Date.now();
-    soundManager.playBuzzerAlert(1.8);
+    soundManager.playBuzzerAlert();
     setEmergencyToast(t('emergencyHud.reactFail'));
     setTimeout(() => setEmergencyToast(null), 4000);
     setState((prev) => {
@@ -1669,7 +1669,7 @@ export default function App() {
     // the UI-level disabling so keybinds / other entry points can't bypass it.
     const s = stateRef.current;
     if (!s.hydraulics.engineRunning || !s.engineStartSequenceComplete) {
-      soundManager.playBuzzerAlert(0.4);
+      soundManager.playBuzzerAlert();
       setShowEngineStartModal(true);
       return;
     }
@@ -1754,7 +1754,7 @@ export default function App() {
       // SAFETY INTERLOCK: PTO cannot engage while engine is off (per manual Section 5.4)
       case 'pto.toggle': {
         if (!h.engineRunning && !h.ptoEngaged) {
-          soundManager.playBuzzerAlert(0.5);
+          soundManager.playBuzzerAlert();
           break; // Block PTO engage when engine off
         }
         updateHydraulics({ ptoEngaged: !h.ptoEngaged });
@@ -1765,7 +1765,7 @@ export default function App() {
       // ----- Gripper / Clamp -----
       case 'clamp.install': {
         if (!canInstallMechanicalClamp(s)) {
-          soundManager.playBuzzerAlert(0.5);
+          soundManager.playBuzzerAlert();
           break;
         }
         const count = Math.min(2, s.rod.mechanicalClampsInstalled + 1);
@@ -1868,7 +1868,7 @@ export default function App() {
     const beep = () => {
       if (cancelled) return;
       // Short, quiet warning blip (soundManager respects the global mute).
-      soundManager.playBuzzerAlert(0.25);
+      soundManager.playBuzzerAlert();
     };
     beep();
     const id = setInterval(beep, 2600);
@@ -2157,7 +2157,7 @@ export default function App() {
               onSetDepth={handleSetDepth}
               onInstallClamp={() => {
                 if (!canInstallMechanicalClamp(state)) {
-                  soundManager.playBuzzerAlert(0.5);
+                  soundManager.playBuzzerAlert();
                   return;
                 }
                 const count = Math.min(2, state.rod.mechanicalClampsInstalled + 1);
