@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addServiceReelDetails } from './three/serviceReelDetails';
+import { addServiceReelDetails, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
 import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
@@ -122,7 +122,7 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // threads through this guide head at the end of the reel's red containment arm,
 // and the arched rod guide (getRodGuideCurve) begins EXACTLY here so the rod
 // runs continuously coil edge → arm guide head → guide arch → injector.
-// Placed WELL OUTBOARD of the reel rims (flange radius 2.3) on the +X side, at a
+// Placed OUTBOARD of the horizontal reel's platter rim (radius 2.3), at a
 // low/side height (not above the reel), matching the field layout.
 // The arm/guide stands on the GROUND at the reel's FRONT-LEFT corner (toward the
 // MG/pulling unit). The reel centre is world (REEL_X=5, ·, REEL_Z=-11) with rim
@@ -130,17 +130,36 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // (toward the MG/camera, clear of the +Z rim edge at z≈-8.7) and only slightly
 // toward the well in +X — so the arm sits at the front-left corner beside the
 // reel, in the direction the guide arch travels toward the mast/injector.
-const GUIDE_HEAD = { x: REEL_X + 1.4, y: 3.2, z: REEL_Z + 3.0 };
-// Reel coil geometry proxy (must match buildServiceReel's coil params) so the rod
-// can dynamically connect to the coil's CURRENT outer radius as it shrinks.
-const COIL_BARREL_R = 0.42;            // barrel radius the first wrap sits on
-const COIL_MAX_OUTER_R = 2.05;         // outer radius at a FULL reel
-const REEL_CENTER_Y = 3.1;             // world Y of the reel/coil centre (= reelGroup Y)
-// Current coil outer radius for a given fill fraction (1 = full, 0 = empty).
-function coilOuterRadius(fill: number): number {
-  const f = Math.max(0, Math.min(1, fill));
-  return COIL_BARREL_R + f * (COIL_MAX_OUTER_R - COIL_BARREL_R);
+// Head sits above the horizontal reel's rim posts (the pack top is ≈3.0 m) and
+// just in front of the wider turntable trailer deck.
+const GUIDE_HEAD = { x: REEL_X + 1.4, y: 3.8, z: REEL_Z + 3.4 };
+// Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM). The rod
+// is coiled like a rope around the central stake in FLAT layers stacked upward;
+// each layer spirals stake → rim (or rim → stake on alternate layers). Rod pays
+// off the TOP layer, so the pack gets lower from the top down as rod runs in.
+const REEL_CENTER_Y = 3.1;             // world Y of the reel group origin (= reelGroup Y)
+const COIL_ROD_R = 0.075;              // drawn rod radius in the pack
+const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap and layer-to-layer pitch
+const COIL_BARREL_R = REEL_GEOM.stakeR + COIL_ROD_R; // first wrap against the stake
+const COIL_WRAPS_PER_LAYER = 11;       // wraps in one flat layer (stake → rim)
+const COIL_MAX_OUTER_R = COIL_BARREL_R + (COIL_WRAPS_PER_LAYER - 1) * COIL_PITCH; // ≈1.95, inside the rim
+const COIL_LAYERS = 11;                // layers at a FULL reel (pack ≈1.65 m tall)
+const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R; // local Y of the bottom layer
+/** Reel-local radius / height of the rod at `t` wraps from the bottom start. */
+function coilAt(t: number): { r: number; y: number } {
+  const W = COIL_WRAPS_PER_LAYER;
+  const layer = Math.max(0, Math.min(COIL_LAYERS - 1, Math.floor(t / W)));
+  const w = t - layer * W;
+  const f = Math.min(w, W - 1) / (W - 1);
+  const span = COIL_MAX_OUTER_R - COIL_BARREL_R;
+  const r = layer % 2 === 0 ? COIL_BARREL_R + f * span : COIL_MAX_OUTER_R - f * span;
+  // The last wrap of each layer (except the top one) climbs one pitch onto the next layer.
+  const climb = layer < COIL_LAYERS - 1 ? Math.max(0, Math.min(1, w - (W - 1))) : 0;
+  const y = COIL_BASE_Y + layer * COIL_PITCH + climb * COIL_PITCH;
+  return { r, y };
 }
+/** Wraps still on the reel for a fill fraction (1 = full, 0 = empty). */
+const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_LAYERS * COIL_WRAPS_PER_LAYER;
 
 // ---------------------------------------------------------------------------
 // Lease layout for the outlying production equipment. Shared by the props and
@@ -604,8 +623,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       cameraRef.current.lookAt(targetLookAt.current);
     } else if (preset === 'reel') {
       // Close up of the COROD Service Reel on its trailer (center-left).
-      targetLookAt.current.set(REEL_X, 4.0, REEL_Z);
-      cameraRef.current.position.set(REEL_X - 1, 5.5, REEL_Z + 9);
+      // Look down onto the flat reel so the coil-pack top (where rod pays off) shows.
+      targetLookAt.current.set(REEL_X, 2.4, REEL_Z);
+      cameraRef.current.position.set(REEL_X - 1, 7.0, REEL_Z + 8);
       sphericalRef.current = { radius: 9, theta: 1.4, phi: 1.15 };
       cameraRef.current.lookAt(targetLookAt.current);
     } else if (preset === 'wellhead') {
@@ -935,7 +955,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 2. Service Reel Dynamic Rotation with Inertia
       if (reelSpoolRef.current) {
         const radPerSec = (speed / 15) * Math.PI * 0.5;
-        reelSpoolRef.current.rotation.z += radPerSec * delta;
+        reelSpoolRef.current.rotation.y -= radPerSec * delta; // horizontal reel turns about its vertical centre
       }
 
       // 2a. Wound-rod coil SHRINKS as rod pays off the reel during RIH -----------
@@ -3403,99 +3423,41 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Stand the reel level (no tilt) so it sits squarely on its trailer/ground.
     reelGroup.rotation.x = 0;
 
-    // Simple flatbed trailer under the reel (per the field diagram).
+    // Flatbed trailer under the HORIZONTAL reel. The deck is wide enough for the
+    // flat 4.6 m platter and raised clear of the wheels (wheels at local y -2.6).
     const trailerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.4, roughness: 0.6 });
-    // Low-profile deck clears the flange bottom (local Y = -2.365).
-    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 3.0), trailerMat);
-    trailerDeck.position.set(0, -2.65, 0);
+    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 4.9), trailerMat);
+    trailerDeck.position.set(0, REEL_GEOM.deckTopY - 0.09, 0);
     trailerDeck.castShadow = true;
     trailerDeck.receiveShadow = true;
     reelGroup.add(trailerDeck);
-    // Trailer wheels
-    const trWheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.35, 20);
-    trWheelGeo.rotateX(Math.PI / 2);
-    const trWheelMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.9 });
-    [
-      [-2.0, -2.6, 1.4], [-2.0, -2.6, -1.4],
-      [2.0, -2.6, 1.4], [2.0, -2.6, -1.4],
-    ].forEach(([x, y, z]) => {
-      const w = new THREE.Mesh(trWheelGeo, trWheelMat);
-      w.position.set(x, y, z);
-      reelGroup.add(w);
-    });
 
-    // Detailed fixed cradle and rotating flange hardware are built separately below.
-
-    // Spool Rotating Assembly
+    // Spool rotating assembly — turns about the VERTICAL centre axis (local Y):
+    // platter, central stake, rim posts (built in addServiceReelDetails) + the coil.
     const spool = new THREE.Group();
-
-    const axleMat = new THREE.MeshStandardMaterial({ color: 0x09090b, metalness: 0.85 });
-    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.9, 24), axleMat);
-    axle.rotation.x = Math.PI / 2;
-    spool.add(axle);
-
     addServiceReelDetails(reelGroup, spool);
 
-    // --- Continuous Coiled Rod Pack (ONE rod wound like rope on a spool) ------
-    // Real transport-reel behaviour (the "rope wrapped around a hook" model): a
-    // SINGLE continuous rod is wound onto the barrel. It spirals across the drum
-    // width one wrap at a time; when it reaches a flange it steps OUT one rod
-    // diameter and spirals back — so the pack GROWS IN THICKNESS (radius) OUTWARD
-    // while always staying INSIDE the flanges. Every individual wrap ("strap") is
-    // still clearly visible. We render the whole thing as one continuous TubeGeometry
-    // following the helical path, so it reads as a real wound rod, not stacked rings.
-    const BARREL_R = 0.42;              // barrel the first wrap sits on (just off the axle)
-    const ROD_R = 0.075;               // individual rod radius
-    const PACK = ROD_R * 2.0;          // centre-to-centre pitch of neighbouring wraps
-    const FLANGE_R = 2.3;              // containing flange radius (hard outer limit)
-    const halfWidth = 1.08;            // wound width, kept just inside the flanges (±1.25)
-    // How many radial layers fit between the barrel and the flange rim when the reel
-    // is FULLY wound (with a small margin so the outer wrap never pokes past the flanges).
-    const maxLayers = Math.max(1, Math.floor((FLANGE_R - ROD_R - BARREL_R) / PACK));
-    const wrapsPerLayer = Math.max(2, Math.round((halfWidth * 2) / PACK));
-
-    // Build the wound-rod tube for a given FILL fraction (1 = full spool, 0 = empty).
-    // The rod pays off from the OUTSIDE in (real reels unwind their outer wraps first),
-    // so as fill drops we drop whole outer layers AND partially unwind the current
-    // outer layer — the coil visibly shrinks in radius. Returns a fresh geometry
-    // (or null if effectively empty). One continuous helix so it reads as a real rod.
+    // --- Continuous CoRod pack: ONE rod coiled like a rope around the stake ----
+    // Flat layers stacked upward (each layer spirals stake → rim, the next rim →
+    // stake). Rod pays off the TOP, so as fill drops whole top layers disappear
+    // and the pack gets LOWER (top → bottom), never thinner from outside in.
     const buildCoilGeometry = (fill: number): THREE.TubeGeometry | null => {
-      const clamped = THREE.MathUtils.clamp(fill, 0, 1);
-      // Total wraps at full spool, and how many remain at this fill level.
-      const totalWraps = maxLayers * wrapsPerLayer;
-      const wrapsRemaining = Math.max(0, clamped * totalWraps);
-      if (wrapsRemaining < 0.75) return null; // essentially bare barrel
-      const fullLayers = Math.floor(wrapsRemaining / wrapsPerLayer);
-      const partialWraps = wrapsRemaining - fullLayers * wrapsPerLayer;
-
+      const wraps = coilWrapsFor(fill);
+      if (wraps < 0.75) return null; // essentially bare platter
+      const TURN_SEG = 40;           // path samples per wrap
+      const steps = Math.max(2, Math.round(wraps * TURN_SEG));
       const path: THREE.Vector3[] = [];
-      const TURN_SEG = 48;             // path samples per single wrap (smoothness)
-      const emitLayer = (layer: number, wrapsInLayer: number) => {
-        const rIn = BARREL_R + layer * PACK;
-        const rOut = BARREL_R + (layer + 1) * PACK;
-        const forward = layer % 2 === 0;      // alternate sweep direction each layer
-        const totalSteps = Math.max(1, Math.round(wrapsInLayer * TURN_SEG));
-        for (let s = 0; s <= totalSteps; s++) {
-          const w = (s / TURN_SEG);           // wraps completed so far in this layer
-          const f = Math.min(1, w / wrapsPerLayer); // 0..1 across the layer width
-          const zPos = forward ? -halfWidth + f * halfWidth * 2
-                               :  halfWidth - f * halfWidth * 2;
-          const ang = w * Math.PI * 2;        // one wrap = 2π
-          const r = Math.min(FLANGE_R - ROD_R, rIn + (rOut - rIn) * f);
-          path.push(new THREE.Vector3(Math.cos(ang) * r, Math.sin(ang) * r, zPos));
-        }
-      };
-      for (let layer = 0; layer < fullLayers; layer++) emitLayer(layer, wrapsPerLayer);
-      if (partialWraps > 0.05) emitLayer(fullLayers, partialWraps);
-      if (path.length < 2) return null;
-
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * wraps;
+        const { r, y } = coilAt(t);
+        const ang = t * Math.PI * 2;
+        path.push(new THREE.Vector3(Math.cos(ang) * r, y, Math.sin(ang) * r));
+      }
       const coilCurve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.0);
-      const tubularSegments = Math.min(4000, path.length); // cap for perf
-      return new THREE.TubeGeometry(coilCurve, tubularSegments, ROD_R, 8, false);
+      return new THREE.TubeGeometry(coilCurve, Math.min(4000, path.length), COIL_ROD_R, 8, false);
     };
 
-    // Initial build at FULL spool. The render loop rebuilds this geometry as the
-    // rod pays off during RIH so the coil shrinks live.
+    // Initial build at FULL reel; the render loop rebuilds as rod pays off.
     const coilMat = new THREE.MeshStandardMaterial({ color: 0x343a40, metalness: 0.7, roughness: 0.4 });
     const initialGeo = buildCoilGeometry(1);
     const coilTube = new THREE.Mesh(initialGeo ?? new THREE.BufferGeometry(), coilMat);
@@ -3505,17 +3467,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     coilTubeRef.current = coilTube;
     coilMatRef.current = coilMat;
     coilFillRef.current = 1;
-    // Expose the builder on the mesh so the render loop can regenerate geometry.
     coilTube.userData.buildCoilGeometry = buildCoilGeometry;
-
-    // Dark barrel cylinder under the innermost wrap so no gap shows to the axle.
-    const core = new THREE.Mesh(
-      new THREE.CylinderGeometry(BARREL_R - ROD_R * 0.5, BARREL_R - ROD_R * 0.5, halfWidth * 2, 32),
-      new THREE.MeshStandardMaterial({ color: 0x0c0a08, metalness: 0.4, roughness: 0.8 }),
-    );
-    core.rotation.x = Math.PI / 2;
-    core.castShadow = true; core.receiveShadow = true;
-    spool.add(core);
 
     reelGroup.add(spool);
     reelSpoolRef.current = spool;
@@ -3535,54 +3487,28 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     hitchRing.position.set(-6.0, -2.7, 0);
     reelGroup.add(hitchRing);
 
-    // Fenders and outboard cradle bracing are supplied by addServiceReelDetails.
-    // Keep braces outside the spinning pack instead of crossing through its bore.
     const crossBraceMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.3 });
 
     // --- AUXILIARY EQUIPMENT at the FRONT BASE (−X, tongue side) --------------
-    // Heavy red structural skid, deployment hydraulic cylinders, and twin fire
-    // extinguishers mounted securely to the frame (per spec / field photo).
+    // Red equipment skid and twin fire extinguishers on the front deck strip.
     const redSteel = new THREE.MeshStandardMaterial({ color: 0xb01818, metalness: 0.45, roughness: 0.5 });
-    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.25 });
-
-    // Red skid frame across the front of the trailer base.
-    const skidCross = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 3.2), redSteel);
-    skidCross.position.set(-2.6, -1.95, 0); skidCross.castShadow = true; reelGroup.add(skidCross);
-    [-1.3, 1.3].forEach((sz) => {
-      const skidRail = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 0.35), redSteel);
-      skidRail.position.set(-1.7, -1.95, sz); skidRail.castShadow = true; reelGroup.add(skidRail);
-    });
-
-    // Deployment hydraulic cylinders (angled) pushing up toward the A-frame.
-    [-1.0, 1.0].forEach((hz) => {
-      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.7, 14), redSteel);
-      cyl.position.set(-1.9, -1.2, hz);
-      cyl.rotation.z = 0.5; // angled toward the reel
-      cyl.castShadow = true; reelGroup.add(cyl);
-      // Chrome piston rod extending out of the cylinder.
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 10), chromeMat);
-      rod.position.set(-1.45, -0.45, hz);
-      rod.rotation.z = 0.5; reelGroup.add(rod);
-      // Base pivot pin.
-      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 10), crossBraceMat);
-      pin.rotation.x = Math.PI / 2; pin.position.set(-2.4, -1.85, hz); reelGroup.add(pin);
-    });
+    // Red equipment skid across the FRONT strip of the deck (clear of the platter).
+    const skidCross = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 3.2), redSteel);
+    skidCross.position.set(-2.95, REEL_GEOM.deckTopY + 0.15, 0); skidCross.castShadow = true; reelGroup.add(skidCross);
 
     // Twin fire extinguishers mounted upright on the front skid.
     [-0.55, 0.55].forEach((ez) => {
+      const by = REEL_GEOM.deckTopY + 0.3 + 0.45;
       const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.9, 16), redSteel);
-      bottle.position.set(-2.95, -1.35, ez); bottle.castShadow = true; reelGroup.add(bottle);
-      // Rounded top
+      bottle.position.set(-2.95, by, ez); bottle.castShadow = true; reelGroup.add(bottle);
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), redSteel);
-      dome.position.set(-2.95, -0.9, ez); reelGroup.add(dome);
-      // Black neck + handle
+      dome.position.set(-2.95, by + 0.45, ez); reelGroup.add(dome);
       const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), crossBraceMat);
-      neck.position.set(-2.95, -0.72, ez); reelGroup.add(neck);
+      neck.position.set(-2.95, by + 0.63, ez); reelGroup.add(neck);
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.08), crossBraceMat);
-      handle.position.set(-3.02, -0.62, ez); reelGroup.add(handle);
-      // Mounting bracket strap to the skid.
+      handle.position.set(-3.02, by + 0.73, ez); reelGroup.add(handle);
       const strap = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 6, 16), crossBraceMat);
-      strap.rotation.y = Math.PI / 2; strap.position.set(-2.95, -1.35, ez); reelGroup.add(strap);
+      strap.rotation.y = Math.PI / 2; strap.position.set(-2.95, by, ez); reelGroup.add(strap);
     });
 
     scene.add(reelGroup);
@@ -3605,9 +3531,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Guide-head point in LOCAL coords (group is at REEL_X). It sits WELL OUTBOARD
     // of the reel (+X) at a low/side height, so the rod runs sideways out of the
     // coil edge and through it — never over the top, never toward the reel centre.
-    const headLX = GUIDE_HEAD.x - REEL_X;   // ≈ 4.2
-    const headLY = GUIDE_HEAD.y;            // ≈ 3.4 (side height)
-    const headLZ = GUIDE_HEAD.z;            // = REEL_Z (-11)
+    const headLX = GUIDE_HEAD.x - REEL_X;   // = 1.4
+    const headLY = GUIDE_HEAD.y;            // = 3.8 (above the horizontal reel's rim posts)
+    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 3.4 (in front of the trailer deck)
     const headPt = new THREE.Vector3(headLX, headLY, headLZ);
 
     // The containment arm is a COMPACT free-standing frame planted on the ground
@@ -4323,29 +4249,26 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const ARC_SAMPLES = 80;
 
     // DYNAMIC rod-strand geometry builder, parameterised by the reel FILL fraction
-    // (1 = full reel, 0 = empty). The rod's start point rides on the coil's CURRENT
-    // outer radius via coilOuterRadius(fill), so as the coil SHRINKS during RIH the
-    // connection point tracks inward and the rod stays glued to the wraps (never a
-    // floating stub). From the coil edge it runs OUTWARD (never over the top / never
-    // toward the reel centre) through the containment guide head, into the arch,
-    // then down the well line. Rebuilt in the render loop whenever fill changes.
+    // (1 = full reel, 0 = empty). The horizontal reel pays rod off the TOP layer:
+    // the rod leaves the top of the pack at the current wrap radius on the side
+    // facing the guide head, lifts over the rim containment posts and runs into
+    // the guide head. As the pack gets lower during RIH the take-off point drops
+    // with it (rod stays glued to the top wrap). Rebuilt when fill changes.
     const buildRodStrandGeometry = (fill: number): THREE.TubeGeometry => {
-      const r = coilOuterRadius(fill);                 // current coil outer radius
-      const rodPoints: THREE.Vector3[] = [];
-      // Emerge from the coil surface on the +X (well-facing) side, at coil centre
-      // height. Tuck slightly INSIDE the surface (r − 0.1) so it reads as connected.
-      // The rod must CURVE AROUND the OUTSIDE of the reel rims — never cut straight
-      // through them. The flanges sit at z = REEL_Z ± 1.25 with rim radius ≈2.3
-      // (world +X rim edge ≈ REEL_X+2.3). So the rod first swings OUT past the rim
-      // radius in +X (clearing the flange circle), then curves FORWARD (+Z) around
-      // the front rim edge, and only then comes IN to the front-corner guide head.
-      const RIM_CLEAR_X = REEL_X + COIL_MAX_OUTER_R + 0.9;  // out past the rim (world ≈ 7.95)
-      rodPoints.push(new THREE.Vector3(REEL_X + Math.max(0.15, r - 0.1), REEL_CENTER_Y, REEL_Z));   // emerge from coil surface
-      rodPoints.push(new THREE.Vector3(REEL_X + r + 0.2, REEL_CENTER_Y + 0.05, REEL_Z));            // just off the coil surface
-      rodPoints.push(new THREE.Vector3(RIM_CLEAR_X, REEL_CENTER_Y, REEL_Z + 0.4));                  // swing OUT past the rim radius
-      rodPoints.push(new THREE.Vector3(RIM_CLEAR_X, GUIDE_HEAD.y, REEL_Z + 1.8));                   // curve FORWARD around the front rim
-      rodPoints.push(new THREE.Vector3((RIM_CLEAR_X + GUIDE_HEAD.x) / 2, GUIDE_HEAD.y, GUIDE_HEAD.z)); // come IN toward the head, clear of the rim
-      rodPoints.push(new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z));                  // through the guide head
+      const top = coilAt(Math.max(0, coilWrapsFor(fill) - 0.001)); // current top wrap
+      const ux0 = GUIDE_HEAD.x - REEL_X, uz0 = GUIDE_HEAD.z - REEL_Z;
+      const ul = Math.hypot(ux0, uz0) || 1;
+      const ux = ux0 / ul, uz = uz0 / ul;            // reel centre → guide head (horizontal)
+      const at = (radius: number, y: number) => new THREE.Vector3(REEL_X + ux * radius, y, REEL_Z + uz * radius);
+      const yTop = REEL_CENTER_Y + top.y + COIL_ROD_R * 0.6;    // sitting on the top wrap
+      const postClear = REEL_CENTER_Y + REEL_GEOM.postTopY + 0.3; // above the rim posts
+      const rodPoints: THREE.Vector3[] = [
+        at(top.r, yTop),                                                     // leave the top wrap
+        at(top.r + 0.12, yTop + 0.22),                                       // lift off the pack
+        at(Math.min(REEL_GEOM.rimR - 0.1, Math.max(top.r + 0.3, 1.6)), Math.max(yTop + 0.45, postClear)), // rise inside the rim
+        at(REEL_GEOM.rimR + 0.35, postClear + 0.1),                          // over the rim posts
+        new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),         // through the guide head
+      ];
       for (let i = 0; i <= ARC_SAMPLES; i++) {
         rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
       }
