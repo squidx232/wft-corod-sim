@@ -380,6 +380,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     sides: Array<{ side: 1 | -1; arm: THREE.Mesh; leg: THREE.Mesh; pad: THREE.Mesh; ext: number; low: number }>;
   } | null>(null);
   const craneColliderTimerRef = useRef(0);
+  /** MG unit's own mast (+ crown block, gripper head) — removed in the knuckle-crane module. */
+  const mgMastPartsRef = useRef<THREE.Object3D[]>([]);
   /** Truck deck footprint (world) — crane loads can rest on it. */
   const truckDeckRef = useRef({ minX: MG_UNIT_X - 1.51, maxX: MG_UNIT_X + 5.96, minZ: -1.3, maxZ: 1.43, top: 1.38 });
   const [showStats, setShowStats] = useState(true);
@@ -512,7 +514,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // The crane's valve bank sits on top of the MG console box (operator stands
     // on the +Z side facing the truck, levers left→right along +X).
     const visual = createKnuckleCrane(craneStore.spec, {
-      leverBank: { position: new THREE.Vector3(-0.9, 0.5, 0.75), yaw: 0, order: LEVER_ORDER },
+      leverBank: { position: new THREE.Vector3(0.42, 0.02, 0.38), yaw: 0, order: LEVER_ORDER },
     });
     visual.root.position.set(base.x, base.y, base.z);
     visual.setVisible(craneModeRef.current);
@@ -1317,6 +1319,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           groundAt: craneSurfaceAt, target: live.target, showTarget: craneModeRef.current, inputs: live.inputs,
         });
       }
+      const mastVisible = !craneModeRef.current;
+      for (const m of mgMastPartsRef.current) if (m.visible !== mastVisible) m.visible = mastVisible;
       if (craneModeRef.current) {
         craneColliderTimerRef.current -= delta;
         if (craneColliderTimerRef.current <= 0) { craneColliderTimerRef.current = 5; refreshCraneColliders(); }
@@ -3320,6 +3324,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               mountKnuckleCrane(sceneRef.current, { x: (pb.min.x + pb.max.x) / 2, y: Math.max(deckTop, pb.min.y), z: (pb.min.z + pb.max.z) / 2 });
             }
           }
+          // The MG mast is taken off in the knuckle-crane module (the crane works
+          // over the deck); remember its parts so the render loop can toggle them.
+          const mastParts: THREE.Object3D[] = [];
+          root.traverse((c) => { if (/^MG_(Mast|CrownBlock|Gripper)/i.test(c.name)) mastParts.push(c); });
+          mgMastPartsRef.current = mastParts;
+          mastParts.forEach((c) => { c.visible = !craneModeRef.current; });
           // Hide the model's own simplified console so our detailed procedural
           // console (with working gauges) shows instead.
           root.traverse((child) => {

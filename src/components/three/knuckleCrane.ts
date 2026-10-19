@@ -9,9 +9,9 @@ import type { CraneSpec, CraneState, CraneLoadDef, CraneInputs, CraneJoint } fro
  *   root (slew axis on the deck) ─ slew column ─ main boom ─ outer boom ─ 6 extensions
  *
  * The crane has no stabilizers of its own — the MG outriggers do that job and
- * are animated by the viewport. Booms use Fassi's hexagonal profile; rams are
- * re-stretched between their pins every frame. A 4-lever valve bank sits on
- * the MG console (levers tilt with the live inputs). Hook, sling, load and
+ * are animated by the viewport. Classic red box-section booms; rams are
+ * re-stretched between their pins every frame. A 4-lever ground-control valve
+ * bank sits on the crane base (levers tilt with the live inputs). Hook, sling, load and
  * landing mat are placed in WORLD space from the sim.
  */
 
@@ -40,17 +40,6 @@ function canvasTexture(draw: (g: CanvasRenderingContext2D, c: HTMLCanvasElement)
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-/** Hexagonal-profile beam along +X from x=0 to x=length. */
-function hexBeam(length: number, radius: number, mat: THREE.Material): THREE.Mesh {
-  const geo = new THREE.CylinderGeometry(radius, radius, length, 6, 1);
-  geo.rotateZ(-Math.PI / 2);
-  geo.rotateX(Math.PI / 6); // flat top/bottom like the real profile
-  geo.translate(length / 2, 0, 0);
-  const m = new THREE.Mesh(geo, mat);
-  m.castShadow = true; m.receiveShadow = true;
-  return m;
 }
 
 /** Hydraulic ram (barrel + chrome rod) stretched between two points of `space`. */
@@ -137,28 +126,28 @@ export function createKnuckleCrane(spec: CraneSpec, opts: KnuckleCraneOptions = 
     parent.add(mesh);
     return mesh;
   };
-  const W = spec.folded.width; // 0.87 m crane width
+  // Classic Fassi box-section look (red booms, white FASSI decals), sized to the
+  // F215A.0.24: column/booms fit the 0.87 m folded width and 2.255 m folded height.
+  // The base is kept slim so it clears the MG console box beside the pedestal.
 
   // --- Base on the MG deck (no own stabilizers: the MG outriggers are used) ---------
-  box(W * 1.05, 0.22, W * 1.05, darkRed, root, 0, 0.11, 0); // base frame bolted to the deck
-  const ringBase = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.5, W * 0.55, 0.18, 32), steel);
-  ringBase.position.y = 0.31; ringBase.castShadow = true; root.add(ringBase);
+  box(0.62, 0.12, 0.62, darkRed, root, 0, 0.06, 0); // base plate bolted to the deck
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.33, 0.16, 28), steel);
+  ring.position.y = 0.2; ring.castShadow = true; root.add(ring);
 
   // --- Slewing column ---------------------------------------------------------------
   const slew = new THREE.Group();
   root.add(slew);
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(W * 0.3, W * 0.36, spec.columnHeight - 0.55, 24), red);
-  column.position.y = 0.4 + (spec.columnHeight - 0.55) / 2; column.castShadow = true; slew.add(column);
-  // Column head (main-boom pivot ears)
-  for (const sz of [-1, 1]) box(0.5, 0.5, 0.06, red, slew, spec.pivotOffset * 0.6, spec.columnHeight - 0.08, sz * W * 0.3);
-  const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, W * 0.72, 12), chrome);
-  pin.rotation.x = Math.PI / 2; pin.position.set(spec.pivotOffset, spec.columnHeight, 0); slew.add(pin);
+  const colH = spec.columnHeight - 0.5;
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.27, colH, 20), red);
+  column.position.y = 0.28 + colH / 2; column.castShadow = true; slew.add(column);
+  box(0.6, 0.42, 0.46, red, slew, spec.pivotOffset * 0.6, spec.columnHeight - 0.05, 0); // column head
 
-  // --- Main boom ----------------------------------------------------------------------
+  // --- Main (inner) boom ------------------------------------------------------------
   const main = new THREE.Group();
   main.position.set(spec.pivotOffset, spec.columnHeight, 0);
   slew.add(main);
-  main.add(hexBeam(spec.mainBoomLength + 0.15, spec.mainBoomRadius, red)).position.x = -0.1;
+  box(spec.mainBoomLength + 0.25, 0.44, 0.34, red, main, spec.mainBoomLength / 2, 0, 0);
   const fassi = canvasTexture((g) => {
     g.fillStyle = '#c81e1e'; g.fillRect(0, 0, 512, 96);
     g.fillStyle = '#ffffff'; g.font = 'bold italic 66px Arial, sans-serif'; g.textBaseline = 'middle'; g.fillText('FASSI', 22, 50);
@@ -166,20 +155,20 @@ export function createKnuckleCrane(spec: CraneSpec, opts: KnuckleCraneOptions = 
   if (fassi) {
     const decalMat = new THREE.MeshStandardMaterial({ map: fassi, roughness: 0.5 });
     for (const sz of [-1, 1]) {
-      const decal = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.2), decalMat);
-      decal.position.set(spec.mainBoomLength * 0.5, 0, sz * (spec.mainBoomRadius * 0.87 + 0.004));
+      const decal = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.22), decalMat);
+      decal.position.set(spec.mainBoomLength * 0.55, 0, sz * 0.172);
       if (sz < 0) decal.rotation.y = Math.PI;
       main.add(decal);
     }
   }
   const liftRam = createRam(root, 0.1, 0.95);
 
-  // --- Outer boom + 6 hydraulic extensions ---------------------------------------------
+  // --- Outer (knuckle) boom + 6 extensions -----------------------------------------------
   const outer = new THREE.Group();
   outer.position.set(spec.mainBoomLength, 0, 0);
   main.add(outer);
-  box(0.42, 0.48, W * 0.62, darkRed, outer, 0, 0.04, 0); // knuckle joint
-  outer.add(hexBeam(spec.outerBoomLength, spec.outerBoomRadius, red));
+  box(0.5, 0.5, 0.36, darkRed, outer, 0, 0.05, 0); // knuckle joint block
+  box(spec.outerBoomLength, 0.36, 0.3, red, outer, spec.outerBoomLength / 2, 0, 0);
   const model = canvasTexture((g) => {
     g.fillStyle = '#c81e1e'; g.fillRect(0, 0, 512, 80);
     g.fillStyle = '#ffffff'; g.font = 'bold 52px Arial, sans-serif'; g.textBaseline = 'middle'; g.fillText('F215A active', 14, 42);
@@ -187,8 +176,8 @@ export function createKnuckleCrane(spec: CraneSpec, opts: KnuckleCraneOptions = 
   if (model) {
     const m = new THREE.MeshStandardMaterial({ map: model, roughness: 0.5 });
     for (const sz of [-1, 1]) {
-      const decal = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.14), m);
-      decal.position.set(spec.outerBoomLength * 0.45, 0, sz * (spec.outerBoomRadius * 0.87 + 0.004));
+      const decal = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.15), m);
+      decal.position.set(spec.outerBoomLength * 0.45, 0, sz * 0.152);
       if (sz < 0) decal.rotation.y = Math.PI;
       outer.add(decal);
     }
@@ -196,24 +185,23 @@ export function createKnuckleCrane(spec: CraneSpec, opts: KnuckleCraneOptions = 
   const knuckleRam = createRam(root, 0.085, 0.8);
   const n = spec.extensionCount;
   const stroke = spec.maxExtension / n;
-  const sectionLen = Math.min(spec.outerBoomLength * 0.95, stroke + 0.25);
+  // Telescopic sections nest inside each other (each one smaller) and run out together.
+  const sectionLen = Math.min(spec.outerBoomLength - 0.05, Math.max(spec.outerBoomLength * 0.85, stroke + 0.3));
   const extensions = Array.from({ length: n }, (_, i) => {
-    const r = spec.outerBoomRadius * (1 - (i + 1) * 0.1);
+    const sz = 0.3 * (1 - (i + 1) * 0.1);
     const g = new THREE.Group();
     outer.add(g);
-    g.add(hexBeam(sectionLen, r, i % 2 ? red : darkRed)).position.x = -sectionLen;
+    box(sectionLen, sz * 1.15, sz, i % 2 ? red : darkRed, g, -sectionLen / 2, 0, 0);
     return g;
   });
   const tipHead = new THREE.Group();
   outer.add(tipHead);
-  box(0.24, 0.22, 0.2, steel, tipHead, 0.02, 0, 0);
-  // Hose reel/carrier along the outer boom (black tubes).
-  for (const sz of [-1, 1]) {
-    const hose = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, spec.outerBoomLength * 0.9, 8), black);
-    hose.rotation.z = Math.PI / 2; hose.position.set(spec.outerBoomLength * 0.5, spec.outerBoomRadius * 0.95, sz * 0.06); outer.add(hose);
-  }
+  box(0.22, 0.2, 0.2, steel, tipHead, 0, 0, 0);
+  // Hose carrier along the outer boom (black tube).
+  const hose = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, spec.outerBoomLength, 8), black);
+  hose.rotation.z = Math.PI / 2; hose.position.set(spec.outerBoomLength / 2, 0.22, 0.1); outer.add(hose);
 
-  // --- Lever bank on the MG console (4 proportional levers, yellow labels) -------------
+  // --- Ground-control lever bank on the crane base (4 proportional levers) ------------
   const leverPivots: Partial<Record<CraneJoint, THREE.Group>> = {};
   if (opts.leverBank) {
     const bank = new THREE.Group();
@@ -274,8 +262,8 @@ export function createKnuckleCrane(spec: CraneSpec, opts: KnuckleCraneOptions = 
 
     root.updateMatrixWorld(true);
     const inRoot = (obj: THREE.Object3D, v: THREE.Vector3) => root.worldToLocal(obj.localToWorld(v));
-    liftRam(inRoot(slew, tmpA.set(spec.pivotOffset + 0.12, 0.75, 0)), inRoot(main, tmpB.set(1.05, -spec.mainBoomRadius, 0)));
-    knuckleRam(inRoot(main, tmpA.set(1.2, spec.mainBoomRadius + 0.05, 0)), inRoot(outer, tmpB.set(-0.28, 0.32, 0)));
+    liftRam(inRoot(slew, tmpA.set(spec.pivotOffset + 0.05, 0.6, 0)), inRoot(main, tmpB.set(1.2, -0.22, 0)));
+    knuckleRam(inRoot(main, tmpA.set(1.35, 0.24, 0)), inRoot(outer, tmpB.set(-0.3, 0.32, 0)));
 
     const load = s.load;
     const hookPos = tmpA.set(s.hook.x, s.hook.y, s.hook.z);

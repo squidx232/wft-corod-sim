@@ -22,7 +22,6 @@ const STR = {
     reset: 'Reset task', task: 'Training task', checklist: 'Checklist', metrics: 'Performance', time: 'Time', maxLmi: 'Max LMI',
     limitHits: 'LMI cut-outs', hard: 'Hard landings', swing: 'Max swing', accuracy: 'Landing error', score: 'Score', done: 'Task complete',
     estop: 'STOP', estopOn: 'E-STOP ENGAGED — twist to release', radius: 'Radius', load: 'Load', cap: 'Rated', page: 'Page',
-    keys: 'Keys', leverDown: 'Lever down', leverUp: 'Lever up',
     specs: 'F215A.0.24: 178 kNm · max 9,930 kg · reach 17.05 m · 2,435 kg · folded 2.475 × 0.87 × 2.255 m',
     levers: { slew: 'Slewing', main: 'Main boom', outer: 'Second boom', extension: 'Extensions' } as DirWords,
     plus: { slew: 'Slew left', main: 'Up', outer: 'Up', extension: 'Out' } as DirWords,
@@ -31,7 +30,7 @@ const STR = {
       lmi: 'Load-moment limiter cut-out: only moment-reducing motions allowed (boom up / extensions in).',
       outriggers: 'Extend and lower both MG outriggers before operating the crane.',
       power: 'No hydraulic power: start the MG engine and engage the PTO.', estop: 'Emergency stop engaged.', limit: 'Joint at its mechanical limit.',
-      collision: 'Collision: the boom is touching an object — reverse the motion to back away.',
+      collision: 'Boom contact — reverse the motion, or raise the main boom / open the second boom to clear the object.',
     } as Record<string, string>,
     checks: {
       power: 'Hydraulic power on (engine + PTO)', 'stab-deployed': 'MG outriggers extended and lowered', unfolded: 'Crane unfolded from transport position', slewed: 'Slewed at least 60°',
@@ -45,7 +44,7 @@ const STR = {
       'stab-stow-blocked': 'Fold the crane (and unhook) before raising the outriggers',
       'boom-collision': 'Boom contact', 'load-strike': 'Load struck an object',
     } as Record<string, string>,
-    hint: 'Pull a lever DOWN (towards you) for the + motion, push UP for the opposite. Drag the levers or use the keys. Gamepad: left stick = slew / main boom, right stick = extensions / second boom.',
+    hint: 'Lever UP = top picture, lever DOWN = bottom picture. Drag a lever or press the key shown on its decal.',
   },
   ar: {
     title: 'FASSI F215A.0.24 active — محطة التحكم بالرافعة', power: 'وحدة الطاقة MG', engine: 'المحرك', pto: 'مأخذ القدرة / الهيدروليك',
@@ -55,7 +54,6 @@ const STR = {
     reset: 'إعادة المهمة', task: 'مهمة التدريب', checklist: 'قائمة التحقق', metrics: 'الأداء', time: 'الوقت', maxLmi: 'أقصى عزم',
     limitHits: 'قطع محدد العزم', hard: 'هبوط عنيف', swing: 'أقصى تأرجح', accuracy: 'خطأ الإنزال', score: 'النتيجة', done: 'اكتملت المهمة',
     estop: 'إيقاف', estopOn: 'الإيقاف الطارئ مفعّل — أدر للتحرير', radius: 'نصف القطر', load: 'الحمولة', cap: 'المقنن', page: 'صفحة',
-    keys: 'المفاتيح', leverDown: 'الذراع لأسفل', leverUp: 'الذراع لأعلى',
     specs: 'F215A.0.24: ‏178 كيلونيوتن·م · أقصى حمولة 9,930 كغ · مدى 17.05 م · الوزن 2,435 كغ · مطوية 2.475 × 0.87 × 2.255 م',
     levers: { slew: 'التدوير', main: 'الذراع الرئيسية', outer: 'الذراع الثانية', extension: 'الامتدادات' } as DirWords,
     plus: { slew: 'تدوير يسار', main: 'أعلى', outer: 'أعلى', extension: 'مدّ' } as DirWords,
@@ -64,7 +62,7 @@ const STR = {
       lmi: 'قطع محدد العزم: يُسمح فقط بالحركات التي تقلل العزم (رفع الذراع / سحب الامتدادات).',
       outriggers: 'مدّ وأنزل مساندي وحدة MG قبل تشغيل الرافعة.',
       power: 'لا توجد طاقة هيدروليكية: شغّل محرك MG وفعّل مأخذ القدرة.', estop: 'الإيقاف الطارئ مفعّل.', limit: 'المفصل عند حده الميكانيكي.',
-      collision: 'تصادم: الذراع تلامس جسماً — اعكس الحركة للابتعاد.',
+      collision: 'تلامس الذراع — اعكس الحركة، أو ارفع الذراع الرئيسية / افتح الذراع الثانية لتجاوز الجسم.',
     } as Record<string, string>,
     checks: {
       power: 'الطاقة الهيدروليكية (محرك + مأخذ قدرة)', 'stab-deployed': 'مدّ وإنزال مساند MG', unfolded: 'فتح الرافعة من وضع النقل', slewed: 'التدوير 60° على الأقل',
@@ -78,101 +76,151 @@ const STR = {
       'stab-stow-blocked': 'اطوِ الرافعة (وفك الخطاف) قبل رفع المساند',
       'boom-collision': 'تلامس الذراع', 'load-strike': 'اصطدام الحمولة بجسم',
     } as Record<string, string>,
-    hint: 'اسحب الذراع لأسفل (نحوك) للحركة +، وادفعها لأعلى للحركة المعاكسة. اسحب الأذرع أو استخدم المفاتيح. ذراع التحكم: العصا اليسرى = التدوير / الذراع الرئيسية، اليمنى = الامتدادات / الذراع الثانية.',
+    hint: 'الذراع لأعلى = الصورة العلوية، الذراع لأسفل = الصورة السفلية. اسحب الذراع أو اضغط المفتاح الظاهر على الملصق.',
   },
 };
 
-/** Simple line pictograms in the style of the yellow Fassi lever labels. */
-const Pictogram: React.FC<{ joint: CraneJoint }> = ({ joint }) => (
-  <svg viewBox="0 0 48 32" className="w-12 h-8" stroke="#111" strokeWidth={2.4} fill="none" strokeLinecap="round" strokeLinejoin="round">
-    {joint === 'slew' && (<><ellipse cx="24" cy="22" rx="16" ry="6" /><path d="M24 22 V8 L38 6" /><path d="M8 20 l-3 -3 M8 20 l4 -1" /></>)}
-    {joint === 'main' && (<><path d="M8 28 V18 L30 6 L40 14" /><path d="M10 22 L22 13" strokeWidth={4} /></>)}
-    {joint === 'outer' && (<><path d="M8 28 V18 L24 8 L42 18" /><path d="M24 8 l6 -4" strokeWidth={4} /></>)}
-    {joint === 'extension' && (<><path d="M6 20 H26" strokeWidth={5} /><path d="M26 20 H42" strokeWidth={3} /><path d="M34 12 l6 8 l-6 8" /></>)}
-  </svg>
-);
+/**
+ * Fassi-style decal pictogram (black on yellow) for one lever direction.
+ * sign +1 = lever pulled DOWN, −1 = lever pushed UP. Drawn in a 44 × 32 box.
+ */
+const Pictogram: React.FC<{ joint: CraneJoint; sign: 1 | -1 }> = ({ joint, sign }) => {
+  const arrow = (d: string) => <path d={d} strokeWidth={2.2} markerEnd="url(#fassi-ah)" />;
+  return (
+    <g stroke="#111" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      {joint === 'slew' && (<>
+        <ellipse cx="20" cy="22" rx="14" ry="6" strokeWidth={2.4} />
+        <path d="M20 22 V8 L34 6" strokeWidth={3} />
+        {arrow(sign > 0 ? 'M30 29 Q20 32 9 27' : 'M9 27 Q20 32 31 28')}
+      </>)}
+      {joint === 'main' && (<>
+        <path d="M6 30 V18" strokeWidth={4} />
+        <path d="M6 18 L30 10" strokeWidth={4} />
+        {arrow(sign > 0 ? 'M38 20 Q42 12 35 5' : 'M35 5 Q42 12 38 20')}
+      </>)}
+      {joint === 'outer' && (<>
+        <path d="M6 30 V18 L18 8" strokeWidth={3} strokeOpacity={0.45} />
+        <path d="M18 8 L34 16" strokeWidth={4} />
+        {arrow(sign > 0 ? 'M40 24 Q44 15 38 9' : 'M38 9 Q44 15 40 24')}
+      </>)}
+      {joint === 'extension' && (<>
+        <path d="M3 22 H22" strokeWidth={6} strokeOpacity={0.45} />
+        <path d="M22 22 H34" strokeWidth={3.5} />
+        {arrow(sign > 0 ? 'M24 10 H41' : 'M41 10 H24')}
+      </>)}
+    </g>
+  );
+};
 
-/** Max lever throw (rad) — matches the 3D valve bank on the MG console. */
+/** Max lever throw (rad) — matches the 3D valve bank on the crane base. */
 const LEVER_THROW = 0.45;
 /** The operator looks down at the valve bank from about 35° above. */
 const VIEW_ELEV = (35 * Math.PI) / 180;
-/** Lever drawing geometry (SVG units): pivot, stem length, view-box height. */
-const PX = 40, PY = 132, L = 96, VB_H = 180;
+/** Bank drawing geometry (SVG units). */
+const COL = 72, VB_W = COL * 4, VB_H = 300, PY = 246, L = 110;
+/** Screen y of a lever knob tilted θ towards the operator (perspective projection). */
+const knobY = (theta: number) => PY - (L * Math.cos(theta + VIEW_ELEV)) / Math.cos(VIEW_ELEV);
 
 /**
- * Spring-return proportional valve-bank lever, drawn as a real lever seen from
- * the operator position: cast valve section + spool boss, rubber boot, chrome
- * stem and black ball knob. Pulling DOWN (towards the operator) = "+".
+ * The crane's valve bank, drawn like the real Fassi ground-control station: one
+ * continuous bank of valve sections, a black lever with ball knob on each, and a
+ * yellow two-part decal above. TOP picture = push the lever UP, BOTTOM picture =
+ * pull it DOWN (towards you). Spring return to neutral on release.
  */
-const Lever: React.FC<{ joint: CraneJoint; value: number; blocked: boolean; label: string }> = ({ joint, value, blocked, label }) => {
+const LeverBank: React.FC<{
+  order: CraneJoint[];
+  inputs: Record<CraneJoint, number>;
+  blocked: Partial<Record<CraneJoint, unknown>>;
+  title: (j: CraneJoint) => string;
+}> = ({ order, inputs, blocked, title }) => {
   const ref = useRef<SVGSVGElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const setFromEvent = (clientY: number) => {
+  const active = useRef<CraneJoint | null>(null);
+  const setFromPointer = (j: CraneJoint, clientY: number) => {
     const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
-    // Invert the lever projection so the knob follows the pointer.
+    if (!r || r.height <= 0) return;
     const y = ((clientY - r.top) / r.height) * VB_H;
     const c = Math.max(-1, Math.min(1, ((PY - y) * Math.cos(VIEW_ELEV)) / L));
     const v = (Math.acos(c) - VIEW_ELEV) / LEVER_THROW;
-    craneStore.setLever(joint, Math.max(-1, Math.min(1, v)));
+    craneStore.setLever(j, Math.max(-1, Math.min(1, v)));
   };
-  const release = () => { setDragging(false); craneStore.setLever(joint, 0); };
-  const pos = Math.max(-1, Math.min(1, value));
-  const theta = pos * LEVER_THROW; // + = top of the lever tilted towards the operator
-  // Projection: screen-up component of a lever tilted θ towards a viewer elevated VIEW_ELEV.
-  const tipY = PY - (L * Math.cos(theta + VIEW_ELEV)) / Math.cos(VIEW_ELEV);
-  const knobScale = 1 + 0.25 * Math.sin(theta);
-  const id = `lv-${joint}`;
+  const release = () => { if (active.current) craneStore.setLever(active.current, 0); active.current = null; };
   return (
-    <svg
-      ref={ref}
-      viewBox="0 0 80 180"
-      className="w-16 h-40 mx-auto touch-none select-none cursor-grab active:cursor-grabbing"
-      onPointerDown={(e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); setDragging(true); setFromEvent(e.clientY); }}
-      onPointerMove={(e) => { if (dragging) setFromEvent(e.clientY); }}
-      onPointerUp={release}
-      onPointerCancel={release}
-      role="slider"
-      aria-label={label}
-      aria-orientation="vertical"
-      aria-valuemin={-1}
-      aria-valuemax={1}
-      aria-valuenow={Number(pos.toFixed(2))}
-    >
+    <svg ref={ref} viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full max-w-md mx-auto block touch-none select-none">
       <defs>
-        <linearGradient id={`${id}-body`} x1="0" x2="1">
-          <stop offset="0" stopColor="#3f3f46" /><stop offset="0.45" stopColor="#a1a1aa" /><stop offset="1" stopColor="#27272a" />
+        <marker id="fassi-ah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 Z" fill="#111" />
+        </marker>
+        <linearGradient id="fassi-valve" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#71717a" /><stop offset="0.35" stopColor="#3f3f46" /><stop offset="1" stopColor="#18181b" />
         </linearGradient>
-        <linearGradient id={`${id}-chrome`} x1="0" x2="1">
-          <stop offset="0" stopColor="#71717a" /><stop offset="0.35" stopColor="#f4f4f5" /><stop offset="0.6" stopColor="#d4d4d8" /><stop offset="1" stopColor="#52525b" />
-        </linearGradient>
-        <radialGradient id={`${id}-knob`} cx="0.35" cy="0.3" r="0.75">
-          <stop offset="0" stopColor="#71717a" /><stop offset="0.25" stopColor="#27272a" /><stop offset="1" stopColor="#000" />
+        <radialGradient id="fassi-knob" cx="0.35" cy="0.3" r="0.8">
+          <stop offset="0" stopColor="#6b7280" /><stop offset="0.3" stopColor="#1f2937" /><stop offset="1" stopColor="#000" />
         </radialGradient>
+        <linearGradient id="fassi-rod" x1="0" x2="1">
+          <stop offset="0" stopColor="#000" /><stop offset="0.4" stopColor="#52525b" /><stop offset="1" stopColor="#09090b" />
+        </linearGradient>
       </defs>
-      {/* Travel guide: + (down/towards operator) and − (up) */}
-      <text x="72" y="22" fontSize="11" fill="#a1a1aa" textAnchor="middle">−</text>
-      <text x="72" y="100" fontSize="11" fill="#a1a1aa" textAnchor="middle">+</text>
-      {/* Valve section (cast body with bolts and spool cap) */}
-      <rect x="8" y="138" width="64" height="38" rx="4" fill={`url(#${id}-body)`} stroke={blocked ? '#ef4444' : '#18181b'} strokeWidth={blocked ? 2.5 : 1.2} />
-      <rect x="8" y="150" width="64" height="6" fill="#18181b" opacity="0.35" />
-      {[16, 64].map((x) => <circle key={x} cx={x} cy="168" r="2.6" fill="#d4d4d8" stroke="#3f3f46" />)}
-      {/* Pivot boss + rubber boot */}
-      <ellipse cx={PX} cy={PY + 6} rx="17" ry="7" fill="#27272a" />
-      <path d={`M${PX - 12} ${PY + 6} Q${PX} ${PY - 14 + theta * 10} ${PX + 12} ${PY + 6} Z`} fill="#111" />
-      {[0, 1, 2].map((i) => <ellipse key={i} cx={PX} cy={PY + 2 - i * 4} rx={11 - i * 2.4} ry="2.2" fill="none" stroke="#3f3f46" strokeWidth="1" />)}
-      {/* Chrome stem */}
-      <line x1={PX} y1={PY - 6} x2={PX} y2={tipY} stroke={`url(#${id}-chrome)`} strokeWidth="7" strokeLinecap="round" />
-      <line x1={PX - 1.5} y1={PY - 6} x2={PX - 1.5} y2={tipY} stroke="#fff" strokeOpacity="0.5" strokeWidth="1.2" />
-      {/* Ball knob (closer when pulled → larger) */}
-      <g transform={`translate(${PX} ${tipY}) scale(${knobScale})`}>
-        <ellipse cx="0" cy="3" rx="15" ry="7" fill="#000" opacity="0.25" />
-        <ellipse cx="0" cy="-2" rx="14" ry="15" fill={`url(#${id}-knob)`} stroke="#000" strokeWidth="1" />
-        <ellipse cx="-4.5" cy="-8" rx="4" ry="2.6" fill="#fff" opacity="0.35" />
-      </g>
+
+      {/* Valve bank: four sections between two end plates, tie-rod nuts at the ends */}
+      <rect x="4" y={PY - 6} width={VB_W - 8} height="54" rx="4" fill="url(#fassi-valve)" stroke="#09090b" />
+      {order.slice(1).map((_, i) => <line key={i} x1={(i + 1) * COL} y1={PY - 4} x2={(i + 1) * COL} y2={PY + 46} stroke="#09090b" strokeWidth="2" />)}
+      {[10, VB_W - 10].map((x) => [PY + 6, PY + 34].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3" fill="#a1a1aa" stroke="#27272a" />))}
+
+      {order.map((j, i) => {
+        const cx = i * COL + COL / 2;
+        const [downKey, upKey] = CRANE_KEYS[j];
+        const isBlocked = !!blocked[j];
+        const theta = Math.max(-1, Math.min(1, inputs[j] ?? 0)) * LEVER_THROW;
+        const ty = knobY(theta);
+        const ks = 1 + 0.22 * Math.sin(theta);
+        const key = (k: string, y: number) => (
+          <g>
+            <rect x={cx + 17} y={y} width="13" height="13" rx="2" fill="#18181b" />
+            <text x={cx + 23.5} y={y + 10} fontSize="9" fontFamily="monospace" fill="#fde047" textAnchor="middle">{k.replace('Key', '')}</text>
+          </g>
+        );
+        return (
+          <g key={j}>
+            <title>{title(j)}</title>
+            {/* Yellow decal: top = lever up, bottom = lever down */}
+            <rect x={cx - 31} y="4" width="62" height="92" rx="4" fill="#facc15" stroke={isBlocked ? '#dc2626' : '#111'} strokeWidth={isBlocked ? 3 : 1.5} />
+            <line x1={cx - 31} y1="50" x2={cx + 31} y2="50" stroke="#111" strokeWidth="1.5" />
+            <g transform={`translate(${cx - 28} 10)`}><Pictogram joint={j} sign={-1} /></g>
+            <g transform={`translate(${cx - 28} 56)`}><Pictogram joint={j} sign={1} /></g>
+            {key(upKey, 8)}
+            {key(downKey, 80)}
+
+            {/* Spool cap on the valve section */}
+            <circle cx={cx} cy={PY + 26} r="9" fill="#27272a" stroke="#52525b" />
+            <circle cx={cx} cy={PY + 26} r="3.5" fill="#71717a" />
+            {/* Rubber boot + black lever rod + ball knob */}
+            <path d={`M${cx - 11} ${PY + 2} L${cx - 5} ${PY - 16} L${cx + 5} ${PY - 16} L${cx + 11} ${PY + 2} Z`} fill="#111" stroke="#27272a" />
+            <line x1={cx} y1={PY - 14} x2={cx} y2={ty} stroke="url(#fassi-rod)" strokeWidth="7" strokeLinecap="round" />
+            <g transform={`translate(${cx} ${ty}) scale(${ks})`}>
+              <ellipse cx="0" cy="0" rx="13" ry="14" fill="url(#fassi-knob)" stroke="#000" />
+              <ellipse cx="-4" cy="-6" rx="3.5" ry="2.4" fill="#fff" opacity="0.3" />
+            </g>
+
+            {/* Drag area for this lever */}
+            <rect
+              x={cx - COL / 2} y="96" width={COL} height={VB_H - 96} fill="transparent"
+              className="cursor-grab active:cursor-grabbing"
+              role="slider" aria-label={title(j)} aria-orientation="vertical"
+              aria-valuemin={-1} aria-valuemax={1} aria-valuenow={Number((inputs[j] ?? 0).toFixed(2))}
+              onPointerDown={(e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); active.current = j; setFromPointer(j, e.clientY); }}
+              onPointerMove={(e) => { if (active.current === j) setFromPointer(j, e.clientY); }}
+              onPointerUp={release}
+              onPointerCancel={release}
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 };
+
+/** Readable name for a scene part, e.g. "MG_Rail_0" → "MG Rail", "MG_RearDeck" → "MG Rear Deck". */
+const partName = (n: string) => n.replace(/^MG_/, 'MG ').replace(/_\d+/g, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
 
 type Outriggers = SimulatorState['outriggers'];
 
@@ -231,7 +279,7 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
 
   return (
     <div dir={dir} className="rounded-xl bg-zinc-900 text-zinc-100 p-3 space-y-3 border border-zinc-700">
-      <div className="text-xs font-bold tracking-wide text-zinc-300">{s.title}</div>
+      <div className="text-xs font-bold tracking-wide text-zinc-300" title={s.specs}>{s.title}</div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
         {/* Fassi FX display */}
@@ -328,29 +376,20 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
       {st.estop && <div className="rounded bg-red-700 px-3 py-1.5 text-xs font-bold text-center">{s.estopOn}</div>}
       {blockedMsgs.map((b) => (
         <div key={b} className="rounded bg-amber-500/20 border border-amber-500 px-3 py-1 text-2xs text-amber-200">
-          {s.blocked[b] ?? b}{b === 'collision' && st.contact ? ` (${st.contact})` : ''}
+          {s.blocked[b] ?? b}{b === 'collision' && st.contact ? ` (${partName(st.contact)})` : ''}
         </div>
       ))}
 
       {/* Lever bank — physical order seen from the operator (left → right): extensions,
           second boom, main boom, slewing. Always laid out LTR to match the machine. */}
-      <div dir="ltr" className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-950/60 p-2 border border-zinc-800">
-        {LEVER_ORDER.map((j) => {
-          const [downKey, upKey] = CRANE_KEYS[j];
-          return (
-            <div key={j} dir={dir} className="text-center space-y-1">
-              <div className="rounded bg-yellow-400 text-zinc-900 px-1 py-1 flex flex-col items-center">
-                <Pictogram joint={j} />
-                <span className="text-3xs font-bold leading-tight">{s.levers[j]}</span>
-              </div>
-              <div className="text-3xs text-zinc-400">{s.leverUp} <kbd className="font-mono">{upKey.replace('Key', '')}</kbd>: −{s.minus[j]}</div>
-              <Lever joint={j} value={snap.inputs[j]} blocked={!!st.blocked[j]} label={s.levers[j]} />
-              <div className="text-3xs text-emerald-300">{s.leverDown} <kbd className="font-mono">{downKey.replace('Key', '')}</kbd>: +{s.plus[j]}</div>
-            </div>
-          );
-        })}
+      <div dir="ltr" className="rounded-lg bg-zinc-950/60 p-2 border border-zinc-800">
+        <LeverBank
+          order={LEVER_ORDER}
+          inputs={snap.inputs}
+          blocked={st.blocked}
+          title={(j) => `${s.levers[j]} — ▲ ${CRANE_KEYS[j][1].replace('Key', '')}: ${s.minus[j]} · ▼ ${CRANE_KEYS[j][0].replace('Key', '')}: ${s.plus[j]}`}
+        />
       </div>
-      <p className="text-3xs text-zinc-500">{s.specs}</p>
       <p className="text-3xs text-zinc-500">{s.hint}</p>
 
       {/* Task */}
@@ -386,7 +425,7 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
         <ul className="text-3xs font-mono space-y-0.5 max-h-24 overflow-y-auto">
           {[...st.events].reverse().map((e, i) => (
             <li key={`${e.t}-${i}`} className={e.kind === 'error' ? 'text-red-400' : e.kind === 'warn' ? 'text-amber-300' : 'text-zinc-400'}>
-              {e.t.toFixed(1)}s — {s.events[e.code] ?? e.code}{e.detail ? ` (${e.detail})` : ''}
+              {e.t.toFixed(1)}s — {s.events[e.code] ?? e.code}{e.detail ? ` (${partName(e.detail)})` : ''}
             </li>
           ))}
         </ul>
