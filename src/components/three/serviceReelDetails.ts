@@ -5,9 +5,10 @@ import * as THREE from 'three';
  *
  * Built like a coiled-tubing reel (drum core + two spoked flanges inside a
  * hinged base) but laid HORIZONTALLY: the drum axis is vertical.
- * Solid-but-flexible CoRod is wound as ONE helix at the drum's large diameter,
- * wraps stacked upward; it pays off the TOP, so the pack gets lower top → bottom
- * and never empties from the middle.
+ * The reel is LOW and WIDE: solid-but-flexible CoRod is wound in a wide band
+ * around a ring of separate vertical columns (no solid core wall), in flat
+ * layers stacked upward; it pays off the TOP, so the pack gets lower top →
+ * bottom — the middle of the reel is open, nothing empties from the centre.
  *
  * The whole cradle is hinged along its FRONT edge (+Z, the side facing the
  * guide head / the left side of the MG) and tilted up at the BACK (−Z) by a
@@ -17,22 +18,28 @@ import * as THREE from 'three';
 export const REEL_GEOM = {
   /** Trailer deck top surface (local Y). */
   deckTopY: -1.91,
+  /** Trailer deck half-width (Z) — wide enough for the large flat reel. */
+  deckHalfZ: 2.8,
   /** Tilt hinge along the front edge of the cradle (local Y/Z). */
   hingeY: -1.79,
-  hingeZ: 2.38,
+  hingeZ: 2.7,
   /** Cradle tilt (rad) — back edge lifted by the hydraulic cylinders. */
   tilt: (10 * Math.PI) / 180,
   /** Cradle base frame half-size (square, X and Z) and its rail height (untilted local Y). */
-  frameHalf: 2.38,
+  frameHalf: 2.7,
   frameBaseY: -1.79,
   /** Bottom flange top surface (first coil layer sits on it). */
   platterTopY: -1.45,
-  /** Top flange (open, spoked) height. */
-  topFlangeY: 0.32,
-  /** Flange radius. */
-  rimR: 2.2,
-  /** Drum core radius — large, because solid CoRod can't bend tight; every wrap sits on it. */
-  coreR: 1.86,
+  /** Top flange (open, spoked) height — a LOW, wide reel. */
+  topFlangeY: -0.6,
+  /** Flange radius (large diameter). */
+  rimR: 2.6,
+  /** The rod band: wound between the ring of columns and the rim. */
+  coilInnerR: 1.7,
+  coilOuterR: 2.48,
+  /** Ring of separate vertical columns the rod is wound around (no solid wall). */
+  columnR: 1.6,
+  columnCount: 16,
   /** Hub radius at the drum centre (spokes run hub → rim). */
   hubR: 0.45,
 };
@@ -112,7 +119,7 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   for (const side of [-1, 1]) {
     mesh(frame, new THREE.BoxGeometry(6.5, 0.22, 0.16), dark, 0, -2.2, side * 1.1); // chassis rail
     for (const x of [-2.8, 0, 2.8]) {
-      mesh(frame, new THREE.BoxGeometry(0.2, 0.09, 0.025), amber, x, -2.0, side * 2.46); // deck-edge reflectors
+      mesh(frame, new THREE.BoxGeometry(0.2, 0.09, 0.025), amber, x, -2.0, side * (G.deckHalfZ + 0.01)); // deck-edge reflectors
     }
     for (const x of [-2, 2]) {
       const wz = side * 1.4;
@@ -156,39 +163,29 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   vcyl(cradle, 0.12, 0.12, 0.3, dark, -1.1, yb + 0.52, 0, 16);
 
   // ===== Rotating drum ================================================================
-  // Large hollow drum core between the flanges (wraps sit on its outside), the
-  // centre hub/axle + axle stubs into the bearings.
+  // Ring of SEPARATE vertical columns the rod is wound around (no solid wall),
+  // the centre axle and its cap.
   const coreH = G.topFlangeY - G.platterTopY;
-  // Painted RED (not dark) so the bare drum never reads as a second layer of rod.
-  const corePaint = paint.clone(); corePaint.side = THREE.DoubleSide;
-  mesh(spool, new THREE.CylinderGeometry(G.coreR, G.coreR, coreH, 72, 1, true), corePaint, 0, G.platterTopY + coreH / 2, 0);
-  for (const fy of [0.25, 0.5, 0.75]) { // internal stiffener rings (inside the drum)
-    const ring = mesh(spool, new THREE.TorusGeometry(G.coreR - 0.06, 0.03, 6, 72), steel, 0, G.platterTopY + coreH * fy, 0);
-    ring.rotation.x = Math.PI / 2;
-  }
-  for (let i = 0; i < 6; i++) { // vertical drum ribs inside — make the drum's turning visible
-    const a = (i * Math.PI) / 3;
-    mesh(spool, new THREE.BoxGeometry(0.08, coreH - 0.04, 0.08), steel, Math.cos(a) * (G.coreR - 0.07), G.platterTopY + coreH / 2, Math.sin(a) * (G.coreR - 0.07));
+  for (let i = 0; i < G.columnCount; i++) {
+    const a = (i * Math.PI * 2) / G.columnCount;
+    const col = mesh(spool, new THREE.BoxGeometry(0.11, coreH, 0.11), paint,
+      Math.cos(a) * G.columnR, G.platterTopY + coreH / 2, Math.sin(a) * G.columnR);
+    col.rotation.y = -a;
   }
   vcyl(spool, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
-  vcyl(spool, 0.24, 0.24, 0.12, steel, 0, G.topFlangeY + 0.1, 0, 16); // axle cap
-  vcyl(spool, 0.2, 0.2, G.platterTopY - (yb + 0.25), steel, 0, (G.platterTopY + yb + 0.25) / 2, 0, 16);
-
   const flange = (y: number, solid: boolean) => {
     if (solid) {
       vcyl(spool, G.rimR, G.rimR, 0.06, steel, 0, y - 0.03, 0, 64);
     } else {
       // Narrow outer ring only: leaves a gap over the wraps for the rod to leave the top.
-      const ring = mesh(spool, new THREE.RingGeometry(G.rimR - 0.12, G.rimR, 64), steelDs, 0, y, 0);
+      const ring = mesh(spool, new THREE.RingGeometry(G.rimR - 0.09, G.rimR, 72), steelDs, 0, y, 0);
       ring.rotation.x = -Math.PI / 2;
     }
     const lip = mesh(spool, new THREE.TorusGeometry(G.rimR, 0.065, 8, 72), steel, 0, y, 0);
     lip.rotation.x = Math.PI / 2;
-    const inner = mesh(spool, new THREE.TorusGeometry(1.3, 0.035, 6, 48), steel, 0, y, 0);
+    const inner = mesh(spool, new THREE.TorusGeometry(G.columnR, 0.035, 6, 64), steel, 0, y, 0); // ties the column ends
     inner.rotation.x = Math.PI / 2;
     vcyl(spool, G.hubR, G.hubR, 0.12, paint, 0, y, 0, 32); // hub
-    const coreLip = mesh(spool, new THREE.TorusGeometry(G.coreR, 0.04, 6, 72), steel, 0, y, 0); // core rim
-    coreLip.rotation.x = Math.PI / 2;
     const off = solid ? -0.08 : 0.06; // spokes under the bottom plate / on top of the top ring
     for (let i = 0; i < 8; i++) {
       const a = (i * Math.PI) / 4;

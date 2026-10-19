@@ -133,23 +133,34 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // Containment arm stands to the SIDE of the reel trailer, at the front end next
 // to the fire extinguishers (beside the tongue), so the rod comes off the EDGE
 // of the reel along a tangent — never out of the middle.
-const GUIDE_HEAD = { x: REEL_X - 4.6, y: 3.9, z: REEL_Z + 1.9 };
+const GUIDE_HEAD = { x: REEL_X - 4.6, y: 3.4, z: REEL_Z + 1.9 };
 // Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM).
-// CoRod is solid (but flexible) steel rod: it can't be bent tight around a small
-// centre, so every wrap sits at the SAME large diameter on the drum core — one
-// continuous helix stacked from the bottom flange upward, like a spring. Rod
-// pays off the TOP wrap only, so the pack gets lower top → bottom and never
-// empties from the middle/inside like coiled tubing.
+// A LOW, WIDE reel: the rod is wound in a wide band between the ring of
+// columns and the rim, in flat layers stacked upward (each layer runs across
+// the band, the next one back). It pays off the TOP layer, so the pack gets
+// lower top → bottom; the open centre of the reel never changes.
+// Enough wraps are drawn that ONE drawn wrap ≈ ONE real drum turn (~40 ft), so
+// the reel's rotation and the wraps coming off always match the depth.
 const REEL_CENTER_Y = 3.1;             // world Y of the reel group origin (= reelGroup Y)
-const COIL_ROD_R = 0.055;              // drawn rod radius on the reel
-const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap pitch (wraps touching)
-const COIL_HELIX_R = REEL_GEOM.coreR + COIL_ROD_R + 0.005; // every wrap at this radius
-const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R;    // local Y of the bottom wrap
-/** Wraps on a FULL reel: as many as fit between the flanges. */
-const COIL_WRAPS_FULL = Math.floor((REEL_GEOM.topFlangeY - REEL_GEOM.platterTopY - 2 * COIL_ROD_R - 0.03) / COIL_PITCH);
+const COIL_ROD_R = 0.035;              // drawn rod radius on the reel
+const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap and layer-to-layer pitch
+const COIL_IN_R = REEL_GEOM.coilInnerR;
+const COIL_OUT_R = REEL_GEOM.coilOuterR;
+const COIL_WRAPS_PER_LAYER = Math.floor((COIL_OUT_R - COIL_IN_R) / COIL_PITCH) + 1;
+const COIL_LAYERS = Math.floor((REEL_GEOM.topFlangeY - REEL_GEOM.platterTopY - 0.06) / COIL_PITCH);
+const COIL_WRAPS_FULL = COIL_WRAPS_PER_LAYER * COIL_LAYERS;
+const COIL_HELIX_R = (COIL_IN_R + COIL_OUT_R) / 2; // mean wrap radius (pay-off tangent)
+const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R; // local Y of the bottom layer
 /** Cradle-local radius / height of the rod at `t` wraps from the bottom start. */
 function coilAt(t: number): { r: number; y: number } {
-  return { r: COIL_HELIX_R, y: COIL_BASE_Y + Math.max(0, t) * COIL_PITCH };
+  const W = COIL_WRAPS_PER_LAYER;
+  const layer = Math.max(0, Math.min(COIL_LAYERS - 1, Math.floor(t / W)));
+  const w = t - layer * W;
+  const f = Math.min(w, W - 1) / (W - 1);
+  const r = layer % 2 === 0 ? COIL_OUT_R - f * (COIL_OUT_R - COIL_IN_R) : COIL_IN_R + f * (COIL_OUT_R - COIL_IN_R);
+  // The last wrap of each layer (except the top one) climbs one pitch onto the next.
+  const climb = layer < COIL_LAYERS - 1 ? Math.max(0, Math.min(1, w - (W - 1))) : 0;
+  return { r, y: COIL_BASE_Y + (layer + climb) * COIL_PITCH };
 }
 /** Wraps still on the reel for a fill fraction (1 = full, 0 = empty). */
 const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_WRAPS_FULL;
@@ -172,20 +183,12 @@ const REEL_PAYOFF = (() => {
   const along = -Math.sin(angle) * dir.x + Math.cos(angle) * dir.z;
   return { angle, dir, hand: along >= 0 ? 1 : -1 };
 })();
-/** Real rod length per drum turn (ft): one wrap at the helix radius. */
-const REEL_FT_PER_TURN = (2 * Math.PI * COIL_HELIX_R) / 0.3048;
 /**
- * Drum rotation for a run depth: the drum turns at the TRUE rod rate (one turn
- * per wrap length paid out), edge moving toward the containment arm; reverses
- * on POOH. Independent of how many wraps are drawn.
+ * Drum rotation for `wraps` still on the reel: exactly one turn per wrap paid
+ * out (edge moving toward the containment arm, reversed on POOH), which also
+ * keeps the top end of the coil at the tangent pay-off point.
  */
-const reelSpinForDepth = (depthFt: number) => -REEL_PAYOFF.hand * (depthFt / REEL_FT_PER_TURN) * Math.PI * 2;
-/**
- * Extra rotation of the (rotationally symmetric) coil mesh inside the turning
- * drum so the top end of the drawn helix always sits at the tangent pay-off point.
- */
-const coilOffsetFor = (wraps: number, spoolSpin: number) =>
-  REEL_PAYOFF.hand * wraps * Math.PI * 2 - REEL_PAYOFF.angle - spoolSpin;
+const reelSpinFor = (wraps: number) => REEL_PAYOFF.hand * wraps * Math.PI * 2 - REEL_PAYOFF.angle;
 
 // ---------------------------------------------------------------------------
 // Lease layout for the outlying production equipment. Shared by the props and
@@ -983,15 +986,19 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 2./2a. Service reel: rod pays off the TOP of the helix. Fill = rod still
       // on the reel = 1 − depth / total. The displayed fill eases toward it and
       // drives the visible wraps (draw range of the pre-built helix — cheap, every
-      // frame) and the drum rotation at the TRUE rod rate (one turn per ~40 ft,
-      // edge toward the containment arm, reversed on POOH). The coil mesh is
-      // counter-rotated inside the drum so the top end of the helix stays at the
-      // tangent pay-off point.
+      // frame) and the drum rotation: one turn per wrap paid out (≈ the real
+      // ~40 ft per turn), edge toward the containment arm, reversed on POOH —
+      // so wraps coming off and drum turns always match the depth.
       if (coilTubeRef.current) {
         const rodS = stateRef.current.rod;
         const total = rodS.totalWellDepthFt > 0 ? rodS.totalWellDepthFt : 1;
         const targetFill = THREE.MathUtils.clamp(1 - rodS.currentDepthFt / total, 0, 1);
-        const shown = coilShownFillRef.current < 0 ? targetFill : THREE.MathUtils.damp(coilShownFillRef.current, targetFill, 4, delta);
+        // Follow the depth directly while running (reel turns the moment rod
+        // moves); only ease big jumps such as a manually typed depth.
+        const prevShown = coilShownFillRef.current;
+        const shown = prevShown < 0 || Math.abs(targetFill - prevShown) < 0.01
+          ? targetFill
+          : THREE.MathUtils.damp(prevShown, targetFill, 5, delta);
         coilShownFillRef.current = shown;
         const wraps = coilWrapsFor(shown);
         const geo = coilTubeRef.current.geometry;
@@ -999,11 +1006,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const radial = (coilTubeRef.current.userData.radial as number) ?? 8;
         if (geo.index && segsPerWrap > 0) geo.setDrawRange(0, Math.floor(wraps * segsPerWrap) * radial * 6);
         coilTubeRef.current.visible = wraps > 0.02;
-        if (reelSpoolRef.current) {
-          const spin = reelSpinForDepth((1 - shown) * total);
-          reelSpoolRef.current.rotation.y = spin;
-          coilTubeRef.current.rotation.y = coilOffsetFor(wraps, spin);
-        }
+        if (reelSpoolRef.current) reelSpoolRef.current.rotation.y = reelSpinFor(wraps);
         // Rod strand take-off height follows the top wrap down (rebuild per ~5 mm).
         if (Math.abs(shown - coilFillRef.current) * COIL_WRAPS_FULL * COIL_PITCH > 0.005 && rodStrandRef.current) {
           const rodBuilder = (rodStrandRef.current.userData as {
@@ -3443,9 +3446,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     reelGroup.rotation.x = 0;
 
     // Flatbed trailer under the HORIZONTAL reel. The deck is wide enough for the
-    // flat 4.6 m platter and raised clear of the wheels (wheels at local y -2.6).
+    // flat 5.2 m reel and raised clear of the wheels (wheels at local y -2.6).
     const trailerMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.4, roughness: 0.6 });
-    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 4.9), trailerMat);
+    const trailerDeck = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, REEL_GEOM.deckHalfZ * 2), trailerMat);
     trailerDeck.position.set(0, REEL_GEOM.deckTopY - 0.09, 0);
     trailerDeck.castShadow = true;
     trailerDeck.receiveShadow = true;
@@ -3459,12 +3462,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const spool = new THREE.Group();
     addServiceReelDetails(reelGroup, reelCradle, spool);
 
-    // --- Continuous CoRod pack: ONE rod wound as a single helix on the drum ----
-    // Every wrap at the same large diameter, stacked upward. Rod pays off the TOP,
-    // so as fill drops the top wraps disappear and the pack gets LOWER
-    // (top → bottom) — it never empties from the middle like coiled tubing.
-    const TURN_SEG = 72; // tube segments per wrap (large diameter)
-    const RADIAL = 8;
+    // --- Continuous CoRod pack: ONE rod wound in a wide band of flat layers ----
+    // Rod pays off the TOP layer, so as fill drops the pack gets LOWER
+    // (top → bottom); the open centre of the reel never changes.
+    const TURN_SEG = 40; // tube segments per wrap
+    const RADIAL = 6;
     const buildFullHelix = (): THREE.TubeGeometry => {
       const path: THREE.Vector3[] = [];
       const steps = COIL_WRAPS_FULL * TURN_SEG;
@@ -3486,8 +3488,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     coilTube.userData.segsPerWrap = TURN_SEG;
     coilTube.userData.radial = RADIAL;
     spool.add(coilTube);
-    spool.rotation.y = reelSpinForDepth(0);
-    coilTube.rotation.y = coilOffsetFor(COIL_WRAPS_FULL, spool.rotation.y);
+    spool.rotation.y = reelSpinFor(COIL_WRAPS_FULL);
     coilTubeRef.current = coilTube;
     coilMatRef.current = coilMat;
     coilFillRef.current = 1;
@@ -3517,21 +3518,21 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const redSteel = new THREE.MeshStandardMaterial({ color: 0xb01818, metalness: 0.45, roughness: 0.5 });
     // Red equipment skid across the FRONT strip of the deck (clear of the platter).
     const skidCross = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 3.2), redSteel);
-    skidCross.position.set(-2.95, REEL_GEOM.deckTopY + 0.15, 0); skidCross.castShadow = true; reelGroup.add(skidCross);
+    skidCross.position.set(-3.05, REEL_GEOM.deckTopY + 0.15, 0); skidCross.castShadow = true; reelGroup.add(skidCross);
 
     // Twin fire extinguishers mounted upright on the front skid.
     [-0.55, 0.55].forEach((ez) => {
       const by = REEL_GEOM.deckTopY + 0.3 + 0.45;
       const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.9, 16), redSteel);
-      bottle.position.set(-2.95, by, ez); bottle.castShadow = true; reelGroup.add(bottle);
+      bottle.position.set(-3.05, by, ez); bottle.castShadow = true; reelGroup.add(bottle);
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), redSteel);
-      dome.position.set(-2.95, by + 0.45, ez); reelGroup.add(dome);
+      dome.position.set(-3.05, by + 0.45, ez); reelGroup.add(dome);
       const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), crossBraceMat);
-      neck.position.set(-2.95, by + 0.63, ez); reelGroup.add(neck);
+      neck.position.set(-3.05, by + 0.63, ez); reelGroup.add(neck);
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.08), crossBraceMat);
-      handle.position.set(-3.02, by + 0.73, ez); reelGroup.add(handle);
+      handle.position.set(-3.12, by + 0.73, ez); reelGroup.add(handle);
       const strap = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 6, 16), crossBraceMat);
-      strap.rotation.y = Math.PI / 2; strap.position.set(-2.95, by, ez); reelGroup.add(strap);
+      strap.rotation.y = Math.PI / 2; strap.position.set(-3.05, by, ez); reelGroup.add(strap);
     });
 
     scene.add(reelGroup);
@@ -3555,7 +3556,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // SIDE of the reel trailer at its front end, beside the fire extinguishers; the
     // rod arrives along the reel's tangent and leaves toward the well.
     const headLX = GUIDE_HEAD.x - REEL_X;   // = -4.6 (front end, clear of the extinguishers)
-    const headLY = GUIDE_HEAD.y;            // = 3.9 (above the reel's top flange)
+    const headLY = GUIDE_HEAD.y;            // = 3.4 (above the low reel's top flange)
     const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 1.9 (beside the tongue)
 
     // Orient the arm along the rod's incoming travel (the reel tangent); the arch
