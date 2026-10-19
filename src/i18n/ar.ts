@@ -65,6 +65,7 @@ export const ar: Record<string, string> = {
   'station.popout': 'فتح في نافذة',
   'station.popout.3d': 'العرض ثلاثي الأبعاد',
   'station.popout.console': 'لوحة التحكم',
+  'station.popout.instructor': 'المدرب',
   'telemetry.depth': 'العمق',
   'telemetry.speed': 'السرعة',
   'telemetry.weight': 'الوزن',

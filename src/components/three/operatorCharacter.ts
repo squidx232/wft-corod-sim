@@ -47,18 +47,18 @@ export interface OperatorCharacter {
   update(frame: OperatorFrame): void;
 }
 
-const DOWN = new THREE.Vector3(0, -1, 0);
-const UPPER_ARM = 0.31;
-const FOREARM = 0.3; // elbow → palm centre
+export const DOWN = new THREE.Vector3(0, -1, 0);
+export const UPPER_ARM = 0.31;
+export const FOREARM = 0.3; // elbow → palm centre
 
 /** Deterministic pseudo-random in [0, 1) from an integer slot. */
-function hash(n: number): number {
+export function hash(n: number): number {
   const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
   return s - Math.floor(s);
 }
 
 /** Frame-rate independent exponential smoothing factor. */
-function damp(rate: number, dt: number): number {
+export function damp(rate: number, dt: number): number {
   return 1 - Math.exp(-rate * dt);
 }
 
@@ -67,7 +67,7 @@ function damp(rate: number, dt: number): number {
  * its −Y) and `elbow` (forearm along −Y) so the palm reaches `target`, with
  * the elbow bending toward `pole`. Unreachable targets fully extend the arm.
  */
-function solveArm(shoulder: THREE.Group, elbow: THREE.Group, target: THREE.Vector3, pole: THREE.Vector3) {
+export function solveArm(shoulder: THREE.Group, elbow: THREE.Group, target: THREE.Vector3, pole: THREE.Vector3) {
   const toTarget = target.clone().sub(shoulder.position);
   const dir = toTarget.clone().normalize();
   const d = THREE.MathUtils.clamp(toTarget.length(), Math.abs(UPPER_ARM - FOREARM) + 1e-3, UPPER_ARM + FOREARM - 1e-3);
@@ -83,18 +83,40 @@ function solveArm(shoulder: THREE.Group, elbow: THREE.Group, target: THREE.Vecto
   elbow.quaternion.setFromUnitVectors(DOWN, forearm);
 }
 
-export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors): OperatorCharacter {
-  const { mat, box, cyl, signTexture } = kit;
-  const coverall = mat(0xb3132b, 0.85, 0.05);
-  const coverallDark = mat(0x8e0f22, 0.85, 0.05);
-  const tape = mat(0xdfe3e8, 0.35, 0.6, 0x9aa0a6, 0.25); // retro-reflective silver tape
+/**
+ * Reusable worker rig builder: constructs the body hierarchy and returns joint groups.
+ * `look` controls appearance: coverall colour, hard-hat colour, optional hi-vis vest.
+ */
+export interface WorkerRigLook {
+  coverallColour?: number; // default 0xb3132b (Weatherford red)
+  hatColour?: number; // default 0xf4f4f2 (white)
+  hiVisVest?: boolean; // default false
+}
+
+export interface WorkerRig {
+  root: THREE.Group;
+  hips: THREE.Group;
+  spine: THREE.Group;
+  torso: THREE.Mesh;
+  neck: THREE.Group;
+  head: THREE.Group;
+  legs: Array<{ hip: THREE.Group; knee: THREE.Group }>;
+  arms: Array<{ shoulder: THREE.Group; elbow: THREE.Group; pole: THREE.Vector3 }>;
+}
+
+export function buildWorkerRig(kit: MeshKit, look: WorkerRigLook = {}): WorkerRig {
+  const { mat, box, cyl } = kit;
+  const coverallCol = look.coverallColour ?? 0xb3132b;
+  const hatCol = look.hatColour ?? 0xf4f4f2;
+  const coverall = mat(coverallCol, 0.85, 0.05);
+  const coverallDark = mat((coverallCol >> 1) & 0x7f7f7f, 0.85, 0.05);
+  const tape = mat(0xdfe3e8, 0.35, 0.6, 0x9aa0a6, 0.25);
   const glove = mat(0x2b2d31, 0.9, 0.05);
   const boot = mat(0x3b2a1a, 0.8, 0.1);
   const sole = mat(0x111111, 0.95, 0.0);
   const skin = mat(0xc99a7a, 0.75, 0.0);
-  const hat = mat(0xf4f4f2, 0.35, 0.15);
-  const lens = mat(0x1b2530, 0.1, 0.6);
   const belt = mat(0x1f1f1f, 0.7, 0.3);
+  const hivis = mat(look.hiVisVest ? 0xccff00 : 0, 0.7, 0.1);
 
   const capsule = (parent: THREE.Object3D, radius: number, length: number, material: THREE.Material,
     x: number, y: number, z: number, scale?: [number, number, number]) => {
@@ -106,6 +128,7 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     parent.add(mesh);
     return mesh;
   };
+
   const band = (parent: THREE.Object3D, radius: number, height: number, y: number, scale?: [number, number, number]) => {
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 16, 1, true), tape);
     mesh.position.y = y;
@@ -115,9 +138,9 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
   };
 
   const root = new THREE.Group();
-  root.name = 'MGConsoleOperator';
+  root.name = 'WorkerCharacter';
 
-  // --- Pelvis / legs -----------------------------------------------------------
+  // --- Pelvis / legs
   const hips = new THREE.Group();
   hips.position.y = 0.93;
   root.add(hips);
@@ -147,34 +170,27 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     return { hip, knee };
   });
 
-  // --- Spine / chest -------------------------------------------------------------
+  // --- Spine / chest
   const spine = new THREE.Group();
   spine.position.y = 0.05;
   hips.add(spine);
   const torso = capsule(spine, 0.16, 0.3, coverall, 0, 0.25, 0, [0.72, 1, 1.05]);
-  band(spine, 0.163, 0.05, 0.16, [0.72, 1, 1.05]); // chest reflective band
-  // Placket / zip line and collar.
+  band(spine, 0.163, 0.05, 0.16, [0.72, 1, 1.05]);
   box(spine, 0.01, 0.42, 0.025, coverallDark, 0.116, 0.24, 0, false);
   const collar = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 16), coverallDark);
   collar.rotation.x = Math.PI / 2;
   collar.position.y = 0.49;
   spine.add(collar);
-  // Weatherford logos: left chest and across the back.
-  const chestLogo = signTexture([{ text: 'Weatherford', color: '#ffffff', size: 92 }], '#b3132b', 512, 160);
-  const logoMat = new THREE.MeshStandardMaterial({ map: chestLogo, roughness: 0.85, transparent: false });
-  const chestPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.047), logoMat);
-  chestPlane.position.set(0.119, 0.36, -0.075);
-  chestPlane.rotation.y = Math.PI / 2;
-  spine.add(chestPlane);
-  const backLogo = signTexture([{ text: 'WEATHERFORD', color: '#ffffff', size: 84 }], '#b3132b', 768, 160);
-  const backPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.063), new THREE.MeshStandardMaterial({ map: backLogo, roughness: 0.85 }));
-  backPlane.position.set(-0.119, 0.32, 0);
-  backPlane.rotation.y = -Math.PI / 2;
-  spine.add(backPlane);
-  // Radio on the chest (right side).
-  box(spine, 0.03, 0.09, 0.05, belt, 0.12, 0.33, 0.09, false);
 
-  // --- Neck / head / PPE ---------------------------------------------------------
+  // Hi-vis vest if requested
+  if (look.hiVisVest) {
+    const vest = capsule(spine, 0.165, 0.32, hivis, 0, 0.26, 0, [0.75, 1.02, 1.08]);
+    vest.position.z -= 0.01; // slight offset to sit on top
+  }
+
+  box(spine, 0.03, 0.09, 0.05, belt, 0.12, 0.33, 0.09, false); // radio
+
+  // --- Neck / head
   const neck = new THREE.Group();
   neck.position.y = 0.5;
   spine.add(neck);
@@ -187,26 +203,25 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
   skull.scale.set(1.0, 1.15, 0.9);
   skull.castShadow = true;
   head.add(skull);
-  box(head, 0.035, 0.04, 0.03, skin, 0.105, 0.1, 0, false); // nose
+  box(head, 0.035, 0.04, 0.03, skin, 0.105, 0.1, 0, false);
   for (const side of [-1, 1]) {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), skin);
     ear.position.set(0, 0.11, side * 0.095);
     ear.scale.set(0.6, 1, 0.4);
     head.add(ear);
   }
-  box(head, 0.02, 0.035, 0.185, lens, 0.093, 0.135, 0, false); // safety glasses
-  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.125, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), hat);
+  box(head, 0.02, 0.035, 0.185, mat(0x1b2530, 0.1, 0.6), 0.093, 0.135, 0, false);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.125, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(hatCol, 0.35, 0.15));
   shell.position.set(0, 0.175, 0);
   shell.scale.set(1.12, 0.92, 1.0);
   shell.castShadow = true;
   head.add(shell);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.152, 0.014, 22), hat);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.152, 0.014, 22), mat(hatCol, 0.35, 0.15));
   brim.position.set(0.035, 0.178, 0);
   brim.scale.set(1.15, 1, 1);
   head.add(brim);
-  box(head, 0.008, 0.02, 0.06, mat(0xc8102e, 0.5, 0.1), 0.142, 0.22, 0, false); // hat logo sticker
 
-  // --- Arms ---------------------------------------------------------------------
+  // --- Arms
   const arms = [-1, 1].map((side) => {
     const shoulder = new THREE.Group();
     shoulder.position.set(0, 0.44, side * 0.2);
@@ -223,9 +238,34 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     elbow.add(hand);
     box(hand, 0.06, 0.1, 0.085, glove, 0, -0.03, 0);
     capsule(hand, 0.02, 0.05, glove, 0.03, -0.06, side * 0.035); // thumb
+    // Index finger for pointing
+    capsule(hand, 0.008, 0.055, glove, -0.015, -0.08, side * 0.025);
     return { shoulder, elbow, pole: new THREE.Vector3(-0.35, -1, side * 0.75).normalize() };
   });
-  const [leftArm, rightArm] = arms;
+
+  return { root, hips, spine, torso, neck, head, legs, arms };
+}
+
+export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors): OperatorCharacter {
+  const { mat, signTexture } = kit;
+  const rig = buildWorkerRig(kit, {});
+  const root = rig.root;
+  root.name = 'MGConsoleOperator';
+  const { hips, spine, torso, neck, head, legs } = rig;
+  const [leftArm, rightArm] = rig.arms;
+
+  // Add Weatherford logos (console operator only)
+  const chestLogo = signTexture([{ text: 'Weatherford', color: '#ffffff', size: 92 }], '#b3132b', 512, 160);
+  const logoMat = new THREE.MeshStandardMaterial({ map: chestLogo, roughness: 0.85, transparent: false });
+  const chestPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.047), logoMat);
+  chestPlane.position.set(0.119, 0.36, -0.075);
+  chestPlane.rotation.y = Math.PI / 2;
+  spine.add(chestPlane);
+  const backLogo = signTexture([{ text: 'WEATHERFORD', color: '#ffffff', size: 84 }], '#b3132b', 768, 160);
+  const backPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.063), new THREE.MeshStandardMaterial({ map: backLogo, roughness: 0.85 }));
+  backPlane.position.set(-0.119, 0.32, 0);
+  backPlane.rotation.y = -Math.PI / 2;
+  spine.add(backPlane);
 
   // --- Animation state ------------------------------------------------------------
   const gaze = new THREE.Vector3();
@@ -270,13 +310,13 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     const sway = Math.sin(t * 0.45) * swayAmp + Math.sin(t * 1.13) * swayAmp * 0.25;
     hips.position.z = sway;
     hips.rotation.x = -sway * 1.2;
-    for (const [i, leg] of legs.entries()) {
+    legs.forEach((leg, i) => {
       leg.hip.rotation.x = sway * 1.2; // keep the feet planted under the shifting hips
       // The unweighted leg relaxes its knee slightly.
       const unweighted = (i === 0 ? -sway : sway) > 0 ? Math.abs(sway) / Math.max(swayAmp, 1e-4) : 0;
       leg.knee.rotation.z = -0.03 - 0.07 * unweighted;
       leg.hip.rotation.z = 0.015 + 0.035 * unweighted;
-    }
+    });
     const breath = Math.sin(t * (f.alarm ? 2.6 : 1.55));
     torso.scale.set(0.72 * (1 + breath * 0.012), 1 + breath * 0.008, 1.05 * (1 + breath * 0.01));
     spine.rotation.z = -lean + breath * 0.008;

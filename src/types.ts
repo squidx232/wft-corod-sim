@@ -322,6 +322,25 @@ export interface EquipmentConfig {
   measurementUnits: 'imperial' | 'metric';
 }
 
+export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
+export type WeatherKind = 'clear' | 'windy' | 'dust' | 'rain';
+
+export interface EnvironmentState {
+  timeOfDay: TimeOfDay;
+  weather: WeatherKind;
+  /** Sustained wind speed (mph). Drives the windsock, dust and rain slant. */
+  windSpeedMph: number;
+  /** Direction the wind blows TOWARD, degrees clockwise from world +X (0..360). */
+  windDirectionDeg: number;
+}
+
+export const DEFAULT_ENVIRONMENT: EnvironmentState = {
+  timeOfDay: 'day',
+  weather: 'clear',
+  windSpeedMph: 8,
+  windDirectionDeg: 0,
+};
+
 export interface SimulatorState {
   hydraulics: HydraulicState;
   bop: BOPState;
@@ -367,6 +386,8 @@ export interface SimulatorState {
   // Interactive emergency-response session (drives the Emergency Response HUD).
   // `emergencyScenarioId` matches an EMERGENCY_SCENARIOS entry id; null when idle.
   emergencyScenarioId: string | null;
+  /** Site conditions rendered in the 3D view (synced across windows; instructor-controllable). */
+  environment: EnvironmentState;
   emergencyStepIndex: number;
 
   // Timed assessment run ("Start Simulation"). null when no run is active.

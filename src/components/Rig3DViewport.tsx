@@ -10,11 +10,15 @@ import {
   PUMPJACK_HORSEHEAD_REACH,
   TankBatteryLayout,
 } from './three/productionEquipment';
-import { addOilfieldSiteDetails } from './three/oilfieldSite';
+import { addOilfieldSiteDetails, OilfieldSiteHandles } from './three/oilfieldSite';
+import { createSiteAtmosphere, SiteAtmosphere } from './three/siteAtmosphere';
+import { createEmergencyEffects, EmergencyEffects } from './three/emergencyEffects';
+import { createFloorhandCharacter, FloorhandCharacter } from './three/floorhandCharacter';
+import { requestEnvironmentChange } from '../utils/simEvents';
 import { createOperatorCharacter, OperatorCharacter } from './three/operatorCharacter';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { SimulatorState } from '../types';
+import { SimulatorState, DEFAULT_ENVIRONMENT, EnvironmentState, TimeOfDay, WeatherKind } from '../types';
 import { soundManager } from '../utils/audio';
 import {
   Camera,
@@ -38,6 +42,11 @@ import {
   Play,
   Flame,
   CheckCircle,
+  Sunrise,
+  Sunset,
+  CloudRain,
+  Cloud,
+  Wind,
 } from 'lucide-react';
 
 interface Rig3DViewportProps {
@@ -166,6 +175,11 @@ const GRADED_PADS: GradedPad[] = [
   ...PUMPJACK_SITES.map((p): GradedPad => ({ kind: 'circle', x: p.x, z: p.z, radius: 8 * p.s, blend: 18 })),
 ];
 const terrain = createTerrainSampler(GRADED_PADS);
+
+const TIME_CYCLE: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
+const WEATHER_CYCLE: WeatherKind[] = ['clear', 'windy', 'dust', 'rain'];
+/** Floorhand stands on the operator side of the cellar, clear of the cellar edge. */
+const FLOORHAND_POS = { x: 5.4, z: 4.2 };
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -316,7 +330,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
   const [cameraPreset, setCameraPreset] = useState<CameraViewPreset>('operator');
   const cameraPresetRef = useRef<CameraViewPreset>('operator');
-  const [isNightMode, setIsNightMode] = useState(false);
+  // Live site conditions come from `state.environment` (instructor/toolbar
+  // controlled) and are applied every frame by the atmosphere module.
+  const environment: EnvironmentState = state.environment ?? DEFAULT_ENVIRONMENT;
+  const skyMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
+  const siteHandlesRef = useRef<OilfieldSiteHandles | null>(null);
+  const atmosphereRef = useRef<SiteAtmosphere | null>(null);
+  const emergencyFxRef = useRef<EmergencyEffects | null>(null);
+  const floorhandRef = useRef<FloorhandCharacter | null>(null);
   const [showStats, setShowStats] = useState(true);
   // In cab mode the bottom HUD dock is redundant (real console is docked below).
   const [showHudControls, setShowHudControls] = useState(!cabMode);
@@ -600,9 +621,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // 1. Scene
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    scene.background = new THREE.Color(isNightMode ? 0x070b14 : 0x9fc0dc);
+    scene.background = new THREE.Color(0x9fc0dc);
     // Lighter, thinner haze in daytime so the field/sky read as an open site.
-    scene.fog = new THREE.FogExp2(isNightMode ? 0x070b14 : 0xbfd4e6, isNightMode ? 0.012 : 0.0045);
+    scene.fog = new THREE.FogExp2(0xbfd4e6, 0.0045);
 
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 350);
@@ -627,10 +648,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     rendererRef.current = renderer;
 
     // 4. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, isNightMode ? 0.35 : 0.9);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xfffaed, isNightMode ? 0.2 : 1.45);
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.45);
     sunLight.position.set(30, 45, 25);
     sunLight.castShadow = true;
     // Item 36/97: Higher shadow map resolution for crisper shadows
@@ -681,6 +702,45 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     buildSafetyCones(scene);
     buildContinuousRodPath(scene);
     buildExhaustParticleSystem(scene);
+
+    // 5b. Live atmosphere (time of day, weather, wind, lightning).
+    const site = siteHandlesRef.current;
+    atmosphereRef.current = createSiteAtmosphere({
+      scene,
+      renderer,
+      ambient: ambientLight,
+      sun: sunLight,
+      sky: skyMaterialRef.current ?? undefined,
+      workLights: [
+        { light: floodLight, onIntensity: 3.2, dayIntensity: 0.8 },
+        { light: consoleLight, onIntensity: 1.8, dayIntensity: 0.4 },
+        ...(site?.towerLights ?? []).map((light) => ({ light, onIntensity: 400 })),
+      ],
+      lampMaterials: site ? [site.lampMaterial] : [],
+      center: new THREE.Vector3((MG_UNIT_X + WELL_X) / 2, 0, 0),
+    });
+    scene.add(sunLight.target);
+
+    // 5c. Visible emergency consequences (beacons, sparks, spray, smoke).
+    emergencyFxRef.current = createEmergencyEffects(scene, {
+      beaconPoles: [new THREE.Vector3(WELL_X - 4.2, 0, -3.6)],
+      beaconHeads: [new THREE.Vector3(WELL_X + 0.9, INJECTOR_TOP_Y + 0.05, 0.9)],
+      gripper: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 1.2, 0),
+      wellheadLeak: new THREE.Vector3(WELL_X, WELLHEAD_TOP_Y + 0.2, 0),
+      bop: new THREE.Vector3(WELL_X, BOP_BASE_Y + BOP_H * 0.45, 0),
+      engine: new THREE.Vector3(MG_UNIT_X - 1.2, 4.6, 1.1),
+    });
+
+    // 5d. Floorhand at the wellhead: relays hand signals to the console operator.
+    const floorhand = createFloorhandCharacter(createMeshKit(), {
+      operator: new THREE.Vector3(-5.85, 3.2, 2.25),
+      injector: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 2.5, 0),
+      wellhead: new THREE.Vector3(WELL_X, WELLHEAD_TOP_Y, 0),
+    });
+    floorhand.root.position.set(FLOORHAND_POS.x, 0, FLOORHAND_POS.z);
+    floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
+    scene.add(floorhand.root);
+    floorhandRef.current = floorhand;
 
     // 6. Resize Observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -998,6 +1058,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
             // Item 88: at idle, only show every other particle
             p.visible = joyActive || idx % 2 === 0;
             p.position.y += delta * 2.2;
+            // Plume leans downwind (stronger as it rises and slows).
+            const windNow = atmosphereRef.current?.wind;
+            if (windNow) {
+              const rise = Math.min(1, (p.position.y - 4.5) / 3);
+              p.position.x += windNow.x * 0.35 * rise * delta;
+              p.position.z += windNow.z * 0.35 * rise * delta;
+            }
             // Item 85: Perlin-like turbulent drift (multi-frequency sin)
             p.position.x += delta * (Math.sin(time * 0.003 + idx) * 0.3 + Math.sin(time * 0.007 + idx * 2.3) * 0.1);
             p.position.z += delta * (Math.cos(time * 0.003 + idx) * 0.3 + Math.cos(time * 0.005 + idx * 1.7) * 0.1);
@@ -1041,6 +1108,45 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       setNeedleAngle(needles['I'], liveState.hydraulics.squeezePressure, 3000);
       setNeedleAngle(needles['L'], liveState.hydraulics.upPressure, 5000);
       setNeedleAngle(needles['M'], liveState.hydraulics.downPressure, 5000);
+
+      // 6b. Atmosphere, emergencies and the floorhand.
+      const liveEnv = liveState.environment ?? DEFAULT_ENVIRONMENT;
+      const scenarioId = liveState.emergencyScenarioId;
+      // A high-wind drill forces a visible gale regardless of the set weather.
+      const effectiveEnv: EnvironmentState = scenarioId === 'emg-wind'
+        ? { ...liveEnv, windSpeedMph: Math.max(liveEnv.windSpeedMph, 38), weather: liveEnv.weather === 'clear' ? 'windy' : liveEnv.weather }
+        : liveEnv;
+      const atmosphere = atmosphereRef.current;
+      if (atmosphere && cameraRef.current) {
+        atmosphere.update({
+          env: effectiveEnv,
+          delta,
+          time: time / 1000,
+          cameraPosition: cameraRef.current.position,
+          lightning: scenarioId === 'emg-lightning',
+        });
+        siteHandlesRef.current?.updateWindsock(atmosphere.wind, time / 1000);
+      }
+      if (emergencyFxRef.current) {
+        emergencyFxRef.current.update({
+          time: time / 1000,
+          delta,
+          alarmTier: liveState.alarmTier,
+          scenarioId,
+          rodSpeedFtPerMin: speed,
+          wind: atmosphere?.wind ?? new THREE.Vector3(),
+        });
+      }
+      if (floorhandRef.current) {
+        floorhandRef.current.update({
+          time: time / 1000,
+          delta,
+          activity: speed < -0.1 ? 'rih' : speed > 0.1 ? 'pooh' : 'idle',
+          speedRatio: Math.min(1, Math.abs(speed) / 85),
+          alarm: alarmActive,
+          emergencyId: scenarioId,
+        });
+      }
 
       // 7. Live 3D Joystick Tilt Movement
       if (joyShaftMeshRef.current) {
@@ -1154,6 +1260,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     return () => {
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
       resizeObserver.disconnect();
+      // Points/Lines from the atmosphere & emergency systems aren't Meshes, so
+      // the traverse below would miss them.
+      atmosphereRef.current?.dispose();
+      emergencyFxRef.current?.dispose();
+      atmosphereRef.current = null;
+      emergencyFxRef.current = null;
+      floorhandRef.current = null;
 
       // Dispose all geometries, materials, and textures to prevent memory leaks
       scene.traverse((obj) => {
@@ -1185,14 +1298,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     };
   }, []);
 
-  // Update Night Mode / Lighting dynamically
-  useEffect(() => {
-    if (!sceneRef.current) return;
-    sceneRef.current.background = new THREE.Color(isNightMode ? 0x070b14 : 0x9fc0dc);
-    if (sceneRef.current.fog) {
-      (sceneRef.current.fog as THREE.FogExp2).color = new THREE.Color(isNightMode ? 0x070b14 : 0xbfd4e6);
-    }
-  }, [isNightMode]);
 
   // ---------------------------------------------------------------------------
   // 3D Scene Geometry Construction
@@ -1202,8 +1307,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // === IMMERSIVE OIL & GAS SITE ENVIRONMENT ================================
     const siteCenterX = (MG_UNIT_X + WELL_X) / 2;
 
-    // 0. Sky dome — daytime gradient (blue up top → pale haze at horizon).
-    if (!isNightMode) {
+    // 0. Sky dome — gradient colours are driven live by the atmosphere module
+    // (day blue, dawn/dusk glow, night black, storm grey).
+    {
       const skyGeo = new THREE.SphereGeometry(300, 32, 16);
       const skyMat = new THREE.ShaderMaterial({
         side: THREE.BackSide,
@@ -1230,8 +1336,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
             gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
           }`,
       });
+      skyMat.fog = false;
       const sky = new THREE.Mesh(skyGeo, skyMat);
       scene.add(sky);
+      skyMaterialRef.current = skyMat;
     }
 
     // Cellar geometry constants (used by the field hole, pad hole, and pit below).
@@ -1248,9 +1356,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG);
     const tPos = terrainGeo.attributes.position as THREE.BufferAttribute;
     // SAND palette matching the lease pad (not green). Day vs night variants.
-    const baseCol = new THREE.Color(isNightMode ? 0x3a3325 : 0x8a7355);
-    const hiCol = new THREE.Color(isNightMode ? 0x4a4230 : 0xa08a63); // sun-lit dune crests
-    const loCol = new THREE.Color(isNightMode ? 0x2a2418 : 0x6e5c44); // shaded hollows
+    const baseCol = new THREE.Color(0x8a7355);
+    const hiCol = new THREE.Color(0xa08a63); // sun-lit dune crests
+    const loCol = new THREE.Color(0x6e5c44); // shaded hollows
     const colors: number[] = [];
     const _c = new THREE.Color();
     for (let i = 0; i < tPos.count; i++) {
@@ -1291,9 +1399,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Two staggered rings of low-poly peaks give depth. Deterministic layout.
     let mSeed = 8641;
     const mRnd = () => { mSeed = (mSeed * 1103515245 + 12345) & 0x7fffffff; return mSeed / 0x7fffffff; };
-    const mtNear = new THREE.Color(isNightMode ? 0x2a3340 : 0x8f8674); // dusty rock
-    const mtFar = new THREE.Color(isNightMode ? 0x1e2836 : 0xa9b0bd);  // hazy distance
-    const mtSnow = new THREE.Color(isNightMode ? 0x3a4658 : 0xeef2f6); // capped peaks
+    const mtNear = new THREE.Color(0x8f8674); // dusty rock
+    const mtFar = new THREE.Color(0xa9b0bd);  // hazy distance
+    const mtSnow = new THREE.Color(0xeef2f6); // capped peaks
     [{ radius: 300, count: 34, hMin: 26, hMax: 60, col: mtNear },
      { radius: 380, count: 30, hMin: 40, hMax: 95, col: mtFar }].forEach((ring) => {
       for (let m = 0; m < ring.count; m++) {
@@ -1329,7 +1437,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // (tank batteries, pump-jack shapes, small units) rendered as simple LOW-POLY
     // HAZY SILHOUETTES far out on the terrain, so the site feels like part of a
     // working oil field without adding many draw calls. Deterministic + minimal.
-    const silCol = new THREE.Color(isNightMode ? 0x1a2230 : 0x7f8391); // hazy distance tint
+    const silCol = new THREE.Color(0x7f8391); // hazy distance tint
     const silMat = new THREE.MeshStandardMaterial({ color: silCol, roughness: 1.0, metalness: 0.0 });
     let dSeed = 4242;
     const dRnd = () => { dSeed = (dSeed * 1103515245 + 12345) & 0x7fffffff; return dSeed / 0x7fffffff; };
@@ -1396,7 +1504,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     padShape.holes.push(hole);
     const padGeo = new THREE.ShapeGeometry(padShape);
     const padMat = new THREE.MeshStandardMaterial({
-      color: isNightMode ? 0x2a2620 : 0x8a7355, // tan dirt/gravel lease pad
+      color: 0x8a7355, // tan dirt/gravel lease pad
       roughness: 0.98,
       metalness: 0.02,
       side: THREE.DoubleSide,
@@ -2108,9 +2216,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     });
 
     // Lease road, scrub/rocks, light towers, doghouse, pipe rack, windsock, signage.
-    addOilfieldSiteDetails(scene, pjKit, {
+    siteHandlesRef.current = addOilfieldSiteDetails(scene, pjKit, {
       groundAt: terrain.groundAt,
-      isNight: isNightMode,
       pad: { minX: siteCenterX - 45, maxX: siteCenterX + 45, minZ: -26, maxZ: 26 },
       keepClear: [
         ...PUMPJACK_SITES.map((p) => ({ x: p.x, z: p.z, r: 9 * p.s })),
@@ -4196,14 +4303,28 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
           {/* Environmental Controls (Day/Night, HUD Toggle, Orbit/Pan) */}
           <div className="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-lg pointer-events-auto">
-            {/* Day / Night Floodlights */}
+            {/* Time of day / weather (synced; also instructor-controllable) */}
             <button
               type="button"
-              onClick={() => setIsNightMode(!isNightMode)}
+              onClick={() => requestEnvironmentChange({ timeOfDay: TIME_CYCLE[(TIME_CYCLE.indexOf(environment.timeOfDay) + 1) % TIME_CYCLE.length] })}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
-              title={isNightMode ? 'Switch to Daylight' : 'Switch to Night Rig Lights'}
+              title={`Time of day: ${environment.timeOfDay} (click to change)`}
             >
-              {isNightMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
+              {environment.timeOfDay === 'night' ? <Moon className="w-4 h-4 text-indigo-400" />
+                : environment.timeOfDay === 'dawn' ? <Sunrise className="w-4 h-4 text-orange-300" />
+                : environment.timeOfDay === 'dusk' ? <Sunset className="w-4 h-4 text-orange-400" />
+                : <Sun className="w-4 h-4 text-amber-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => requestEnvironmentChange({ weather: WEATHER_CYCLE[(WEATHER_CYCLE.indexOf(environment.weather) + 1) % WEATHER_CYCLE.length] })}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
+              title={`Weather: ${environment.weather}, wind ${environment.windSpeedMph} mph (click to change)`}
+            >
+              {environment.weather === 'rain' ? <CloudRain className="w-4 h-4 text-sky-300" />
+                : environment.weather === 'dust' ? <Cloud className="w-4 h-4 text-amber-300" />
+                : environment.weather === 'windy' ? <Wind className="w-4 h-4 text-slate-200" />
+                : <Sun className="w-4 h-4 text-amber-200" />}
             </button>
 
             {/* Orbit / Pan Toggle */}

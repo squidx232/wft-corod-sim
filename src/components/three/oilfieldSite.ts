@@ -3,7 +3,6 @@ import { MeshKit, placement, seededRandom } from './meshKit';
 
 export interface SiteLayout {
   groundAt: (x: number, z: number) => number;
-  isNight: boolean;
   /** Lease pad rectangle (world). */
   pad: { minX: number; maxX: number; minZ: number; maxZ: number };
   /** Areas to keep clear of scattered vegetation/rocks (equipment, facilities). */
@@ -61,9 +60,21 @@ function ribbon(points: THREE.Vector3[], width: number, surfaceAt: (x: number, z
  * dry grass, portable light towers, a crew/doghouse trailer, a tubular pipe
  * rack, a windsock, a muster-point sign and a portable toilet.
  */
-export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: SiteLayout): void {
+/** Live handles for lighting / wind animation (see siteAtmosphere.ts). */
+export interface OilfieldSiteHandles {
+  /** Lamp-lens material on the light towers (emissive driven by time of day). */
+  lampMaterial: THREE.MeshStandardMaterial;
+  /** Light-tower spotlights (intensity 0 at build; driven live). */
+  towerLights: THREE.SpotLight[];
+  /** Orient and flutter the windsock. `wind` = velocity vector (m/s) the air moves toward. */
+  updateWindsock(wind: THREE.Vector3, time: number): void;
+}
+
+export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: SiteLayout): OilfieldSiteHandles {
   const { mat, box, cyl, strut, railing, instanced, signTexture, signPlane } = kit;
-  const { groundAt, isNight } = site;
+  const { groundAt } = site;
+  const towerLights: THREE.SpotLight[] = [];
+  let windsock: THREE.Group | null = null;
   const galvanised = mat(0x9aa3ad, 0.55, 0.7);
   const dark = mat(0x1f2937, 0.6, 0.5);
   const yellow = mat(0xf2c200, 0.55, 0.3);
@@ -75,9 +86,9 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
   const surfaceAt = (x: number, z: number) => (inPad(x, z) ? Math.max(groundAt(x, z), 0.01) : groundAt(x, z));
   const roadPoints: THREE.Vector3[] = [];
   for (let x = LEASE_ROAD.startX; x >= LEASE_ROAD.endX; x -= 2) roadPoints.push(new THREE.Vector3(x, 0, LEASE_ROAD.centerZ(x)));
-  const roadMaterial = new THREE.MeshStandardMaterial({ color: isNight ? 0x2b2620 : 0x7d6c55, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x7d6c55, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   scene.add(ribbon(roadPoints, LEASE_ROAD.width, surfaceAt, 0.12, roadMaterial));
-  const rutMaterial = new THREE.MeshStandardMaterial({ color: isNight ? 0x211d18 : 0x5e5040, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const rutMaterial = new THREE.MeshStandardMaterial({ color: 0x5e5040, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   for (const offset of [-1.4, 1.4]) {
     const rut = roadPoints.map((p, i) => {
       const next = roadPoints[Math.min(roadPoints.length - 1, i + 1)];
@@ -135,27 +146,27 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
     return out;
   };
   const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
-  const sageGreen = mat(isNight ? 0x252b1e : 0x6b7448, 1, 0);
-  const dryBrush = mat(isNight ? 0x2d2618 : 0x8f7d4e, 1, 0);
+  const sageGreen = mat(0x6b7448, 1, 0);
+  const dryBrush = mat(0x8f7d4e, 1, 0);
   for (const material of [sageGreen, dryBrush]) {
     instanced(scene, shrubGeometry, material, scatter(380, 47, 230, 1.5, (x, z, gy) => {
       const s = 0.45 + rnd() * 0.9;
       return placement(x, gy + s * 0.25, z, 0, rnd() * Math.PI, 0, s * (1 + rnd() * 0.5), s * 0.6, s);
     }), true);
   }
-  instanced(scene, new THREE.ConeGeometry(0.22, 0.7, 5), mat(isNight ? 0x3a3222 : 0xb39b62, 1, 0),
+  instanced(scene, new THREE.ConeGeometry(0.22, 0.7, 5), mat(0xb39b62, 1, 0),
     scatter(900, 46, 140, 0.8, (x, z, gy) => {
       const s = 0.6 + rnd() * 0.8;
       return placement(x, gy + 0.3 * s, z, (rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3, s);
     }));
-  instanced(scene, new THREE.DodecahedronGeometry(1, 0), mat(isNight ? 0x2a2620 : 0x7a6c5a, 1, 0),
+  instanced(scene, new THREE.DodecahedronGeometry(1, 0), mat(0x7a6c5a, 1, 0),
     scatter(320, 47, 240, 1, (x, z, gy) => {
       const s = 0.25 + rnd() * rnd() * 1.6;
       return placement(x, gy + s * 0.3, z, rnd() * 3, rnd() * 3, rnd() * 3, s, s * 0.65, s * (0.8 + rnd() * 0.5));
     }), true);
 
   // --- Portable light towers ------------------------------------------------------
-  const lampMaterial = mat(0xfff4d6, 0.2, 0.1, 0xfff1c1, isNight ? 3 : 0.4);
+  const lampMaterial = mat(0xfff4d6, 0.2, 0.1, 0xfff1c1, 0.4);
   const buildLightTower = (x: number, z: number, faceY: number) => {
     const tower = new THREE.Group();
     tower.position.set(x, groundAt(x, z) + 0.15, z);
@@ -178,12 +189,11 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
       box(head, 0.02, 0.38, 0.48, lampMaterial, 0.1, 0, 0, false);
       tower.add(head);
     }
-    if (isNight) {
-      const light = new THREE.SpotLight(0xfff1d0, 400, 60, Math.PI / 4, 0.5, 2);
-      light.position.set(-0.7, 8.0, 0);
-      light.target.position.set(14, -8, 0);
-      tower.add(light, light.target);
-    }
+    const light = new THREE.SpotLight(0xfff1d0, 0, 60, Math.PI / 4, 0.5, 2);
+    light.position.set(-0.7, 8.0, 0);
+    light.target.position.set(14, -8, 0);
+    tower.add(light, light.target);
+    towerLights.push(light);
     scene.add(tower);
   };
 
@@ -239,16 +249,21 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
   const buildWindsock = (x: number, z: number) => {
     const gy = groundAt(x, z);
     strut(scene, new THREE.Vector3(x, gy, z), new THREE.Vector3(x, gy + 6.5, z), 0.06, galvanised, 8, true);
+    // Swivel at the pole top; bands stream along the swivel's local +X.
+    const swivel = new THREE.Group();
+    swivel.position.set(x, gy + 6.4, z);
     for (let i = 0; i < 5; i++) {
       const band = new THREE.Mesh(
         new THREE.CylinderGeometry(0.34 - i * 0.045, 0.34 - (i + 1) * 0.045, 0.42, 12, 1, true),
         mat(i % 2 ? 0xf5f5f5 : 0xff5a1f, 0.8, 0),
       );
       (band.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
-      band.rotation.z = -Math.PI / 2 + 0.25; // stream downwind, drooping slightly
-      band.position.set(x + 0.25 + i * 0.41, gy + 6.4 - i * 0.1, z);
-      scene.add(band);
+      band.rotation.z = -Math.PI / 2;
+      band.position.set(0.25 + i * 0.41, 0, 0);
+      swivel.add(band);
     }
+    scene.add(swivel);
+    windsock = swivel;
   };
 
   // --- Muster point sign and portable toilet --------------------------------------
@@ -273,4 +288,20 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
   buildWindsock(22, 16);
   buildMusterSign(-15, 18.5, 0);
   buildToilet(-36.5, 14);
+
+  return {
+    lampMaterial,
+    towerLights,
+    updateWindsock(wind, time) {
+      if (!windsock) return;
+      const speed = Math.hypot(wind.x, wind.z); // m/s
+      // Rotate so local +X points downwind (direction the air moves toward).
+      if (speed > 0.05) windsock.rotation.y = Math.atan2(-wind.z, wind.x);
+      // A sock fills fully at ~15 kn (7.7 m/s); limp at calm — droop toward vertical.
+      const fill = THREE.MathUtils.clamp(speed / 7.7, 0, 1);
+      const flutter = Math.sin(time * (4 + speed)) * 0.06 * fill;
+      windsock.rotation.z = -(1 - fill) * 1.25 + flutter;
+      windsock.rotation.x = Math.sin(time * (3 + speed * 0.7)) * 0.08 * fill;
+    },
+  };
 }
