@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addServiceReelDetails, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
+import { addServiceReelDetails, buildReelDrum, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
 import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
@@ -139,31 +139,84 @@ const GUIDE_HEAD = { x: REEL_X - 4.6, y: 3.4, z: REEL_Z + 1.9 };
 // columns and the rim, in flat layers stacked upward (each layer runs across
 // the band, the next one back). It pays off the TOP layer, so the pack gets
 // lower top → bottom; the open centre of the reel never changes.
-// Enough wraps are drawn that ONE drawn wrap ≈ ONE real drum turn (~40 ft), so
-// the reel's rotation and the wraps coming off always match the depth.
+// The coil is drawn at TRUE LENGTH: its path is exactly the well's total depth
+// of rod, so a deeper well gives more wraps / a taller pack, the visible coil
+// is always the rod still on the reel, and the drum turns at the real surface
+// speed (one turn per wrap circumference, ~35–50 ft) — matching the injector.
 const REEL_CENTER_Y = 3.1;             // world Y of the reel group origin (= reelGroup Y)
 const COIL_ROD_R = 0.035;              // drawn rod radius on the reel
 const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap and layer-to-layer pitch
 const COIL_IN_R = REEL_GEOM.coilInnerR;
 const COIL_OUT_R = REEL_GEOM.coilOuterR;
 const COIL_WRAPS_PER_LAYER = Math.floor((COIL_OUT_R - COIL_IN_R) / COIL_PITCH) + 1;
-const COIL_LAYERS = Math.floor((REEL_GEOM.topFlangeY - REEL_GEOM.platterTopY - 0.06) / COIL_PITCH);
-const COIL_WRAPS_FULL = COIL_WRAPS_PER_LAYER * COIL_LAYERS;
+const COIL_MIN_LAYERS = 4;             // smallest reel built (very shallow wells)
+const COIL_MAX_LAYERS = 60;            // safety cap (~4.2 m pack)
 const COIL_HELIX_R = (COIL_IN_R + COIL_OUT_R) / 2; // mean wrap radius (pay-off tangent)
 const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R; // local Y of the bottom layer
+const COIL_SAMPLES_PER_WRAP = 40;
 /** Cradle-local radius / height of the rod at `t` wraps from the bottom start. */
-function coilAt(t: number): { r: number; y: number } {
+function coilAt(t: number, layers = COIL_MAX_LAYERS): { r: number; y: number } {
   const W = COIL_WRAPS_PER_LAYER;
-  const layer = Math.max(0, Math.min(COIL_LAYERS - 1, Math.floor(t / W)));
+  const layer = Math.max(0, Math.min(layers - 1, Math.floor(t / W)));
   const w = t - layer * W;
   const f = Math.min(w, W - 1) / (W - 1);
   const r = layer % 2 === 0 ? COIL_OUT_R - f * (COIL_OUT_R - COIL_IN_R) : COIL_IN_R + f * (COIL_OUT_R - COIL_IN_R);
   // The last wrap of each layer (except the top one) climbs one pitch onto the next.
-  const climb = layer < COIL_LAYERS - 1 ? Math.max(0, Math.min(1, w - (W - 1))) : 0;
+  const climb = layer < layers - 1 ? Math.max(0, Math.min(1, w - (W - 1))) : 0;
   return { r, y: COIL_BASE_Y + (layer + climb) * COIL_PITCH };
 }
-/** Wraps still on the reel for a fill fraction (1 = full, 0 = empty). */
-const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_WRAPS_FULL;
+/** A coil wound with exactly `totalFt` of rod: path + length ↔ wraps lookup. */
+interface ReelCoilPlan {
+  totalFt: number;
+  lengthM: number;
+  points: THREE.Vector3[];
+  /** wraps-from-bottom and cumulative path length (m) at each point. */
+  tAt: number[];
+  cumM: number[];
+  layers: number;
+  topFlangeY: number;
+}
+function planReelCoil(totalFt: number): ReelCoilPlan {
+  const targetM = Math.max(1, totalFt) * 0.3048;
+  const maxT = COIL_MAX_LAYERS * COIL_WRAPS_PER_LAYER;
+  const point = (t: number) => {
+    const { r, y } = coilAt(t);
+    const ang = REEL_PAYOFF.hand * t * Math.PI * 2;
+    return new THREE.Vector3(Math.cos(ang) * r, y, Math.sin(ang) * r);
+  };
+  const points = [point(0)];
+  const tAt = [0];
+  const cumM = [0];
+  for (let i = 1; ; i++) {
+    const t = i / COIL_SAMPLES_PER_WRAP;
+    const p = point(t);
+    const seg = p.distanceTo(points[points.length - 1]);
+    const prevM = cumM[cumM.length - 1];
+    if (prevM + seg >= targetM || t >= maxT) {
+      const k = seg > 0 ? Math.min(1, (targetM - prevM) / seg) : 1;
+      const tEnd = (i - 1 + k) / COIL_SAMPLES_PER_WRAP;
+      points.push(point(tEnd)); tAt.push(tEnd); cumM.push(Math.min(targetM, prevM + seg * k));
+      break;
+    }
+    points.push(p); tAt.push(t); cumM.push(prevM + seg);
+  }
+  const tEnd = tAt[tAt.length - 1];
+  const layers = Math.max(COIL_MIN_LAYERS, Math.floor(tEnd / COIL_WRAPS_PER_LAYER) + 1);
+  return {
+    totalFt, lengthM: cumM[cumM.length - 1], points, tAt, cumM, layers,
+    topFlangeY: REEL_GEOM.platterTopY + layers * COIL_PITCH + 0.06,
+  };
+}
+/** Wraps from the bottom at which `lengthM` of rod is still on the reel. */
+function coilWrapsAtLength(plan: ReelCoilPlan, lengthM: number): number {
+  const c = plan.cumM;
+  if (lengthM <= 0) return 0;
+  if (lengthM >= c[c.length - 1]) return plan.tAt[plan.tAt.length - 1];
+  let lo = 0, hi = c.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (c[mid] <= lengthM) lo = mid; else hi = mid; }
+  const k = (lengthM - c[lo]) / Math.max(1e-9, c[hi] - c[lo]);
+  return plan.tAt[lo] + k * (plan.tAt[hi] - plan.tAt[lo]);
+}
 // --- Pay-off geometry (cradle-local plane) ------------------------------------
 // The rod leaves the top wrap at the point where the line to the containment
 // arm's guide head is TANGENT to the coil, and the reel turns so its edge moves
@@ -464,8 +517,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const containmentArmRef = useRef<THREE.Group | null>(null);
   const containmentArmRestRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
   const coilFillRef = useRef<number>(-1);
-  /** Displayed (eased) reel fill driving the coil draw range and spool rotation. */
-  const coilShownFillRef = useRef<number>(-1);
+  /** Displayed (eased) rod remaining on the reel (ft) driving the coil and drum spin. */
+  const coilShownRemRef = useRef<number>(-1);
+  /** Current true-length coil plan (sized to the well's total depth). */
+  const reelPlanRef = useRef<ReelCoilPlan | null>(null);
+  const reelDrumRef = useRef<THREE.Group | null>(null);
   const rodStrandRef = useRef<THREE.Mesh | null>(null);
   const gripperChainLeftRef = useRef<THREE.Group | null>(null);
   const gripperChainRightRef = useRef<THREE.Group | null>(null);
@@ -983,41 +1039,44 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         }
       }
 
-      // 2./2a. Service reel: rod pays off the TOP of the helix. Fill = rod still
-      // on the reel = 1 − depth / total. The displayed fill eases toward it and
-      // drives the visible wraps (draw range of the pre-built helix — cheap, every
-      // frame) and the drum rotation: one turn per wrap paid out (≈ the real
-      // ~40 ft per turn), edge toward the containment arm, reversed on POOH —
-      // so wraps coming off and drum turns always match the depth.
+      // 2./2a. Service reel: rod pays off the TOP of the true-length coil.
+      // Rod still on the reel = total depth − current depth (ft). It drives the
+      // visible coil (draw range = remaining length) and the drum rotation
+      // (wraps at that length → one turn per real wrap circumference), so the
+      // reel turns at exactly the injector's rod speed, RIH and POOH alike.
       if (coilTubeRef.current) {
         const rodS = stateRef.current.rod;
-        const total = rodS.totalWellDepthFt > 0 ? rodS.totalWellDepthFt : 1;
-        const targetFill = THREE.MathUtils.clamp(1 - rodS.currentDepthFt / total, 0, 1);
-        // Follow the depth directly while running (reel turns the moment rod
-        // moves); only ease big jumps such as a manually typed depth.
-        const prevShown = coilShownFillRef.current;
-        const shown = prevShown < 0 || Math.abs(targetFill - prevShown) < 0.01
-          ? targetFill
-          : THREE.MathUtils.damp(prevShown, targetFill, 5, delta);
-        coilShownFillRef.current = shown;
-        const wraps = coilWrapsFor(shown);
-        const geo = coilTubeRef.current.geometry;
-        const segsPerWrap = (coilTubeRef.current.userData.segsPerWrap as number) ?? 0;
-        const radial = (coilTubeRef.current.userData.radial as number) ?? 8;
-        if (geo.index && segsPerWrap > 0) geo.setDrawRange(0, Math.floor(wraps * segsPerWrap) * radial * 6);
-        coilTubeRef.current.visible = wraps > 0.02;
-        if (reelSpoolRef.current) reelSpoolRef.current.rotation.y = reelSpinFor(wraps);
-        // Rod strand take-off height follows the top wrap down (rebuild per ~5 mm).
-        if (Math.abs(shown - coilFillRef.current) * COIL_WRAPS_FULL * COIL_PITCH > 0.005 && rodStrandRef.current) {
-          const rodBuilder = (rodStrandRef.current.userData as {
-            buildRodStrandGeometry?: (f: number) => THREE.TubeGeometry;
-          }).buildRodStrandGeometry;
-          if (rodBuilder) {
-            const newRodGeo = rodBuilder(shown);
-            rodStrandRef.current.geometry.dispose();
-            rodStrandRef.current.geometry = newRodGeo;
+        const total = Math.max(1, rodS.totalWellDepthFt || 1);
+        if (!reelPlanRef.current || Math.abs(reelPlanRef.current.totalFt - total) > 0.5) rebuildReelForDepth(total);
+        const plan = reelPlanRef.current;
+        if (plan) {
+          const targetRem = THREE.MathUtils.clamp(total - rodS.currentDepthFt, 0, total);
+          // Follow the rod directly while running; only ease big jumps (typed depth).
+          const prevRem = coilShownRemRef.current;
+          const rem = prevRem < 0 || Math.abs(targetRem - prevRem) < 50
+            ? targetRem
+            : THREE.MathUtils.damp(prevRem, targetRem, 5, delta);
+          coilShownRemRef.current = rem;
+          const remM = Math.min(plan.lengthM, rem * 0.3048);
+          const geo = coilTubeRef.current.geometry;
+          const segs = (coilTubeRef.current.userData.segs as number) ?? 0;
+          const radial = (coilTubeRef.current.userData.radial as number) ?? 6;
+          if (geo.index && segs > 0) geo.setDrawRange(0, Math.floor((remM / plan.lengthM) * segs) * radial * 6);
+          coilTubeRef.current.visible = remM > 0.3;
+          const wraps = coilWrapsAtLength(plan, remM);
+          if (reelSpoolRef.current) reelSpoolRef.current.rotation.y = reelSpinFor(wraps);
+          // Rod strand take-off follows the top wrap (rebuild every ~0.1 wrap).
+          if ((coilFillRef.current < 0 || Math.abs(wraps - coilFillRef.current) > 0.1) && rodStrandRef.current) {
+            const rodBuilder = (rodStrandRef.current.userData as {
+              buildRodStrandGeometry?: (w: number) => THREE.TubeGeometry;
+            }).buildRodStrandGeometry;
+            if (rodBuilder) {
+              const newRodGeo = rodBuilder(wraps);
+              rodStrandRef.current.geometry.dispose();
+              rodStrandRef.current.geometry = newRodGeo;
+            }
+            coilFillRef.current = wraps;
           }
-          coilFillRef.current = shown;
         }
       }
 
@@ -3419,6 +3478,36 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     scene.add(ogGroup);
   }
 
+  /**
+   * Size the reel to the well: wind exactly `totalFt` of rod (true length), build
+   * the drum just tall enough for those layers, and reset the coil display.
+   */
+  function rebuildReelForDepth(totalFt: number) {
+    const spool = reelSpoolRef.current;
+    const coil = coilTubeRef.current;
+    if (!spool || !coil) return;
+    const plan = planReelCoil(totalFt);
+    reelPlanRef.current = plan;
+    // Coil: one tube along the whole path; the loop trims its draw range.
+    const RADIAL = 6;
+    const segs = plan.points.length - 1;
+    const curve = new THREE.CatmullRomCurve3(plan.points, false, 'catmullrom', 0.0);
+    coil.geometry.dispose();
+    coil.geometry = new THREE.TubeGeometry(curve, segs, COIL_ROD_R, RADIAL, false);
+    coil.userData.segs = segs;
+    coil.userData.radial = RADIAL;
+    // Drum hardware to the new height.
+    if (reelDrumRef.current) {
+      spool.remove(reelDrumRef.current);
+      reelDrumRef.current.traverse((o) => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); });
+    }
+    const drum = buildReelDrum(plan.topFlangeY);
+    spool.add(drum);
+    reelDrumRef.current = drum;
+    coilShownRemRef.current = -1;  // snap the display to the current depth
+    coilFillRef.current = -1;      // force a rod-strand rebuild
+  }
+
   /** Pose one MG outrigger from its eased extension (0 stowed..1 out) and lowering (0 raised..1 on pad). */
   function layoutMgOutrigger(sd: { side: 1 | -1; arm: THREE.Mesh; leg: THREE.Mesh; pad: THREE.Mesh; ext: number; low: number }) {
     const outerZ = OG.ARM_STOWED_Z + (OG.ARM_OUTER_Z - OG.ARM_STOWED_Z) * sd.ext;
@@ -3460,41 +3549,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const { pivot: reelTiltPivot, cradle: reelCradle } = createTiltedCradle();
     reelGroup.add(reelTiltPivot);
     const spool = new THREE.Group();
-    addServiceReelDetails(reelGroup, reelCradle, spool);
+    addServiceReelDetails(reelGroup, reelCradle);
 
     // --- Continuous CoRod pack: ONE rod wound in a wide band of flat layers ----
     // Rod pays off the TOP layer, so as fill drops the pack gets LOWER
     // (top → bottom); the open centre of the reel never changes.
-    const TURN_SEG = 40; // tube segments per wrap
-    const RADIAL = 6;
-    const buildFullHelix = (): THREE.TubeGeometry => {
-      const path: THREE.Vector3[] = [];
-      const steps = COIL_WRAPS_FULL * TURN_SEG;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / TURN_SEG; // wraps from the bottom
-        const { r, y } = coilAt(t);
-        const ang = REEL_PAYOFF.hand * t * Math.PI * 2;
-        path.push(new THREE.Vector3(Math.cos(ang) * r, y, Math.sin(ang) * r));
-      }
-      const curve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.0);
-      return new THREE.TubeGeometry(curve, steps, COIL_ROD_R, RADIAL, false);
-    };
-
-    // Built once at FULL; the render loop just trims the draw range from the top.
+    // Coil + drum are sized to the well's total depth (rebuilt if it changes).
     const coilMat = new THREE.MeshStandardMaterial({ color: 0x343a40, metalness: 0.7, roughness: 0.4 });
-    const coilTube = new THREE.Mesh(buildFullHelix(), coilMat);
+    const coilTube = new THREE.Mesh(new THREE.BufferGeometry(), coilMat);
     coilTube.castShadow = true;
     coilTube.receiveShadow = true;
-    coilTube.userData.segsPerWrap = TURN_SEG;
-    coilTube.userData.radial = RADIAL;
     spool.add(coilTube);
-    spool.rotation.y = reelSpinFor(COIL_WRAPS_FULL);
     coilTubeRef.current = coilTube;
     coilMatRef.current = coilMat;
-    coilFillRef.current = 1;
+    reelSpoolRef.current = spool;
+    rebuildReelForDepth(stateRef.current.rod.totalWellDepthFt);
 
     reelCradle.add(spool);
-    reelSpoolRef.current = spool;
 
     // (Removed the blue level-wind sheave cylinder — it read as a stray floating
     // blue object near the rod path and isn't needed for the visual.)
@@ -4286,15 +4357,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // cradle's front rail and runs into the guide head. Points are built in the
     // cradle's untilted frame and mapped through the cradle tilt. As the pack
     // gets lower during RIH the take-off point drops with it. Rebuilt on fill change.
-    const buildRodStrandGeometry = (fill: number): THREE.TubeGeometry => {
-      const top = coilAt(Math.max(0, coilWrapsFor(fill) - 0.001)); // current top wrap
+    const buildRodStrandGeometry = (wrapsOnReel: number): THREE.TubeGeometry => {
+      const plan = reelPlanRef.current;
+      const top = coilAt(Math.max(0, wrapsOnReel - 0.001), plan?.layers); // current top wrap
       const { angle, dir } = REEL_PAYOFF;
       const tx = Math.cos(angle) * top.r, tz = Math.sin(angle) * top.r;
       // Cradle-local point `s` metres along the tangent at height y → world.
       const at = (sAlong: number, y: number) =>
         cradleToReelLocal(tx + dir.x * sAlong, y, tz + dir.z * sAlong).add(new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z));
       const yTop = top.y + COIL_ROD_R * 0.6;            // on the top wrap
-      const flangeClear = REEL_GEOM.topFlangeY + 0.28;  // over the top flange lip + spokes
+      const flangeClear = (plan?.topFlangeY ?? REEL_GEOM.topFlangeY) + 0.28; // over the top flange lip + spokes
       const rodPoints: THREE.Vector3[] = [
         at(0, yTop),                                     // leaves the EDGE of the top wrap
         at(0.25, yTop + 0.15),                           // along the tangent, lifting
@@ -4338,7 +4410,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Thin CoRod string (â‰ˆ1" continuous rod). Built at FULL fill initially; the
     // render loop rebuilds it as the reel pays off so the connection point tracks
     // the shrinking coil.
-    const rodMesh = new THREE.Mesh(buildRodStrandGeometry(1), rodMat);
+    const rodMesh = new THREE.Mesh(buildRodStrandGeometry(reelPlanRef.current ? reelPlanRef.current.tAt[reelPlanRef.current.tAt.length - 1] : 0), rodMat);
     rodMesh.castShadow = true;
     // Expose the builder so the render loop can regenerate the strand on fill change.
     rodMesh.userData.buildRodStrandGeometry = buildRodStrandGeometry;

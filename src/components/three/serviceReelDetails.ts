@@ -60,60 +60,62 @@ export function cradleToReelLocal(x: number, y: number, z: number, out = new THR
   return out.set(x, G.hingeY + dy * c - dz * s, G.hingeZ + dy * s + dz * c);
 }
 
+// --- Shared materials + mesh helpers -----------------------------------------
+const paint = new THREE.MeshStandardMaterial({ color: 0xa51f27, metalness: 0.45, roughness: 0.48 });
+const steel = new THREE.MeshStandardMaterial({ color: 0xaeb9c3, metalness: 0.8, roughness: 0.38 });
+const steelDs = steel.clone(); steelDs.side = THREE.DoubleSide;
+const dark = new THREE.MeshStandardMaterial({ color: 0x252d35, metalness: 0.65, roughness: 0.55 });
+const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, metalness: 0.95, roughness: 0.15 });
+const rubber = new THREE.MeshStandardMaterial({ color: 0x151719, roughness: 0.95 });
+const amber = new THREE.MeshStandardMaterial({ color: 0xf5a623, roughness: 0.4 });
+
+function mesh(parent: THREE.Object3D, geometry: THREE.BufferGeometry, material: THREE.Material,
+  x: number, y: number, z: number): THREE.Mesh {
+  const part = new THREE.Mesh(geometry, material);
+  part.position.set(x, y, z);
+  part.castShadow = true;
+  part.receiveShadow = true;
+  parent.add(part);
+  return part;
+}
+/** Box beam between two points. */
+function beam(parent: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, w: number, d: number, mat: THREE.Material) {
+  const delta = b.clone().sub(a);
+  const part = mesh(parent, new THREE.BoxGeometry(w, delta.length(), d), mat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+  return part;
+}
+/** Round bar between two points. */
+function rod(parent: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material) {
+  const delta = b.clone().sub(a);
+  const part = mesh(parent, new THREE.CylinderGeometry(r, r, delta.length(), 16), mat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+  return part;
+}
+const vcyl = (parent: THREE.Object3D, rTop: number, rBot: number, h: number, mat: THREE.Material,
+  x: number, y: number, z: number, seg = 32) => mesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, seg), mat, x, y, z);
+const zcyl = (parent: THREE.Object3D, r: number, len: number, mat: THREE.Material, x: number, y: number, z: number) => {
+  const m = mesh(parent, new THREE.CylinderGeometry(r, r, len, 24), mat, x, y, z);
+  m.rotation.x = Math.PI / 2;
+  return m;
+};
+const xcyl = (parent: THREE.Object3D, r: number, len: number, mat: THREE.Material, x: number, y: number, z: number) => {
+  const m = mesh(parent, new THREE.CylinderGeometry(r, r, len, 16), mat, x, y, z);
+  m.rotation.z = Math.PI / 2;
+  return m;
+};
+const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
 /**
  * Builds the reel:
  * - `frame`  : fixed trailer hardware (reel-local): chassis, wheels, hinge
  *              brackets, tilt cylinders.
  * - `cradle` : the tilting base frame (untilted coordinates; caller
  *              applies the hinge transform — see `createTiltedCradle`).
- * - `spool`  : rotating drum (core, flanges) — spins about the cradle's Y axis.
+ * The rotating drum is built separately by `buildReelDrum`.
  */
-export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, spool: THREE.Group): void {
+export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group): void {
   const G = REEL_GEOM;
-  const paint = new THREE.MeshStandardMaterial({ color: 0xa51f27, metalness: 0.45, roughness: 0.48 });
-  const steel = new THREE.MeshStandardMaterial({ color: 0xaeb9c3, metalness: 0.8, roughness: 0.38 });
-  const steelDs = steel.clone(); steelDs.side = THREE.DoubleSide;
-  const dark = new THREE.MeshStandardMaterial({ color: 0x252d35, metalness: 0.65, roughness: 0.55 });
-  const chrome = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, metalness: 0.95, roughness: 0.15 });
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x151719, roughness: 0.95 });
-  const amber = new THREE.MeshStandardMaterial({ color: 0xf5a623, roughness: 0.4 });
-
-  function mesh(parent: THREE.Object3D, geometry: THREE.BufferGeometry, material: THREE.Material,
-    x: number, y: number, z: number): THREE.Mesh {
-    const part = new THREE.Mesh(geometry, material);
-    part.position.set(x, y, z);
-    part.castShadow = true;
-    part.receiveShadow = true;
-    parent.add(part);
-    return part;
-  }
-  /** Box beam between two points. */
-  function beam(parent: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, w: number, d: number, mat: THREE.Material) {
-    const delta = b.clone().sub(a);
-    const part = mesh(parent, new THREE.BoxGeometry(w, delta.length(), d), mat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-    part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-    return part;
-  }
-  /** Round bar between two points. */
-  function rod(parent: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material) {
-    const delta = b.clone().sub(a);
-    const part = mesh(parent, new THREE.CylinderGeometry(r, r, delta.length(), 16), mat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-    part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-    return part;
-  }
-  const vcyl = (parent: THREE.Object3D, rTop: number, rBot: number, h: number, mat: THREE.Material,
-    x: number, y: number, z: number, seg = 32) => mesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, seg), mat, x, y, z);
-  const zcyl = (parent: THREE.Object3D, r: number, len: number, mat: THREE.Material, x: number, y: number, z: number) => {
-    const m = mesh(parent, new THREE.CylinderGeometry(r, r, len, 24), mat, x, y, z);
-    m.rotation.x = Math.PI / 2;
-    return m;
-  };
-  const xcyl = (parent: THREE.Object3D, r: number, len: number, mat: THREE.Material, x: number, y: number, z: number) => {
-    const m = mesh(parent, new THREE.CylinderGeometry(r, r, len, 16), mat, x, y, z);
-    m.rotation.z = Math.PI / 2;
-    return m;
-  };
-  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
   // ===== Fixed trailer hardware ======================================================
   for (const side of [-1, 1]) {
@@ -162,45 +164,55 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   mesh(cradle, new THREE.BoxGeometry(0.4, 0.28, 0.34), paint, -1.1, yb + 0.24, 0); // hydraulic drive
   vcyl(cradle, 0.12, 0.12, 0.3, dark, -1.1, yb + 0.52, 0, 16);
 
+}
+
+/**
+ * Rotating drum hardware (add to the spool, which spins about cradle Y): ring
+ * of separate columns, centre axle, solid bottom flange and open top flange.
+ * Built to `topFlangeY` so the reel is just tall enough for the well's rod.
+ */
+export function buildReelDrum(topFlangeY: number): THREE.Group {
+  const G = REEL_GEOM;
+  const drum = new THREE.Group();
   // ===== Rotating drum ================================================================
   // Ring of SEPARATE vertical columns the rod is wound around (no solid wall),
   // the centre axle and its cap.
-  const coreH = G.topFlangeY - G.platterTopY;
+  const coreH = topFlangeY - G.platterTopY;
   for (let i = 0; i < G.columnCount; i++) {
     const a = (i * Math.PI * 2) / G.columnCount;
-    const col = mesh(spool, new THREE.BoxGeometry(0.11, coreH, 0.11), paint,
+    const col = mesh(drum, new THREE.BoxGeometry(0.11, coreH, 0.11), paint,
       Math.cos(a) * G.columnR, G.platterTopY + coreH / 2, Math.sin(a) * G.columnR);
     col.rotation.y = -a;
   }
-  vcyl(spool, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
+  vcyl(drum, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
   const flange = (y: number, solid: boolean) => {
     if (solid) {
-      vcyl(spool, G.rimR, G.rimR, 0.06, steel, 0, y - 0.03, 0, 64);
+      vcyl(drum, G.rimR, G.rimR, 0.06, steel, 0, y - 0.03, 0, 64);
     } else {
       // Narrow outer ring only: leaves a gap over the wraps for the rod to leave the top.
-      const ring = mesh(spool, new THREE.RingGeometry(G.rimR - 0.09, G.rimR, 72), steelDs, 0, y, 0);
+      const ring = mesh(drum, new THREE.RingGeometry(G.rimR - 0.09, G.rimR, 72), steelDs, 0, y, 0);
       ring.rotation.x = -Math.PI / 2;
     }
-    const lip = mesh(spool, new THREE.TorusGeometry(G.rimR, 0.065, 8, 72), steel, 0, y, 0);
+    const lip = mesh(drum, new THREE.TorusGeometry(G.rimR, 0.065, 8, 72), steel, 0, y, 0);
     lip.rotation.x = Math.PI / 2;
-    const inner = mesh(spool, new THREE.TorusGeometry(G.columnR, 0.035, 6, 64), steel, 0, y, 0); // ties the column ends
+    const inner = mesh(drum, new THREE.TorusGeometry(G.columnR, 0.035, 6, 64), steel, 0, y, 0); // ties the column ends
     inner.rotation.x = Math.PI / 2;
-    vcyl(spool, G.hubR, G.hubR, 0.12, paint, 0, y, 0, 32); // hub
+    vcyl(drum, G.hubR, G.hubR, 0.12, paint, 0, y, 0, 32); // hub
     const off = solid ? -0.08 : 0.06; // spokes under the bottom plate / on top of the top ring
     for (let i = 0; i < 8; i++) {
       const a = (i * Math.PI) / 4;
       const d = V(Math.cos(a), 0, Math.sin(a));
-      beam(spool, d.clone().multiplyScalar(G.hubR - 0.05).setY(y + off), d.clone().multiplyScalar(G.rimR - 0.08).setY(y + off), 0.1, 0.09, steel);
+      beam(drum, d.clone().multiplyScalar(G.hubR - 0.05).setY(y + off), d.clone().multiplyScalar(G.rimR - 0.08).setY(y + off), 0.1, 0.09, steel);
     }
   };
   flange(G.platterTopY, true);
-  flange(G.topFlangeY, false);
+  flange(topFlangeY, false);
 
   // Flange bolt circles (instanced).
   const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 6), steel, 48);
   const t = new THREE.Object3D();
   let k = 0;
-  for (const y of [G.platterTopY - 0.09, G.topFlangeY + 0.08]) {
+  for (const y of [G.platterTopY - 0.09, topFlangeY + 0.08]) {
     for (const r of [G.hubR - 0.08, G.rimR - 0.06]) {
       for (let i = 0; i < 12; i++) {
         const a = (i * Math.PI) / 6;
@@ -211,7 +223,8 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
     }
   }
   bolts.instanceMatrix.needsUpdate = true;
-  spool.add(bolts);
+  drum.add(bolts);
+  return drum;
 }
 
 /**
