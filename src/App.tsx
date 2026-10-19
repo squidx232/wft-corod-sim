@@ -384,15 +384,15 @@ function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' | 'ins
 /**
  * Run-speed curve for normal joystick-driven RIH/POOH (ft/min, signed).
  * The raw joystick × pressure speed is remapped onto faster working speeds:
- *   13 → 30, 38 → 55, 75 → 100 ft/min (linear between points, same slope
+ *   13 → 60, 38 → 110, 75 → 200 ft/min (linear between points, same slope
  *   beyond the last one). Free-fall / slip speeds are NOT affected.
  * Reel RPM follows automatically since it's derived from rod speed.
  */
 const RUN_SPEED_CURVE: ReadonlyArray<readonly [number, number]> = [
   [0, 0],
-  [13, 30],
-  [38, 55],
-  [75, 100],
+  [13, 60],
+  [38, 110],
+  [75, 200],
 ];
 function boostedRunSpeed(rawFtPerMin: number): number {
   const a = Math.abs(rawFtPerMin);

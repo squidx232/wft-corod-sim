@@ -192,7 +192,8 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
       box(head, 0.02, 0.38, 0.48, lampMaterial, 0.1, 0, 0, false);
       tower.add(head);
     }
-    const light = new THREE.SpotLight(0xfff1d0, 0, 60, Math.PI / 4, 0.5, 2);
+    // Stronger, wider night-work beam (intensity driven live by the atmosphere).
+    const light = new THREE.SpotLight(0xfff1d0, 0, 95, Math.PI / 3.2, 0.5, 2);
     light.position.set(-0.7, 8.0, 0);
     light.target.position.set(14, -8, 0);
     tower.add(light, light.target);
@@ -286,6 +287,9 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
   const aimAtWell = (x: number, z: number) => Math.atan2(-(0 - z), 9 - x);
   buildLightTower(-19, 15.5, aimAtWell(-19, 15.5));
   buildLightTower(23, -14, aimAtWell(23, -14));
+  // Extra towers for night work: behind the reel trailer and front-right of the well.
+  buildLightTower(-5, -19, aimAtWell(-5, -19));
+  buildLightTower(14, 17.5, aimAtWell(14, 17.5));
   buildDoghouse(-30, 14);
   buildPipeRack(-27, -6);
   buildWindsock(22, 16);

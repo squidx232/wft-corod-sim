@@ -12,6 +12,10 @@ import {
 } from './three/productionEquipment';
 import { addOilfieldSiteDetails, OilfieldSiteHandles, MUSTER_SIGN } from './three/oilfieldSite';
 import { createSiteAtmosphere, SiteAtmosphere } from './three/siteAtmosphere';
+import { addNightWorkLights } from './three/nightWorkLights';
+import { addInjectorDetails, InjectorDetailHandles } from './three/injectorDetails';
+import { addMgUnitDetails } from './three/mgUnitDetails';
+import { addFieldDevelopment, FieldDevelopmentHandles, FIELD_PADS } from './three/fieldDevelopment';
 import { createEmergencyEffects, EmergencyEffects } from './three/emergencyEffects';
 import { createFloorhandCharacter, FloorhandCharacter } from './three/floorhandCharacter';
 import { requestEnvironmentChange } from '../utils/simEvents';
@@ -253,13 +257,16 @@ const reelSpinFor = (wraps: number) => REEL_PAYOFF.hand * wraps * Math.PI * 2 - 
 // Lease layout for the outlying production equipment. Shared by the props and
 // the terrain grading so every facility sits on a level, graded pad.
 // ---------------------------------------------------------------------------
+// Offset producers drilled on a regular pattern around the lease: a north row
+// (Z = +50) and a south row behind the tank battery (Z = −64), ~36 m apart,
+// every unit on the same azimuth (well end +X) as a real drilled pattern.
+// Each well's flowline runs to the lease tank-battery headers (LEASE_FLOWLINES).
 const PUMPJACK_SITES: Array<{ x: number; z: number; ry: number; s: number; paint: number; rate: number }> = [
-  { x: WELL_X + 26, z: -20, ry: -0.5, s: 1.0, paint: 0xb45309, rate: 0.9 },
-  { x: WELL_X + 40, z: 6, ry: -1.9, s: 1.15, paint: 0x1f6feb, rate: 0.7 },
-  { x: MG_UNIT_X - 30, z: 22, ry: 0.7, s: 0.9, paint: 0x15803d, rate: 1.1 },
-  { x: MG_UNIT_X - 44, z: -14, ry: 2.2, s: 1.25, paint: 0xb91c1c, rate: 0.8 },
-  // Clear of the tank battery (which spans ~X 36..68, Z ≈ −30 ± 3).
-  { x: WELL_X + 70, z: -52, ry: -0.9, s: 1.1, paint: 0xca8a04, rate: 0.6 },
+  { x: -40, z: 50, ry: 0, s: 1.0, paint: 0xb45309, rate: 0.9 },
+  { x: -4, z: 50, ry: 0, s: 1.1, paint: 0x1f6feb, rate: 0.7 },
+  { x: 32, z: 50, ry: 0, s: 1.0, paint: 0x15803d, rate: 1.1 },
+  { x: 20, z: -64, ry: 0, s: 1.15, paint: 0xb91c1c, rate: 0.8 },
+  { x: 56, z: -64, ry: 0, s: 1.1, paint: 0xca8a04, rate: 0.6 },
 ];
 const TANK_BATTERY: TankBatteryLayout = {
   startX: WELL_X + 30,
@@ -274,6 +281,33 @@ const PRODUCTION_FACILITY = {
   x: TANK_BATTERY.startX + (TANK_BATTERY.count - 1) * TANK_BATTERY.spacing + TANK_BATTERY.radius + 9,
   z: TANK_BATTERY.z,
 };
+/** Wellhead (horsehead end, local +X) of a lease pump jack, world XZ. */
+const pumpjackWellXZ = (p: (typeof PUMPJACK_SITES)[number]) => ({
+  x: p.x + Math.cos(p.ry) * PUMPJACK_HORSEHEAD_REACH * p.s,
+  z: p.z - Math.sin(p.ry) * PUMPJACK_HORSEHEAD_REACH * p.s,
+});
+// Lease battery berm spans X ≈ 34..74, Z ≈ −35..−25: north wells tie into a
+// header on its north side, south wells into one on its south side.
+const LEASE_HEADER_X = TANK_BATTERY.startX + 12;
+const LEASE_FLOWLINES: Array<Array<{ x: number; z: number }>> = (() => {
+  const north = PUMPJACK_SITES.filter((p) => p.z > 0);
+  const south = PUMPJACK_SITES.filter((p) => p.z < 0);
+  const lines: Array<Array<{ x: number; z: number }>> = [];
+  north.forEach((p, i) => {
+    const w = pumpjackWellXZ(p);
+    const zRun = p.z - 4 - i * 0.7;            // parallel bundle south of the row
+    const xRun = 47 + i * 0.7;                  // down the pad's east edge (pad ends X≈44.5)
+    lines.push([{ x: w.x + 0.5, z: w.z }, { x: w.x + 0.5, z: zRun }, { x: xRun, z: zRun },
+      { x: xRun, z: TANK_BATTERY.z + 7 + i * 0.7 }, { x: LEASE_HEADER_X, z: TANK_BATTERY.z + 7 + i * 0.7 }]);
+  });
+  south.forEach((p, i) => {
+    const w = pumpjackWellXZ(p);
+    const zRun = TANK_BATTERY.z - 10 - i * 0.7;
+    lines.push([{ x: w.x + 0.5, z: w.z }, { x: w.x + 0.5, z: zRun }, { x: LEASE_HEADER_X + i * 0.7, z: zRun },
+      { x: LEASE_HEADER_X + i * 0.7, z: TANK_BATTERY.z - 7 }]);
+  });
+  return lines;
+})();
 const GRADED_PADS: GradedPad[] = [
   { kind: 'circle', x: 0, z: 0, radius: 42, blend: 60 }, // main lease (original flat site)
   {
@@ -285,6 +319,7 @@ const GRADED_PADS: GradedPad[] = [
     blend: 22,
   },
   ...PUMPJACK_SITES.map((p): GradedPad => ({ kind: 'circle', x: p.x, z: p.z, radius: 8 * p.s, blend: 18 })),
+  ...FIELD_PADS,
 ];
 const terrain = createTerrainSampler(GRADED_PADS);
 
@@ -478,6 +513,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const environment: EnvironmentState = state.environment ?? DEFAULT_ENVIRONMENT;
   const skyMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const siteHandlesRef = useRef<OilfieldSiteHandles | null>(null);
+  const fieldDevRef = useRef<FieldDevelopmentHandles | null>(null);
+  const injectorDetailsRef = useRef<InjectorDetailHandles | null>(null);
   const atmosphereRef = useRef<SiteAtmosphere | null>(null);
   const emergencyFxRef = useRef<EmergencyEffects | null>(null);
   const floorhandRef = useRef<FloorhandCharacter | null>(null);
@@ -931,7 +968,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     scene.add(sunLight);
 
     // Mast Work Floodlight (positioned at actual mast top, aimed at injector/wellhead)
-    const floodLight = new THREE.SpotLight(0xffffff, 2.5, 50, Math.PI / 3.5, 0.3, 1);
+    const floodLight = new THREE.SpotLight(0xffffff, 2.5, 80, Math.PI / 3.2, 0.35, 1);
     floodLight.position.set(WELL_X + MAST_OFFSET_X, 20, 2);
     floodLight.target.position.set(WELL_X, 6, 0);
     floodLight.castShadow = true;
@@ -967,6 +1004,19 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
     // 5b. Live atmosphere (time of day, weather, wind, lightning).
     const site = siteHandlesRef.current;
+    // Extra night-work fixtures (mast LED bank, MG deck bar, injector pole lamp,
+    // reel lamp, night fill) — all switched by the atmosphere's light level.
+    const nightLights = addNightWorkLights(scene, {
+      mastBank: new THREE.Vector3(WELL_X + MAST_OFFSET_X - 0.9, 17.5, 0),
+      mastBankTarget: new THREE.Vector3(REEL_X - 2, 1.5, REEL_Z + 3),
+      deckBar: new THREE.Vector3(MG_UNIT_X + 5.9, 4.8, -1.7),
+      deckTarget: new THREE.Vector3(MG_UNIT_X + 9, 0, 1.5),
+      deckPostBaseY: 1.5,
+      injectorPole: { x: WELL_X + 5.8, z: 5.6, height: 9 }, // just outside the cone ring
+      injectorTarget: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 3, 0),
+      reelLamp: new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y + 1.1, GUIDE_HEAD.z),
+      reelTarget: new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z),
+    });
     atmosphereRef.current = createSiteAtmosphere({
       scene,
       renderer,
@@ -974,11 +1024,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       sun: sunLight,
       sky: skyMaterialRef.current ?? undefined,
       workLights: [
-        { light: floodLight, onIntensity: 3.2, dayIntensity: 0.8 },
-        { light: consoleLight, onIntensity: 1.8, dayIntensity: 0.4 },
-        ...(site?.towerLights ?? []).map((light) => ({ light, onIntensity: 400 })),
+        { light: floodLight, onIntensity: 9, dayIntensity: 0.8 },
+        { light: consoleLight, onIntensity: 3.2, dayIntensity: 0.4 },
+        ...(site?.towerLights ?? []).map((light) => ({ light, onIntensity: 1100 })),
+        ...nightLights.workLights,
       ],
-      lampMaterials: site ? [site.lampMaterial] : [],
+      lampMaterials: [...(site ? [site.lampMaterial] : []), nightLights.lampMaterial],
       center: new THREE.Vector3((MG_UNIT_X + WELL_X) / 2, 0, 0),
     });
     scene.add(sunLight.target);
@@ -1197,6 +1248,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 3. Gripper Chain Shoes & Teeth Movement
       if (gripperChainLeftRef.current && gripperChainRightRef.current) {
         const chainDelta = motionSpeed * delta * 0.08;
+        // Injector depth encoder rolls with the rod; weight indicator reads string load.
+        injectorDetailsRef.current?.update(delta, motionSpeed / 60, liveState.rod.totalStringWeightLbs);
         gripperChainLeftRef.current.children.forEach((child) => {
           child.position.y = (((child.position.y - chainDelta + 2) % 4) + 4) % 4 - 2;
         });
@@ -1415,6 +1468,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           lightning: scenarioId === 'emg-lightning',
         });
         siteHandlesRef.current?.updateWindsock(atmosphere.wind, time / 1000);
+        fieldDevRef.current?.update(time / 1000, atmosphere.lightLevel);
       }
       if (emergencyFxRef.current) {
         emergencyFxRef.current.update({
@@ -1593,6 +1647,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // Points/Lines from the atmosphere & emergency systems aren't Meshes, so
       // the traverse below would miss them.
       atmosphereRef.current?.dispose();
+      fieldDevRef.current?.dispose();
+      fieldDevRef.current = null;
       emergencyFxRef.current?.dispose();
       atmosphereRef.current = null;
       emergencyFxRef.current = null;
@@ -1763,53 +1819,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       }
     });
 
-    // --- DISTANT FIELD SILHOUETTES: a sparse ring of neighbouring facilities
-    // (tank batteries, pump-jack shapes, small units) rendered as simple LOW-POLY
-    // HAZY SILHOUETTES far out on the terrain, so the site feels like part of a
-    // working oil field without adding many draw calls. Deterministic + minimal.
-    const silCol = new THREE.Color(0x7f8391); // hazy distance tint
-    const silMat = new THREE.MeshStandardMaterial({ color: silCol, roughness: 1.0, metalness: 0.0 });
-    let dSeed = 4242;
-    const dRnd = () => { dSeed = (dSeed * 1103515245 + 12345) & 0x7fffffff; return dSeed / 0x7fffffff; };
-    // Sample the real terrain surface so the silhouettes sit ON the dunes.
-    const groundAt = terrain.groundAt;
-    // Distant cluster sites at varied bearings/distances (kept OUTSIDE the pad).
-    const distantSites: Array<{ x: number; z: number; kind: 'tanks' | 'pumpjack' | 'unit' }> = [
-      { x: 120, z: -70, kind: 'tanks' },
-      { x: -140, z: 40, kind: 'pumpjack' },
-      { x: 60, z: 150, kind: 'unit' },
-      { x: -90, z: -150, kind: 'tanks' },
-      { x: 170, z: 60, kind: 'pumpjack' },
-      { x: -60, z: 170, kind: 'pumpjack' },
-      { x: 200, z: -30, kind: 'unit' },
-      { x: -180, z: -90, kind: 'tanks' },
-    ];
-    distantSites.forEach((site) => {
-      const gy = groundAt(site.x, site.z);
-      if (site.kind === 'tanks') {
-        const n = 2 + Math.floor(dRnd() * 3);
-        for (let i = 0; i < n; i++) {
-          const r = 2.2 + dRnd() * 1.2, hh = 6 + dRnd() * 3;
-          const tk = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 12), silMat);
-          tk.position.set(site.x + i * (r * 2 + 1), gy + hh / 2, site.z + (dRnd() - 0.5) * 2);
-          scene.add(tk);
-        }
-      } else if (site.kind === 'pumpjack') {
-        // Simple pump-jack silhouette: post + tilted beam.
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.8, 5, 0.8), silMat);
-        post.position.set(site.x, gy + 2.5, site.z); scene.add(post);
-        const beam = new THREE.Mesh(new THREE.BoxGeometry(8, 0.7, 0.7), silMat);
-        beam.position.set(site.x, gy + 5, site.z); beam.rotation.z = 0.18; scene.add(beam);
-        const cw = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 0.6), silMat);
-        cw.position.set(site.x - 3.6, gy + 3.6, site.z); scene.add(cw);
-      } else {
-        // Generic unit/derrick block.
-        const body = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 2.5), silMat);
-        body.position.set(site.x, gy + 1.5, site.z); scene.add(body);
-        const derr = new THREE.Mesh(new THREE.ConeGeometry(1.6, 9, 4), silMat);
-        derr.position.set(site.x + 3, gy + 4.5, site.z); scene.add(derr);
-      }
-    });
+    // (Distant field: real pump-jack / PCP / ESP patterns, satellite batteries,
+    // processing station and pipe racks are built by addFieldDevelopment().)
 
     // 1b. Wellsite lease pad (dirt/gravel) — the worked ground the rig sits on.
     // Built as a Shape with a SQUARE HOLE punched out over the wellhead so you
@@ -2497,6 +2508,17 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     addTankBatteryDetails(scene, pjKit, TANK_BATTERY);
     addProductionFacility(scene, pjKit, PRODUCTION_FACILITY.x, PRODUCTION_FACILITY.z,
       Math.max(terrain.groundAt(PRODUCTION_FACILITY.x, PRODUCTION_FACILITY.z), 0));
+
+    // Wider producing field in line of sight: well patterns (pump jacks, PCP,
+    // ESP), satellite batteries, processing station + flare, crude storage,
+    // pipe rack / trunk lines, and the near-lease flowlines.
+    fieldDevRef.current?.dispose();
+    fieldDevRef.current = addFieldDevelopment(scene, {
+      groundAt: terrain.groundAt,
+      leaseBattery: { x: PRODUCTION_FACILITY.x + 10, z: PRODUCTION_FACILITY.z },
+      leaseInlet: { x: LEASE_HEADER_X - 6, z: TANK_BATTERY.z - 7 },
+      leaseFlowlines: LEASE_FLOWLINES,
+    });
 
     // --- Power line poles receding across the field ---
     const woodMat = steel(0x5c4326, 0.95, 0.0);
@@ -3474,6 +3496,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               child.visible = false;
             }
           });
+          // Truck detail pass (roof light bar/beacons, exhaust stack, air tanks,
+          // toolboxes, hydraulic tank, mud flaps, lights, DOT tape, decals…).
+          addMgUnitDetails(modelHolder, root);
         },
       });
     }
@@ -4092,6 +4117,20 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         onLoaded: (root) => {
           // Guarantee the injector stands perfectly upright (no baked tilt).
           root.rotation.set(0, 0, 0);
+          // Detail pass fitted to the model's real bounds (injector-group space):
+          // adapter flange, manifold + hoses to the MG unit, load cell + weight
+          // indicator, depth encoder, lube reservoir, grease lines, decals.
+          if (sceneRef.current) {
+            injectorGroup.updateWorldMatrix(true, true);
+            const bounds = new THREE.Box3().setFromObject(root)
+              .applyMatrix4(new THREE.Matrix4().copy(injectorGroup.matrixWorld).invert());
+            if (Number.isFinite(bounds.min.x)) {
+              injectorDetailsRef.current = addInjectorDetails(injectorGroup, sceneRef.current, bounds, {
+                groundWorldY: 0,
+                hoseEndWorld: new THREE.Vector3(MG_UNIT_X + 6.4, 1.0, -0.9),
+              });
+            }
+          }
         },
       });
     }
