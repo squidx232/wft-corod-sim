@@ -33,6 +33,7 @@ export const en: Record<string, string> = {
 
   // --- Navigation tabs ---
   'tabs.3dview': '3D View',
+  'tabs.crane': 'Knuckle Crane',
   'tabs.procedures': 'Step-by-Step Procedures',
   'tabs.emergency': 'Emergency Practice',
   'tabs.logbook': 'Log & Scores',
