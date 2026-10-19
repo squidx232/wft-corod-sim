@@ -63,6 +63,9 @@ interface Rig3DViewportProps {
   onSoundAirHorn?: () => void;
   onTriggerEmergencyStop?: () => void;
   onResetEmergencyStop?: () => void;
+  /** Training time-acceleration: when provided, a ×1/×2/×5/×10 selector is
+      shown in the top bar next to the SPEED readout. */
+  onSetSimSpeed?: (multiplier: number) => void;
   /** When true the viewport fills its parent's height (cab windshield mode)
       instead of using its own fixed 520/620px height. The internal
       ResizeObserver keeps the WebGL canvas correctly sized either way. */
@@ -74,6 +77,9 @@ interface Rig3DViewportProps {
       real HTML console dashboard is docked directly below the windshield). */
   cabMode?: boolean;
 }
+
+/** Training time-acceleration presets offered in the top bar. */
+const SIM_SPEED_STEPS = [1, 2, 5, 10] as const;
 
 export type CameraViewPreset = 'operator' | 'orbit' | 'injector' | 'reel' | 'wellhead' | 'console' | 'crane';
 
@@ -457,11 +463,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   onSoundAirHorn,
   onTriggerEmergencyStop,
   onResetEmergencyStop,
+  onSetSimSpeed,
   fillHeight = false,
   cabMode = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const simSpeed = state.simulationSpeedMultiplier ?? 1;
 
   const [cameraPreset, setCameraPreset] = useState<CameraViewPreset>('operator');
   const cameraPresetRef = useRef<CameraViewPreset>('operator');
@@ -4641,11 +4649,36 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                     ? `${state.rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN RIH`
                     : '0.0 FT/MIN'}
                 </span>
-                {/* Same speed per second + the real reel RPM (one drum turn per ~43 ft wrap). */}
+                {/* On-screen rate = gauge speed × training time-acceleration;
+                    reel RPM follows the same effective rod rate (one turn per wrap). */}
                 <span className="text-slate-500 text-[10px]">
-                  {`≈ ${(Math.abs(state.rod.rodSpeedFtPerMin) / 60).toFixed(2)} FT/S · REEL ${reelRpmForSpeed(state.rod.rodSpeedFtPerMin).toFixed(2)} RPM`}
+                  {`≈ ${((Math.abs(state.rod.rodSpeedFtPerMin) / 60) * simSpeed).toFixed(2)} FT/S · REEL ${(reelRpmForSpeed(state.rod.rodSpeedFtPerMin) * simSpeed).toFixed(2)} RPM`}
+                  {simSpeed !== 1 && <span className="text-amber-400 font-bold">{` (×${simSpeed} SIM)`}</span>}
                 </span>
               </div>
+
+              {onSetSimSpeed && (
+                <div
+                  className="flex bg-slate-950 px-1.5 py-1 rounded-xl border border-slate-800 items-center gap-1"
+                  title="Training time-acceleration: how much faster than real time the rod, reel and depth move"
+                >
+                  <span className="text-slate-400 text-[10px] px-0.5">SIM</span>
+                  {SIM_SPEED_STEPS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => onSetSimSpeed(m)}
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                        simSpeed === m
+                          ? 'bg-amber-500 text-slate-950'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {`×${m}`}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 2. Direct Hydraulic Levers & Knobs Quick Actions */}

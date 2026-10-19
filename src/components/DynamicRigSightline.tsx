@@ -35,6 +35,8 @@ interface DynamicRigSightlineProps {
   onSoundAirHorn?: () => void;
   onTriggerEmergencyStop?: () => void;
   onResetEmergencyStop?: () => void;
+  /** Training time-acceleration selector (×1/×2/×5/×10). */
+  onSetSimSpeed?: (multiplier: number) => void;
 }
 
 export type DisplayPerspectiveMode = '3d' | '2d-full' | '2d-gripper' | '2d-reel' | 'split';
@@ -56,6 +58,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   onSoundAirHorn,
   onTriggerEmergencyStop,
   onResetEmergencyStop,
+  onSetSimSpeed,
 }) => {
   const { t } = useT();
   const { rod, hydraulics, bop } = state;
@@ -67,7 +70,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   const isStationary = Math.abs(rod.rodSpeedFtPerMin) <= 0.3;
   const isSlipping = rod.rodGripSlipping;
   // Real reel RPM: one drum turn per wrap of rod (~43 ft) — same maths as the 3D reel.
-  const reelRpm = reelRpmForSpeed(rod.rodSpeedFtPerMin).toFixed(2);
+  const reelRpm = (reelRpmForSpeed(rod.rodSpeedFtPerMin) * (state.simulationSpeedMultiplier ?? 1)).toFixed(2);
 
   // Depth positioning (RIH/POOH via the presets & slider) requires the engine to
   // be running and the start sequence complete — nothing hydraulic can move the
@@ -289,6 +292,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
           onSoundAirHorn={onSoundAirHorn}
           onTriggerEmergencyStop={onTriggerEmergencyStop}
           onResetEmergencyStop={onResetEmergencyStop}
+          onSetSimSpeed={onSetSimSpeed}
         />
       )}
 
@@ -314,6 +318,7 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
             onSoundAirHorn={onSoundAirHorn}
             onTriggerEmergencyStop={onTriggerEmergencyStop}
             onResetEmergencyStop={onResetEmergencyStop}
+            onSetSimSpeed={onSetSimSpeed}
           />
           <div className="h-[380px] sm:h-[420px] md:h-[460px] rounded-xl overflow-hidden border border-slate-800">
             <RealtimeRodAnimationLayer

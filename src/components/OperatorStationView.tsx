@@ -32,6 +32,8 @@ interface OperatorStationViewProps {
   onSoundAirHorn: () => void;
   onTriggerEmergencyStop: () => void;
   onResetEmergencyStop: () => void;
+  /** Training time-acceleration selector (×1/×2/×5/×10). */
+  onSetSimSpeed?: (multiplier: number) => void;
   onInstallClamp: () => void;
   onRemoveClamp?: () => void;
   onSetClampCount?: (count: number) => void;
@@ -57,6 +59,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
   onSoundAirHorn,
   onTriggerEmergencyStop,
   onResetEmergencyStop,
+  onSetSimSpeed,
   onInstallClamp,
   onRemoveClamp,
   onSetClampCount,
@@ -517,6 +520,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
                 onSoundAirHorn={onSoundAirHorn}
                 onTriggerEmergencyStop={onTriggerEmergencyStop}
                 onResetEmergencyStop={onResetEmergencyStop}
+                onSetSimSpeed={onSetSimSpeed}
               />
 
               {/* Area label */}
@@ -684,6 +688,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
               onSoundAirHorn={onSoundAirHorn}
               onTriggerEmergencyStop={onTriggerEmergencyStop}
               onResetEmergencyStop={onResetEmergencyStop}
+              onSetSimSpeed={onSetSimSpeed}
             />
           </div>
 
@@ -731,6 +736,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             onSoundAirHorn={onSoundAirHorn}
             onTriggerEmergencyStop={onTriggerEmergencyStop}
             onResetEmergencyStop={onResetEmergencyStop}
+            onSetSimSpeed={onSetSimSpeed}
           />
         </div>
       )}
