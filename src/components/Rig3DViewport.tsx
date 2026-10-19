@@ -527,6 +527,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const coilFillRef = useRef<number>(-1);
   /** Displayed (eased) rod remaining on the reel (ft) driving the coil and drum spin. */
   const coilShownRemRef = useRef<number>(-1);
+  // Last 10 Hz sim value of rod-on-reel (ft) + when it arrived (ms), so the
+  // render loop can extrapolate between ticks for a smooth drum/coil.
+  const coilTickRemRef = useRef<{ rem: number; at: number }>({ rem: -1, at: 0 });
   /** Current true-length coil plan (sized to the well's total depth). */
   const reelPlanRef = useRef<ReelCoilPlan | null>(null);
   const reelDrumRef = useRef<THREE.Group | null>(null);
@@ -1031,6 +1034,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       const liveState = stateRef.current;
       const speed = liveState.rod.rodSpeedFtPerMin;
+      // Training time-acceleration: everything that MOVES with the rod (reel,
+      // coil, chains, rod texture) runs at gauge speed × multiplier so it stays
+      // in step with how fast depth actually advances.
+      const simMul = liveState.simulationSpeedMultiplier ?? 1;
+      const motionSpeed = speed * simMul;
       const isEngineOn = liveState.hydraulics.engineRunning;
       const rpm = liveState.hydraulics.engineRpm || 0;
 
@@ -1059,11 +1067,30 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const plan = reelPlanRef.current;
         if (plan) {
           const targetRem = THREE.MathUtils.clamp(total - rodS.currentDepthFt, 0, total);
-          // Follow the rod directly while running; only ease big jumps (typed depth).
+          // Depth only updates on the 10 Hz sim tick, so following it directly
+          // makes the drum step (worse at ×5/×10). Instead advance the shown
+          // length EVERY FRAME at the live rod rate (POOH → more rod on reel),
+          // then gently pull it onto the sim value so it never drifts. Large
+          // jumps (typed depth / reset) ease in as before.
           const prevRem = coilShownRemRef.current;
-          const rem = prevRem < 0 || Math.abs(targetRem - prevRem) < 50
-            ? targetRem
-            : THREE.MathUtils.damp(prevRem, targetRem, 5, delta);
+          let rem: number;
+          if (prevRem < 0) {
+            rem = targetRem;
+          } else if (Math.abs(targetRem - prevRem) > 50) {
+            rem = THREE.MathUtils.damp(prevRem, targetRem, 5, delta);
+          } else {
+            const moving = Math.abs(speed) > 0.5 && !rodS.isLandedOnTagBar;
+            const remRate = moving ? motionSpeed / 60 : 0; // ft/s onto (+) / off (−) the reel
+            const tick = coilTickRemRef.current;
+            if (tick.rem !== targetRem) { tick.rem = targetRem; tick.at = time; }
+            // Where the sim depth "is" right now between ticks (capped to ~1.5 ticks).
+            const sinceTick = Math.min((time - tick.at) / 1000, 0.15);
+            const smoothTarget = THREE.MathUtils.clamp(targetRem + remRate * sinceTick, 0, total);
+            // Advance at the live rate every frame, then softly correct onto the
+            // extrapolated sim value — no 10 Hz steps, no drift.
+            rem = THREE.MathUtils.damp(prevRem + remRate * delta, smoothTarget, moving ? 6 : 10, delta);
+          }
+          rem = THREE.MathUtils.clamp(rem, 0, total);
           coilShownRemRef.current = rem;
           const remM = Math.min(plan.lengthM, rem * 0.3048);
           const geo = coilTubeRef.current.geometry;
@@ -1169,7 +1196,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // 3. Gripper Chain Shoes & Teeth Movement
       if (gripperChainLeftRef.current && gripperChainRightRef.current) {
-        const chainDelta = speed * delta * 0.08;
+        const chainDelta = motionSpeed * delta * 0.08;
         gripperChainLeftRef.current.children.forEach((child) => {
           child.position.y = (((child.position.y - chainDelta + 2) % 4) + 4) % 4 - 2;
         });
@@ -1196,7 +1223,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // rattles hard even before the rod builds full freefall speed.
       const shakeRatio = Math.min(1.4, Math.max(speedRatio, alarmActive ? 0.6 : 0) * alarmShakeMul);
       if (rodStrandRef.current && (rodStrandRef.current.material as THREE.MeshStandardMaterial).map) {
-        rodTextureOffset.current += speed * delta * 0.025;
+        rodTextureOffset.current += motionSpeed * delta * 0.025;
         const rodMat = rodStrandRef.current.material as THREE.MeshStandardMaterial;
         rodMat.map!.offset.y = rodTextureOffset.current;
 
