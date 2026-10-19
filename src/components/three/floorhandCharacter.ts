@@ -26,6 +26,32 @@ export interface FloorhandAnchors {
   injector: THREE.Vector3;
   /** World-space position of the wellhead (look down at it occasionally). */
   wellhead: THREE.Vector3;
+  /** Engine / power-pack area on the MG unit (engine, overheat, outrigger hazards). */
+  engine?: THREE.Vector3;
+  /** BOP stack (hydraulic / air leak hazards). */
+  bop?: THREE.Vector3;
+}
+
+/** Where the floorhand points for each emergency (what he's warning the operator about). */
+function hazardPoint(id: string | null, a: FloorhandAnchors): THREE.Vector3 {
+  switch (id) {
+    case 'emg-engine':
+    case 'emg-overheat':
+    case 'emg-outrigger':
+      return a.engine ?? a.operator;
+    case 'emg-blowout':
+      return a.wellhead;
+    case 'emg-hydraulic':
+    case 'emg-bopair':
+      return a.bop ?? a.wellhead;
+    case 'emg-lightning':
+    case 'emg-wind':
+      // Point up at the injector/mast — the elevated load at risk.
+      return a.injector.clone().add(new THREE.Vector3(0, 4, 0));
+    default:
+      // Rod slip / free-fall / charge / chain / overpull: at the injector.
+      return a.injector;
+  }
 }
 
 export interface FloorhandFrame {
@@ -33,8 +59,10 @@ export interface FloorhandFrame {
   delta: number; // seconds since last frame
   activity: FloorhandActivity;
   speedRatio: number; // 0..1, higher = more frequent checks/signals
+  /** Alarm horn / slip alarm sounding. */
   alarm: boolean;
-  emergencyId: string | null; // null | 'emg-h2s' | other emergency codes
+  /** Active emergency scenario id (injected or drill), e.g. 'emg-h2s'. Any non-null id triggers a reaction. */
+  emergencyId: string | null;
 }
 
 export interface FloorhandCharacter {
@@ -68,7 +96,11 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
   let signalPhase = 0; // 0..1 for animated signal phases
   let signalCycle = 0; // timer for signal cycles
   let lastSignalTime = 0;
-  let workSignalActive = false; // a LOWER/HOIST signal is in progress (persists across frames)
+  let workSignalActive = false;
+  // Emergency reaction state: when it started and for which emergency.
+  let emergencyKey: string | null = null;
+  let emergencyStart = 0;
+  let pointing = false; // a LOWER/HOIST signal is in progress (persists across frames)
 
   /** Hips yaw (relative to the root) that faces a world point; rig faces local +X. */
   const yawToward = (p: THREE.Vector3) => {
@@ -84,6 +116,7 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
   const headWorld = () => head.localToWorld(tmp.set(0, 0.12, 0));
 
   function chooseGaze(f: FloorhandFrame): THREE.Vector3 {
+    if (f.alarm && pointing) return hazardPoint(f.emergencyId, anchors).clone();
     if (f.alarm) {
       // In alarm, face the operator
       return anchors.operator.clone();
@@ -144,7 +177,8 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
   /** Body frame (feet origin, hips yaw) → world. */
   const bodyToWorld = (v: THREE.Vector3) => root.localToWorld(v.clone().applyAxisAngle(UP, bodYaw));
 
-  function update(f: FloorhandFrame) {
+  function update(frame: FloorhandFrame) {
+    const f: FloorhandFrame = { ...frame, alarm: frame.alarm || !!frame.emergencyId };
     const dt = Math.min(f.delta, 0.1);
     const t = f.time;
 
@@ -154,12 +188,27 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     let isSignalling = false;
     let signalType: 'lower' | 'hoist' | 'estop' | 'h2s' = 'lower';
 
+    // Any active emergency (alarm horn OR an injected/drill scenario) is an alarm for the crew.
+    const key = f.emergencyId ?? (f.alarm ? 'alarm' : null);
+    if (key !== emergencyKey) {
+      emergencyKey = key;
+      emergencyStart = t;
+    }
+    const sinceStart = t - emergencyStart;
+    pointing = false;
+
     if (f.alarm) {
       isSignalling = true;
+      // Reaction sequence: E-STOP to the operator for 5 s, then alternate
+      // pointing at the hazard (radio to the head) with repeated E-STOP signals.
+      pointing = f.emergencyId !== 'emg-h2s' && sinceStart > 5 && (sinceStart - 5) % 7 < 3.5;
       if (f.emergencyId === 'emg-h2s') {
         signalType = 'h2s';
         // Face away from well (upwind evacuation stance)
         turnBody(yawToward(anchors.wellhead) + Math.PI, 8, dt);
+      } else if (pointing) {
+        signalType = 'estop';
+        turnBody(yawToward(hazardPoint(f.emergencyId, anchors)), 6, dt);
       } else {
         signalType = 'estop';
         // Face the operator
@@ -213,6 +262,8 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     const swayAmp = f.alarm ? 0.006 : f.activity !== 'idle' ? 0.008 : 0.015;
     const sway = Math.sin(t * 0.4) * swayAmp + Math.sin(t * 1.1) * swayAmp * 0.2;
     hips.position.z = sway;
+    // Startle at emergency onset: quick backward recoil of the upper body (~0.8 s).
+    const startle = f.alarm && sinceStart < 0.8 ? Math.sin((sinceStart / 0.8) * Math.PI) * 0.12 : 0;
     hips.rotation.x = -sway * 0.8;
 
     // Keep feet planted
@@ -226,7 +277,7 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     // Breathing
     const breath = Math.sin(t * (f.alarm ? 2.8 : 1.4));
     torso.scale.set(0.72 * (1 + breath * 0.01), 1 + breath * 0.007, 1.05 * (1 + breath * 0.009));
-    spine.rotation.z = breath * 0.006;
+    spine.rotation.z = breath * 0.006 + startle;
 
     root.updateMatrixWorld(true);
 
@@ -257,6 +308,13 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
       const w = f.alarm ? 1 : THREE.MathUtils.smoothstep(signalPhase, 0, 1);
       leftGoal = bodyToWorld(restLeft.clone().lerp(targets.left, w));
       rightGoal = bodyToWorld(restRight.clone().lerp(targets.right, w));
+      if (pointing) {
+        // Right arm straight at the hazard; left hand keys the radio at the head.
+        const shoulder = rightArm.shoulder.getWorldPosition(new THREE.Vector3());
+        const dir = hazardPoint(f.emergencyId, anchors).clone().sub(shoulder).normalize();
+        rightGoal = shoulder.addScaledVector(dir, 0.58 * root.scale.x);
+        leftGoal = head.localToWorld(new THREE.Vector3(0.02, 0.0, -0.13));
+      }
     } else if (f.activity === 'idle') {
       // Idle hand poses
       const cycle = t % 12;

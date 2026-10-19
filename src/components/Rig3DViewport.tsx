@@ -178,8 +178,24 @@ const terrain = createTerrainSampler(GRADED_PADS);
 
 const TIME_CYCLE: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
 const WEATHER_CYCLE: WeatherKind[] = ['clear', 'windy', 'dust', 'rain'];
-/** Floorhand stands on the operator side of the cellar, clear of the cellar edge. */
-const FLOORHAND_POS = { x: 5.4, z: 4.2 };
+/** Safety-cone ring (exclusion zone) around the wellhead / injector. */
+const SAFETY_CONE_POSITIONS: [number, number][] = [
+  [WELL_X - 4.6, 4.6],
+  [WELL_X + 4.6, 4.6],
+  [WELL_X - 4.6, -4.6],
+  [WELL_X + 4.6, -4.6],
+  [WELL_X, 5.4],
+  [WELL_X, -5.4],
+  [WELL_X - 7.5, 0],
+];
+/**
+ * Floorhand stands OUTSIDE the cone exclusion zone, ~2.5 m beyond the
+ * console-side corner cone, where he can see both the injector and the
+ * operator (≈9 m from the well centre).
+ */
+const FLOORHAND_POS = { x: WELL_X - 4.6 - 2.0, z: 4.6 + 1.6 };
+/** Crew figures are modelled at ~1.80 m; scale up slightly for presence/readability. */
+const CREW_SCALE = 1.1;
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -736,8 +752,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       operator: new THREE.Vector3(-5.85, 3.2, 2.25),
       injector: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 2.5, 0),
       wellhead: new THREE.Vector3(WELL_X, WELLHEAD_TOP_Y, 0),
+      engine: new THREE.Vector3(MG_UNIT_X - 1.2, 3.2, 1.1),
+      bop: new THREE.Vector3(WELL_X, BOP_BASE_Y + BOP_H * 0.45, 0),
     });
-    floorhand.root.position.set(FLOORHAND_POS.x, 0, FLOORHAND_POS.z);
+    floorhand.root.position.set(FLOORHAND_POS.x, terrain.groundAt(FLOORHAND_POS.x, FLOORHAND_POS.z), FLOORHAND_POS.z);
+    floorhand.root.scale.setScalar(CREW_SCALE);
     floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
     scene.add(floorhand.root);
     floorhandRef.current = floorhand;
@@ -1164,7 +1183,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           delta,
           activity: opSpeed < -0.1 ? 'rih' : opSpeed > 0.1 ? 'pooh' : 'idle',
           speedRatio: Math.min(1, Math.abs(opSpeed) / 85),
-          alarm: alarmActive,
+          // Injected/drill emergencies count as an alarm for the crew too.
+          alarm: alarmActive || !!scenarioId,
           engineOn: isEngineOn,
         });
       }
@@ -3076,6 +3096,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       reel: new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z),
     });
     operator.root.position.set(-0.34, 0.06, 0.08); // on the platform floor
+    operator.root.scale.setScalar(CREW_SCALE);
     opPlatformGroup.add(operator.root);
     operatorRef.current = operator;
 
@@ -3912,15 +3933,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Cone placements (world X, Z) ringing the wellhead / walkway.
     // Ring the cones OUTSIDE the cellar opening (CELLAR_HALF = 2.6) so none sit
     // on the pit edge or float over the open hole. ~4.5-unit standoff ring.
-    const conePositions: [number, number][] = [
-      [WELL_X - 4.6, 4.6],
-      [WELL_X + 4.6, 4.6],
-      [WELL_X - 4.6, -4.6],
-      [WELL_X + 4.6, -4.6],
-      [WELL_X, 5.4],
-      [WELL_X, -5.4],
-      [WELL_X - 7.5, 0],
-    ];
+    const conePositions = SAFETY_CONE_POSITIONS;
     gltfLoader.load(
       '/models/cone.glb',
       (gltf) => {
