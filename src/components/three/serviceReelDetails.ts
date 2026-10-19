@@ -3,10 +3,11 @@ import * as THREE from 'three';
 /**
  * CoRod service reel, in reel-local coordinates.
  *
- * Built like a coiled-tubing reel (core barrel + two spoked flanges inside a
- * steel containment frame) but laid HORIZONTALLY: the drum axis is vertical and
- * the rod is coiled around the core like a rope around a stake, in flat layers
- * stacked upward. The rod pays off the TOP, so the pack gets lower top → bottom.
+ * Built like a coiled-tubing reel (drum core + two spoked flanges inside a
+ * steel containment frame) but laid HORIZONTALLY: the drum axis is vertical.
+ * Solid-but-flexible CoRod is wound as ONE helix at the drum's large diameter,
+ * wraps stacked upward; it pays off the TOP, so the pack gets lower top → bottom
+ * and never empties from the middle.
  *
  * The whole cradle is hinged along its FRONT edge (+Z, the side facing the
  * guide head / the left side of the MG) and tilted up at the BACK (−Z) by a
@@ -31,8 +32,10 @@ export const REEL_GEOM = {
   topFlangeY: 0.32,
   /** Flange radius. */
   rimR: 2.2,
-  /** Core barrel radius the first wrap sits against. */
-  stakeR: 0.38,
+  /** Drum core radius — large, because solid CoRod can't bend tight; every wrap sits on it. */
+  coreR: 1.86,
+  /** Hub radius at the drum centre (spokes run hub → rim). */
+  hubR: 0.45,
 };
 
 /** Reel-local position of a point given in the cradle's untilted coordinates. */
@@ -155,9 +158,16 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   vcyl(cradle, 0.12, 0.12, 0.08, steel, 0, yt + 0.12, 0, 16);
 
   // ===== Rotating drum ================================================================
-  // Core barrel between the flanges + axle stubs into the bearings.
+  // Large hollow drum core between the flanges (wraps sit on its outside), the
+  // centre hub/axle + axle stubs into the bearings.
   const coreH = G.topFlangeY - G.platterTopY;
-  vcyl(spool, G.stakeR, G.stakeR, coreH, dark, 0, G.platterTopY + coreH / 2, 0, 32);
+  const core = mesh(spool, new THREE.CylinderGeometry(G.coreR, G.coreR, coreH, 72, 1, true), dark.clone(), 0, G.platterTopY + coreH / 2, 0);
+  (core.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+  for (const fy of [0.25, 0.5, 0.75]) { // internal stiffener rings
+    const ring = mesh(spool, new THREE.TorusGeometry(G.coreR - 0.04, 0.03, 6, 72), paint, 0, G.platterTopY + coreH * fy, 0);
+    ring.rotation.x = Math.PI / 2;
+  }
+  vcyl(spool, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
   vcyl(spool, 0.2, 0.2, G.frameTopY - G.topFlangeY, steel, 0, (G.frameTopY + G.topFlangeY) / 2, 0, 16);
   vcyl(spool, 0.2, 0.2, G.platterTopY - (yb + 0.25), steel, 0, (G.platterTopY + yb + 0.25) / 2, 0, 16);
 
@@ -165,19 +175,22 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
     if (solid) {
       vcyl(spool, G.rimR, G.rimR, 0.06, steel, 0, y - 0.03, 0, 64);
     } else {
-      const ring = mesh(spool, new THREE.RingGeometry(G.rimR - 0.22, G.rimR, 64), steelDs, 0, y, 0);
+      // Narrow outer ring only: leaves a gap over the wraps for the rod to leave the top.
+      const ring = mesh(spool, new THREE.RingGeometry(G.rimR - 0.12, G.rimR, 64), steelDs, 0, y, 0);
       ring.rotation.x = -Math.PI / 2;
     }
     const lip = mesh(spool, new THREE.TorusGeometry(G.rimR, 0.065, 8, 72), steel, 0, y, 0);
     lip.rotation.x = Math.PI / 2;
     const inner = mesh(spool, new THREE.TorusGeometry(1.3, 0.035, 6, 48), steel, 0, y, 0);
     inner.rotation.x = Math.PI / 2;
-    vcyl(spool, G.stakeR + 0.1, G.stakeR + 0.1, 0.12, paint, 0, y, 0, 32); // hub
+    vcyl(spool, G.hubR, G.hubR, 0.12, paint, 0, y, 0, 32); // hub
+    const coreLip = mesh(spool, new THREE.TorusGeometry(G.coreR, 0.04, 6, 72), steel, 0, y, 0); // core rim
+    coreLip.rotation.x = Math.PI / 2;
     const off = solid ? -0.08 : 0.06; // spokes under the bottom plate / on top of the top ring
     for (let i = 0; i < 8; i++) {
       const a = (i * Math.PI) / 4;
       const d = V(Math.cos(a), 0, Math.sin(a));
-      beam(spool, d.clone().multiplyScalar(G.stakeR + 0.05).setY(y + off), d.clone().multiplyScalar(G.rimR - 0.08).setY(y + off), 0.1, 0.09, steel);
+      beam(spool, d.clone().multiplyScalar(G.hubR - 0.05).setY(y + off), d.clone().multiplyScalar(G.rimR - 0.08).setY(y + off), 0.1, 0.09, steel);
     }
   };
   flange(G.platterTopY, true);
@@ -188,7 +201,7 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   const t = new THREE.Object3D();
   let k = 0;
   for (const y of [G.platterTopY - 0.09, G.topFlangeY + 0.08]) {
-    for (const r of [G.stakeR + 0.02, G.rimR - 0.11]) {
+    for (const r of [G.hubR - 0.08, G.rimR - 0.06]) {
       for (let i = 0; i < 12; i++) {
         const a = (i * Math.PI) / 6;
         t.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
