@@ -4,7 +4,7 @@ import * as THREE from 'three';
  * CoRod service reel, in reel-local coordinates.
  *
  * Built like a coiled-tubing reel (drum core + two spoked flanges inside a
- * steel containment frame) but laid HORIZONTALLY: the drum axis is vertical.
+ * hinged base) but laid HORIZONTALLY: the drum axis is vertical.
  * Solid-but-flexible CoRod is wound as ONE helix at the drum's large diameter,
  * wraps stacked upward; it pays off the TOP, so the pack gets lower top → bottom
  * and never empties from the middle.
@@ -22,10 +22,9 @@ export const REEL_GEOM = {
   hingeZ: 2.38,
   /** Cradle tilt (rad) — back edge lifted by the hydraulic cylinders. */
   tilt: (10 * Math.PI) / 180,
-  /** Cradle frame half-size (square, X and Z) and its base / top rail heights (untilted local Y). */
+  /** Cradle base frame half-size (square, X and Z) and its rail height (untilted local Y). */
   frameHalf: 2.38,
   frameBaseY: -1.79,
-  frameTopY: 0.5,
   /** Bottom flange top surface (first coil layer sits on it). */
   platterTopY: -1.45,
   /** Top flange (open, spoked) height. */
@@ -37,6 +36,14 @@ export const REEL_GEOM = {
   /** Hub radius at the drum centre (spokes run hub → rim). */
   hubR: 0.45,
 };
+
+/** Inverse of `cradleToReelLocal`: reel-local point → cradle (untilted) coordinates. */
+export function reelLocalToCradle(x: number, y: number, z: number, out = new THREE.Vector3()): THREE.Vector3 {
+  const G = REEL_GEOM;
+  const c = Math.cos(G.tilt), s = Math.sin(G.tilt);
+  const dy = y - G.hingeY, dz = z - G.hingeZ;
+  return out.set(x, G.hingeY + dy * c + dz * s, G.hingeZ - dy * s + dz * c);
+}
 
 /** Reel-local position of a point given in the cradle's untilted coordinates. */
 export function cradleToReelLocal(x: number, y: number, z: number, out = new THREE.Vector3()): THREE.Vector3 {
@@ -50,7 +57,7 @@ export function cradleToReelLocal(x: number, y: number, z: number, out = new THR
  * Builds the reel:
  * - `frame`  : fixed trailer hardware (reel-local): chassis, wheels, hinge
  *              brackets, tilt cylinders.
- * - `cradle` : the tilting containment frame (untilted coordinates; caller
+ * - `cradle` : the tilting base frame (untilted coordinates; caller
  *              applies the hinge transform — see `createTiltedCradle`).
  * - `spool`  : rotating drum (core, flanges) — spins about the cradle's Y axis.
  */
@@ -133,29 +140,20 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
     vcyl(frame, 0.11, 0.11, 0.08, dark, split.x, split.y, split.z, 16); // gland
   }
 
-  // ===== Tilting cradle: square containment frame (CT reel style, laid flat) ==========
-  const H = G.frameHalf, yb = G.frameBaseY, yt = G.frameTopY;
+  // ===== Tilting cradle: low base frame only (no cage around the reel) ===============
+  // The flanges contain the rod; the cradle is just the hinged base under the
+  // drum that the tilt cylinders push on, carrying the slewing bearing + drive.
+  const H = G.frameHalf, yb = G.frameBaseY;
   const corners = [V(-H, 0, -H), V(H, 0, -H), V(H, 0, H), V(-H, 0, H)];
   for (let i = 0; i < 4; i++) {
     const a = corners[i], b = corners[(i + 1) % 4];
-    beam(cradle, V(a.x, yb, a.z), V(b.x, yb, b.z), 0.2, 0.2, paint);  // base rails
-    beam(cradle, V(a.x, yt, a.z), V(b.x, yt, b.z), 0.14, 0.14, paint); // top rails
-    beam(cradle, V(a.x, yb, a.z), V(a.x, yt, a.z), 0.16, 0.16, paint); // corner posts
-    // Diagonal side bracing (keeps the open sides from looking flimsy).
-    const mid = a.clone().lerp(b, 0.5);
-    beam(cradle, V(a.x, yb + 0.1, a.z), V(mid.x, yt - 0.08, mid.z), 0.08, 0.08, paint);
-    beam(cradle, V(b.x, yb + 0.1, b.z), V(mid.x, yt - 0.08, mid.z), 0.08, 0.08, paint);
+    beam(cradle, V(a.x, yb, a.z), V(b.x, yb, b.z), 0.2, 0.2, paint); // base rails
   }
-  // Base cross-members carrying the bottom bearing + slew drive.
-  beam(cradle, V(-H, yb, 0), V(H, yb, 0), 0.22, 0.2, paint);
+  beam(cradle, V(-H, yb, 0), V(H, yb, 0), 0.22, 0.2, paint);       // cross-members
   beam(cradle, V(0, yb, -H), V(0, yb, H), 0.22, 0.2, paint);
-  vcyl(cradle, 0.55, 0.6, 0.2, dark, 0, yb + 0.2, 0, 32); // bottom bearing housing
+  vcyl(cradle, 0.55, 0.6, 0.2, dark, 0, yb + 0.2, 0, 32); // slewing bearing housing
   mesh(cradle, new THREE.BoxGeometry(0.4, 0.28, 0.34), paint, -1.1, yb + 0.24, 0); // hydraulic drive
   vcyl(cradle, 0.12, 0.12, 0.3, dark, -1.1, yb + 0.52, 0, 16);
-  // Top bridge across the reel (along X) carrying the top bearing.
-  beam(cradle, V(-H, yt, 0), V(H, yt, 0), 0.2, 0.22, paint);
-  vcyl(cradle, 0.28, 0.28, 0.24, dark, 0, yt - 0.02, 0, 24);
-  vcyl(cradle, 0.12, 0.12, 0.08, steel, 0, yt + 0.12, 0, 16);
 
   // ===== Rotating drum ================================================================
   // Large hollow drum core between the flanges (wraps sit on its outside), the
@@ -168,7 +166,7 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
     ring.rotation.x = Math.PI / 2;
   }
   vcyl(spool, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
-  vcyl(spool, 0.2, 0.2, G.frameTopY - G.topFlangeY, steel, 0, (G.frameTopY + G.topFlangeY) / 2, 0, 16);
+  vcyl(spool, 0.24, 0.24, 0.12, steel, 0, G.topFlangeY + 0.1, 0, 16); // axle cap
   vcyl(spool, 0.2, 0.2, G.platterTopY - (yb + 0.25), steel, 0, (G.platterTopY + yb + 0.25) / 2, 0, 16);
 
   const flange = (y: number, solid: boolean) => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addServiceReelDetails, cradleToReelLocal, createTiltedCradle, REEL_GEOM } from './three/serviceReelDetails';
+import { addServiceReelDetails, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
 import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
@@ -130,9 +130,10 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // (toward the MG/camera, clear of the +Z rim edge at z≈-8.7) and only slightly
 // toward the well in +X — so the arm sits at the front-left corner beside the
 // reel, in the direction the guide arch travels toward the mast/injector.
-// Head sits above the front rail of the tilted reel cradle and just in front of
-// the wide reel trailer deck.
-const GUIDE_HEAD = { x: REEL_X + 1.4, y: 4.2, z: REEL_Z + 3.6 };
+// Containment arm stands to the SIDE of the reel trailer, at the front end next
+// to the fire extinguishers (beside the tongue), so the rod comes off the EDGE
+// of the reel along a tangent — never out of the middle.
+const GUIDE_HEAD = { x: REEL_X - 3.85, y: 3.9, z: REEL_Z + 1.3 };
 // Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM).
 // CoRod is solid (but flexible) steel rod: it can't be bent tight around a small
 // centre, so every wrap sits at the SAME large diameter on the drum core — one
@@ -152,6 +153,27 @@ function coilAt(t: number): { r: number; y: number } {
 }
 /** Wraps still on the reel for a fill fraction (1 = full, 0 = empty). */
 const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_WRAPS_FULL;
+// --- Pay-off geometry (cradle-local plane) ------------------------------------
+// The rod leaves the top wrap at the point where the line to the containment
+// arm's guide head is TANGENT to the coil, and the reel turns so its edge moves
+// toward the arm (same direction the rod enters it).
+const REEL_PAYOFF = (() => {
+  const h = reelLocalToCradle(GUIDE_HEAD.x - REEL_X, GUIDE_HEAD.y - REEL_CENTER_Y, GUIDE_HEAD.z - REEL_Z);
+  const R = COIL_HELIX_R;
+  const d = Math.max(R + 0.01, Math.hypot(h.x, h.z));
+  const beta = Math.atan2(h.z, h.x);
+  const alpha = Math.acos(R / d);
+  // Two tangents — take the one on the front (+Z, low) side of the tilted reel.
+  const angle = [beta + alpha, beta - alpha].sort((p, q) => Math.sin(q) - Math.sin(p))[0];
+  const tx = Math.cos(angle) * R, tz = Math.sin(angle) * R;
+  const len = Math.hypot(h.x - tx, h.z - tz) || 1;
+  const dir = { x: (h.x - tx) / len, z: (h.z - tz) / len }; // unit tangent toward the arm
+  // Point at angle φ moves along (−sinφ, cosφ)·(−ψ̇)·R when spool.rotation.y = ψ.
+  const along = -Math.sin(angle) * dir.x + Math.cos(angle) * dir.z;
+  return { angle, dir, hand: along >= 0 ? 1 : -1 };
+})();
+/** Spool rotation for `wraps` still on the reel: keeps the coil's top end at the pay-off point. */
+const reelSpinFor = (wraps: number) => REEL_PAYOFF.hand * wraps * Math.PI * 2 - REEL_PAYOFF.angle;
 
 // ---------------------------------------------------------------------------
 // Lease layout for the outlying production equipment. Shared by the props and
@@ -427,6 +449,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const containmentArmRef = useRef<THREE.Group | null>(null);
   const containmentArmRestRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
   const coilFillRef = useRef<number>(-1);
+  /** Displayed (eased) reel fill driving the coil draw range and spool rotation. */
+  const coilShownFillRef = useRef<number>(-1);
   const rodStrandRef = useRef<THREE.Mesh | null>(null);
   const gripperChainLeftRef = useRef<THREE.Group | null>(null);
   const gripperChainRightRef = useRef<THREE.Group | null>(null);
@@ -944,50 +968,36 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         }
       }
 
-      // 2. Service Reel Dynamic Rotation with Inertia
-      if (reelSpoolRef.current) {
-        const radPerSec = (speed / 15) * Math.PI * 0.5;
-        reelSpoolRef.current.rotation.y -= radPerSec * delta; // horizontal reel turns about its vertical centre
-      }
-
-      // 2a. Wound-rod coil SHRINKS as rod pays off the reel during RIH -----------
-      // Fill = how much rod is still on the reel = 1 − (currentDepth / totalDepth).
-      // As we RIH, currentDepthFt rises → fill drops → the coil is rebuilt with
-      // fewer wraps, so it visibly gets smaller in radius (rope pulled off a spool).
-      // The whole spool is already spinning, so the wraps also rotate away as they
-      // unwind. We only rebuild the (relatively costly) tube geometry when the fill
-      // changes past a small threshold, and lerp toward the target so it eases.
+      // 2./2a. Service reel: rod pays off the TOP of the helix. Fill = rod still
+      // on the reel = 1 − depth / total. The displayed fill eases toward it and
+      // drives BOTH the visible wraps (draw range of the pre-built helix — cheap,
+      // every frame) and the spool rotation (tied to rod paid out, so the coil's
+      // top end stays exactly at the tangent pay-off point while the reel turns
+      // toward the containment arm).
       if (coilTubeRef.current) {
         const rodS = stateRef.current.rod;
         const total = rodS.totalWellDepthFt > 0 ? rodS.totalWellDepthFt : 1;
         const targetFill = THREE.MathUtils.clamp(1 - rodS.currentDepthFt / total, 0, 1);
-        // Ease the displayed fill toward the target so depth jumps don't pop.
-        const shown = coilFillRef.current < 0 ? targetFill : coilFillRef.current;
-        const eased = THREE.MathUtils.damp(shown, targetFill, 6, delta);
-        // Rebuild only when the change is visually meaningful (~2%).
-        if (Math.abs(eased - coilFillRef.current) > 0.02) {
-          const builder = (coilTubeRef.current.userData as {
-            buildCoilGeometry?: (f: number) => THREE.TubeGeometry | null;
-          }).buildCoilGeometry;
-          if (builder) {
-            const newGeo = builder(eased);
-            coilTubeRef.current.geometry.dispose();
-            coilTubeRef.current.geometry = newGeo ?? new THREE.BufferGeometry();
-            coilTubeRef.current.visible = newGeo != null;
+        const shown = coilShownFillRef.current < 0 ? targetFill : THREE.MathUtils.damp(coilShownFillRef.current, targetFill, 4, delta);
+        coilShownFillRef.current = shown;
+        const wraps = coilWrapsFor(shown);
+        const geo = coilTubeRef.current.geometry;
+        const segsPerWrap = (coilTubeRef.current.userData.segsPerWrap as number) ?? 0;
+        const radial = (coilTubeRef.current.userData.radial as number) ?? 8;
+        if (geo.index && segsPerWrap > 0) geo.setDrawRange(0, Math.floor(wraps * segsPerWrap) * radial * 6);
+        coilTubeRef.current.visible = wraps > 0.02;
+        if (reelSpoolRef.current) reelSpoolRef.current.rotation.y = reelSpinFor(wraps);
+        // Rod strand take-off height follows the top wrap down (rebuild per ~5 mm).
+        if (Math.abs(shown - coilFillRef.current) * COIL_WRAPS_FULL * COIL_PITCH > 0.005 && rodStrandRef.current) {
+          const rodBuilder = (rodStrandRef.current.userData as {
+            buildRodStrandGeometry?: (f: number) => THREE.TubeGeometry;
+          }).buildRodStrandGeometry;
+          if (rodBuilder) {
+            const newRodGeo = rodBuilder(shown);
+            rodStrandRef.current.geometry.dispose();
+            rodStrandRef.current.geometry = newRodGeo;
           }
-          // Rebuild the ROD STRAND too so its coil-connection point tracks the
-          // shrinking coil radius (rod stays glued to the wraps at any depth).
-          if (rodStrandRef.current) {
-            const rodBuilder = (rodStrandRef.current.userData as {
-              buildRodStrandGeometry?: (f: number) => THREE.TubeGeometry;
-            }).buildRodStrandGeometry;
-            if (rodBuilder) {
-              const newRodGeo = rodBuilder(eased);
-              rodStrandRef.current.geometry.dispose();
-              rodStrandRef.current.geometry = newRodGeo;
-            }
-          }
-          coilFillRef.current = eased;
+          coilFillRef.current = shown;
         }
       }
 
@@ -3424,7 +3434,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     trailerDeck.receiveShadow = true;
     reelGroup.add(trailerDeck);
 
-    // Hinged cradle (CT-style containment frame laid flat), tilted up at the back
+    // Hinged low base cradle (no cage — the flanges contain the rod), tilted up at the back
     // by two hydraulic cylinders. The drum inside turns about the cradle's
     // vertical axis: core barrel + bottom/top flanges + the coil.
     const { pivot: reelTiltPivot, cradle: reelCradle } = createTiltedCradle();
@@ -3436,33 +3446,33 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Every wrap at the same large diameter, stacked upward. Rod pays off the TOP,
     // so as fill drops the top wraps disappear and the pack gets LOWER
     // (top → bottom) — it never empties from the middle like coiled tubing.
-    const buildCoilGeometry = (fill: number): THREE.TubeGeometry | null => {
-      const wraps = coilWrapsFor(fill);
-      if (wraps < 0.3) return null; // essentially bare drum
-      const TURN_SEG = 72;          // path samples per wrap (large diameter)
-      const steps = Math.max(2, Math.round(wraps * TURN_SEG));
+    const TURN_SEG = 72; // tube segments per wrap (large diameter)
+    const RADIAL = 8;
+    const buildFullHelix = (): THREE.TubeGeometry => {
       const path: THREE.Vector3[] = [];
+      const steps = COIL_WRAPS_FULL * TURN_SEG;
       for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * wraps;
+        const t = i / TURN_SEG; // wraps from the bottom
         const { r, y } = coilAt(t);
-        const ang = t * Math.PI * 2;
+        const ang = REEL_PAYOFF.hand * t * Math.PI * 2;
         path.push(new THREE.Vector3(Math.cos(ang) * r, y, Math.sin(ang) * r));
       }
-      const coilCurve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.0);
-      return new THREE.TubeGeometry(coilCurve, Math.min(4000, path.length), COIL_ROD_R, 8, false);
+      const curve = new THREE.CatmullRomCurve3(path, false, 'catmullrom', 0.0);
+      return new THREE.TubeGeometry(curve, steps, COIL_ROD_R, RADIAL, false);
     };
 
-    // Initial build at FULL reel; the render loop rebuilds as rod pays off.
+    // Built once at FULL; the render loop just trims the draw range from the top.
     const coilMat = new THREE.MeshStandardMaterial({ color: 0x343a40, metalness: 0.7, roughness: 0.4 });
-    const initialGeo = buildCoilGeometry(1);
-    const coilTube = new THREE.Mesh(initialGeo ?? new THREE.BufferGeometry(), coilMat);
+    const coilTube = new THREE.Mesh(buildFullHelix(), coilMat);
     coilTube.castShadow = true;
     coilTube.receiveShadow = true;
+    coilTube.userData.segsPerWrap = TURN_SEG;
+    coilTube.userData.radial = RADIAL;
     spool.add(coilTube);
+    spool.rotation.y = reelSpinFor(COIL_WRAPS_FULL);
     coilTubeRef.current = coilTube;
     coilMatRef.current = coilMat;
     coilFillRef.current = 1;
-    coilTube.userData.buildCoilGeometry = buildCoilGeometry;
 
     reelCradle.add(spool);
     reelSpoolRef.current = spool;
@@ -3523,55 +3533,54 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const armDark = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.7, roughness: 0.4 });
     const armChrome = new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.25 });
 
-    // Guide-head point in LOCAL coords (group is at REEL_X). It sits WELL OUTBOARD
-    // of the reel (+X) at a low/side height, so the rod runs sideways out of the
-    // coil edge and through it — never over the top, never toward the reel centre.
-    const headLX = GUIDE_HEAD.x - REEL_X;   // = 1.4
-    const headLY = GUIDE_HEAD.y;            // = 4.2 (above the tilted cradle's front rail)
-    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 3.6 (in front of the trailer deck)
-    const headPt = new THREE.Vector3(headLX, headLY, headLZ);
+    // Guide-head point in LOCAL coords (group is at REEL_X). The arm stands to the
+    // SIDE of the reel trailer at its front end, beside the fire extinguishers; the
+    // rod arrives along the reel's tangent and leaves toward the well.
+    const headLX = GUIDE_HEAD.x - REEL_X;   // = -3.85 (front end, past the deck)
+    const headLY = GUIDE_HEAD.y;            // = 3.9 (above the reel's top flange)
+    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 1.3 (beside the tongue)
 
-    // The containment arm is a COMPACT free-standing frame planted on the ground
-    // BESIDE the reel (well side). It is a small skid with TWO vertical red posts
-    // forming the throat (the "two bars" in the field diagram) that the rod passes
-    // between, capped by the guide head. All members are AT headLX so the whole
-    // thing sits cleanly to the side of the reel — nothing reaches back toward it.
+    // Orient the arm along the rod's incoming travel (the reel tangent); the arch
+    // then carries the rod on and swings it round toward the well.
+    const { x: travelX, z: travelZ } = rodInDirWorld();
+    // Arm-local +X = travel direction (rotation.y = θ maps +X to (cosθ, 0, −sinθ)).
+    const armYaw = new THREE.Group();
+    armYaw.position.set(headLX, 0, headLZ);
+    armYaw.rotation.y = Math.atan2(-travelZ, travelX);
+    armGroup.add(armYaw);
+    const headPt = new THREE.Vector3(0, headLY, 0);
+
+    // Compact free-standing frame on the ground: a skid with TWO vertical red
+    // posts forming the throat the rod passes between, capped by the guide head.
     const skid = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.6), armDark);
-    skid.position.set(headLX, 0.1, headLZ); skid.receiveShadow = true; skid.castShadow = true;
-    armGroup.add(skid);
-
-    // Two vertical red posts straddling the rod path in Z, standing on the skid,
-    // tall enough to carry the guide head at headLY. They stand clear of the reel
-    // rims so the reel never contacts them when rotating (per the CAUTION).
+    skid.position.set(0, 0.1, 0); skid.receiveShadow = true; skid.castShadow = true;
+    armYaw.add(skid);
     const postH = headLY + 0.2;
     [0.45, -0.45].forEach((pz) => {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, postH, 0.24), armRed);
-      post.position.set(headLX, postH / 2, headLZ + pz);
-      post.castShadow = true; armGroup.add(post);
+      post.position.set(0, postH / 2, pz);
+      post.castShadow = true; armYaw.add(post);
     });
-    // Cross-tie linking the two posts near the top for rigidity.
     const tie = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 1.1), armRed);
-    tie.position.set(headLX, postH - 0.35, headLZ); armGroup.add(tie);
+    tie.position.set(0, postH - 0.35, 0); armYaw.add(tie);
     // Drop-pin barrel at the base (Fig 235 support-arm locking pin).
     const pinBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 12), armChrome);
-    pinBarrel.position.set(headLX, 0.45, headLZ + 0.78); armGroup.add(pinBarrel);
+    pinBarrel.position.set(0, 0.45, 0.78); armYaw.add(pinBarrel);
 
-    // GUIDE HEAD atop the throat — a ring the rod threads through (axis along the
-    // rod's outward travel ≈ +X), flanked by two removable SAFETY FORKS + housing.
+    // GUIDE HEAD — a ring the rod threads through (axis along the travel), two
+    // removable SAFETY FORKS and the housing.
     const headHousing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.6), armRed);
-    headHousing.position.copy(headPt); headHousing.castShadow = true; armGroup.add(headHousing);
+    headHousing.position.copy(headPt); headHousing.castShadow = true; armYaw.add(headHousing);
     const headRing = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.06, 10, 20), armChrome);
-    headRing.rotation.y = Math.PI / 2;  // opening faces along the rod path (X)
-    headRing.position.copy(headPt); armGroup.add(headRing);
-    // Two safety forks straddling the throat (±Z), per "safety forks can be removed".
+    headRing.rotation.y = Math.PI / 2;
+    headRing.position.copy(headPt); armYaw.add(headRing);
     [0.3, -0.3].forEach((fz) => {
       const fork = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.1), armDark);
-      fork.position.set(headPt.x, headPt.y - 0.1, headPt.z + fz);
-      armGroup.add(fork);
+      fork.position.set(0, headPt.y - 0.1, fz);
+      armYaw.add(fork);
     });
-    // Drop-pin handle detail on the head housing.
     const headPin = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8), armChrome);
-    headPin.position.set(headPt.x, headPt.y + 0.35, headPt.z); armGroup.add(headPin);
+    headPin.position.set(0, headPt.y + 0.35, 0); armYaw.add(headPin);
 
     scene.add(armGroup);
     containmentArmRef.current = armGroup;
@@ -3582,29 +3591,36 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   // the guide arch, then straight down into the injector head. Both the rod tube
   // and the guide channel follow THIS curve so the rod visibly runs inside the
   // guide up to the injector top. Kept as a shared helper so they stay in sync.
+  /** Horizontal unit direction (world) the rod travels as it enters the guide head. */
+  function rodInDirWorld(): { x: number; z: number } {
+    const d = cradleToReelLocal(REEL_PAYOFF.dir.x, 0, REEL_PAYOFF.dir.z).sub(cradleToReelLocal(0, 0, 0));
+    const l = Math.hypot(d.x, d.z) || 1;
+    return { x: d.x / l, z: d.z / l };
+  }
+
   function getRodGuideCurve(): THREE.CatmullRomCurve3 {
     const apexY = INJECTOR_TOP_Y + 2.6; // top of the arch above the injector head
-    // The arch now BEGINS at the containment arm's guide head (GUIDE_HEAD) so the
-    // rod threads continuously: reel coil → arm guide head → this arch → injector.
-    // The arch is stretched/re-anchored to start there instead of floating off the
-    // top of the coil, so the guide physically connects to the containment arm.
-    // The rod must leave the guide head HORIZONTALLY (out the END of the arm, like
-    // the manual) and only THEN curve up into the arch — not shoot straight up off
-    // the head. So the first control points stay at the head's HEIGHT and extend in
-    // the travel direction (toward the well/mast, +X and +Z toward z=0), giving a
-    // long horizontal lead-out; the arch then sweeps up with a WIDER curve.
-    const dirX = WELL_X - GUIDE_HEAD.x;          // horizontal travel toward the well
-    const dirZ = 0 - GUIDE_HEAD.z;               // and toward the well's z=0 line
-    const dirLen = Math.hypot(dirX, dirZ) || 1;
-    const ux = dirX / dirLen, uz = dirZ / dirLen; // unit horizontal travel direction
+    // The arch BEGINS at the containment arm's guide head (GUIDE_HEAD) so the rod
+    // threads continuously: reel edge (tangent) → arm guide head → arch → injector.
+    // The arm stands at the trailer's front end (by the fire extinguishers), so the
+    // rod arrives travelling AWAY from the well. The arch therefore carries it on
+    // in that direction while rising, then swings it round in a wide climbing turn
+    // toward the well side (+Z) and on to the apex over the injector — no hairpin
+    // kink at the head.
+    const inDir = rodInDirWorld();
+    // Turn toward the well's side: the perpendicular pointing toward z = 0.
+    let px = -inDir.z, pz = inDir.x;
+    if (pz * (0 - GUIDE_HEAD.z) < 0) { px = -px; pz = -pz; }
+    const H = GUIDE_HEAD;
     return new THREE.CatmullRomCurve3([
-      new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),                       // AT the guide head
-      new THREE.Vector3(GUIDE_HEAD.x + ux * 1.4, GUIDE_HEAD.y, GUIDE_HEAD.z + uz * 1.4), // HORIZONTAL lead-out (same height)
-      new THREE.Vector3(GUIDE_HEAD.x + ux * 2.8, GUIDE_HEAD.y + 0.4, GUIDE_HEAD.z + uz * 2.8), // still low, just beginning to rise
-      new THREE.Vector3(WELL_X - 2.6, INJECTOR_TOP_Y - 0.5, GUIDE_HEAD.z * 0.35),        // wide sweep rising toward the well
-      new THREE.Vector3(WELL_X - 1.0, apexY - 0.6, 0),                                   // approaching the apex
-      new THREE.Vector3(WELL_X, apexY - 0.05, 0),                                        // over the apex
-      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.4, 0),                                // down into the injector head top
+      new THREE.Vector3(H.x, H.y, H.z),                                                         // AT the guide head
+      new THREE.Vector3(H.x + inDir.x * 1.1, H.y + 0.3, H.z + inDir.z * 1.1),                  // carry on, starting to rise
+      new THREE.Vector3(H.x + inDir.x * 1.4 + px * 1.6, H.y + 1.0, H.z + inDir.z * 1.4 + pz * 1.6), // swinging round
+      new THREE.Vector3(H.x + px * 3.2, H.y + 1.7, H.z + pz * 3.2),                            // turned toward the well
+      new THREE.Vector3(WELL_X - 2.6, INJECTOR_TOP_Y - 0.5, (H.z + pz * 3.2) * 0.35),          // wide sweep rising toward the well
+      new THREE.Vector3(WELL_X - 1.0, apexY - 0.6, 0),                                          // approaching the apex
+      new THREE.Vector3(WELL_X, apexY - 0.05, 0),                                               // over the apex
+      new THREE.Vector3(WELL_X, INJECTOR_TOP_Y + 0.4, 0),                                       // down into the injector head top
     ]);
   }
 
@@ -4253,23 +4269,19 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // gets lower during RIH the take-off point drops with it. Rebuilt on fill change.
     const buildRodStrandGeometry = (fill: number): THREE.TubeGeometry => {
       const top = coilAt(Math.max(0, coilWrapsFor(fill) - 0.001)); // current top wrap
-      const ux0 = GUIDE_HEAD.x - REEL_X, uz0 = GUIDE_HEAD.z - REEL_Z;
-      const ul = Math.hypot(ux0, uz0) || 1;
-      const ux = ux0 / ul, uz = uz0 / ul;            // reel centre → guide head (horizontal)
-      // Cradle-local (untilted) point along the pay-off direction → world.
-      const at = (radius: number, y: number) => {
-        const p = cradleToReelLocal(ux * radius, y, uz * radius);
-        return p.add(new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z));
-      };
-      const yTop = top.y + COIL_ROD_R * 0.6;                        // sitting on the top wrap
-      const flangeClear = REEL_GEOM.topFlangeY + 0.3;              // above the open top flange + spokes
-      const railR = REEL_GEOM.frameHalf / Math.max(Math.abs(ux), Math.abs(uz)); // where it meets the frame
+      const { angle, dir } = REEL_PAYOFF;
+      const tx = Math.cos(angle) * top.r, tz = Math.sin(angle) * top.r;
+      // Cradle-local point `s` metres along the tangent at height y → world.
+      const at = (sAlong: number, y: number) =>
+        cradleToReelLocal(tx + dir.x * sAlong, y, tz + dir.z * sAlong).add(new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z));
+      const yTop = top.y + COIL_ROD_R * 0.6;            // on the top wrap
+      const flangeClear = REEL_GEOM.topFlangeY + 0.28;  // over the top flange lip + spokes
       const rodPoints: THREE.Vector3[] = [
-        at(top.r, yTop),                                                     // leave the top wrap
-        at(top.r + 0.02, yTop + 0.2),                                        // lift off the pack
-        at(top.r + 0.05, Math.max(yTop + 0.4, flangeClear)),                 // up through the gap inside the top flange ring
-        at(railR + 0.15, REEL_GEOM.frameTopY + 0.3),                         // over the cradle's front rail
-        new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),         // through the guide head
+        at(0, yTop),                                     // leaves the EDGE of the top wrap
+        at(0.25, yTop + 0.15),                           // along the tangent, lifting
+        at(0.6, Math.max(yTop + 0.35, flangeClear)),     // clear of the top flange (still inside the rim)
+        at(1.4, flangeClear + 0.1),                      // past the rim, heading for the arm
+        new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z), // through the guide head
       ];
       for (let i = 0; i <= ARC_SAMPLES; i++) {
         rodPoints.push(guideCurve.getPoint(i / ARC_SAMPLES));
