@@ -1,9 +1,35 @@
 import * as THREE from 'three';
 
-/** Static trailer details and rotating steelwork, in reel-local coordinates.
- * The axle is Z; keep all fixed bearings outside the flanges at Z = ±1.25.
+/**
+ * Horizontal (turntable) CoRod service reel, in reel-local coordinates.
+ *
+ * A CoRod reel lies FLAT: the continuous rod is coiled like a rope around a
+ * central vertical stake on a rotating platter, layer upon layer. The reel turns
+ * about its vertical centre axis and the rod pays off the TOP of the pack, so the
+ * pack gets lower from the top down — it does not shrink from the outside in like
+ * a vertical coiled-tubing drum.
+ */
+export const REEL_GEOM = {
+  /** Trailer deck top surface (local Y). */
+  deckTopY: -1.91,
+  /** Rotating platter top surface (local Y) — the first coil layer sits on it. */
+  platterTopY: -1.75,
+  /** Platter / containment radius. */
+  rimR: 2.3,
+  /** Central stake (spindle) radius the first wrap sits against. */
+  stakeR: 0.38,
+  /** Top of the rim containment posts (local Y). */
+  postTopY: 0.0,
+  /** Top of the central stake (local Y). */
+  stakeTopY: 0.4,
+};
+
+/**
+ * Builds the fixed trailer hardware into `frame` and the rotating platter,
+ * stake and containment posts into `spool` (which spins about local Y).
  */
 export function addServiceReelDetails(frame: THREE.Group, spool: THREE.Group): void {
+  const G = REEL_GEOM;
   const paint = new THREE.MeshStandardMaterial({ color: 0xa51f27, metalness: 0.45, roughness: 0.48 });
   const steel = new THREE.MeshStandardMaterial({ color: 0xaeb9c3, metalness: 0.8, roughness: 0.38 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x252d35, metalness: 0.65, roughness: 0.55 });
@@ -19,89 +45,78 @@ export function addServiceReelDetails(frame: THREE.Group, spool: THREE.Group): v
     parent.add(part);
     return part;
   }
+  /** Vertical cylinder (axis = Y). */
+  const vcyl = (parent: THREE.Object3D, rTop: number, rBot: number, h: number, mat: THREE.Material,
+    x: number, y: number, z: number, seg = 32) => mesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, seg), mat, x, y, z);
+  /** Cylinder with its axis along Z (wheels). */
+  const zcyl = (parent: THREE.Object3D, r: number, len: number, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = mesh(parent, new THREE.CylinderGeometry(r, r, len, 24), mat, x, y, z);
+    m.rotation.x = Math.PI / 2;
+    return m;
+  };
 
-  function beam(parent: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3,
-    width: number, depth: number, material: THREE.Material): void {
-    const delta = b.clone().sub(a);
-    const part = mesh(parent, new THREE.BoxGeometry(width, delta.length(), depth), material,
-      (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-    part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-  }
-
-  function cylinder(parent: THREE.Object3D, radius: number, length: number,
-    material: THREE.Material, x: number, y: number, z: number, segments = 32): THREE.Mesh {
-    const part = mesh(parent, new THREE.CylinderGeometry(radius, radius, length, segments), material, x, y, z);
-    part.rotation.x = Math.PI / 2;
-    return part;
-  }
-
-  // Shared bolt geometry and instancing keep the repeated flange hardware cheap.
-  const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 6), steel, 48);
-  const transform = new THREE.Object3D();
-  let boltIndex = 0;
+  // --- Fixed: trailer chassis, wheels, turntable bearing and slew drive ----------
   for (const side of [-1, 1]) {
-    const z = side * 1.25;
-    // Flat annular flange plates, rolled outer lips, and an inner stiffening ring.
-    const plate = mesh(spool, new THREE.RingGeometry(2.08, 2.3, 64), steel, 0, 0, z);
-    // RingGeometry has one face; cloning the material avoids changing all steel parts.
-    const plateMaterial = steel.clone();
-    plateMaterial.side = THREE.DoubleSide;
-    plate.material = plateMaterial;
-    mesh(spool, new THREE.TorusGeometry(2.3, 0.065, 8, 64), steel, 0, 0, z);
-    mesh(spool, new THREE.TorusGeometry(1.35, 0.035, 6, 48), steel, 0, 0, z);
-    cylinder(spool, 0.36, 0.16, paint, 0, 0, z);
-    cylinder(spool, 0.22, 0.23, steel, 0, 0, z);
-    for (let i = 0; i < 8; i++) {
-      const angle = i * Math.PI / 4;
-      const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
-      beam(spool, direction.clone().multiplyScalar(0.32).setZ(z),
-        direction.clone().multiplyScalar(2.18).setZ(z), 0.1, 0.09, steel);
-    }
-    for (const radius of [0.28, 2.19]) {
-      for (let i = 0; i < 12; i++) {
-        const angle = i * Math.PI / 6;
-        transform.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, z + side * 0.065);
-        transform.rotation.set(Math.PI / 2, 0, angle);
-        transform.updateMatrix();
-        bolts.setMatrixAt(boltIndex++, transform.matrix);
-      }
-    }
-    // Bearing blocks and feet stay stationary while the hubs turn within them.
-    mesh(frame, new THREE.BoxGeometry(0.62, 0.5, 0.28), paint, 0, 0, side * 1.58);
-    cylinder(frame, 0.19, 0.32, dark, 0, 0, side * 1.59);
-    cylinder(frame, 0.1, 0.06, steel, 0, 0, side * 1.78);
-    for (const x of [-1.2, 1.2]) {
-      beam(frame, new THREE.Vector3(x, -2.45, side * 1.58),
-        new THREE.Vector3(0, -0.12, side * 1.58), 0.21, 0.22, paint);
-      mesh(frame, new THREE.BoxGeometry(0.6, 0.08, 0.55), dark, x, -2.42, side * 1.58);
-    }
-    beam(frame, new THREE.Vector3(-1.2, -1.9, side * 1.58),
-      new THREE.Vector3(1.2, -1.9, side * 1.58), 0.1, 0.12, paint);
-    // Longitudinal chassis rails and reflective markers.
-    mesh(frame, new THREE.BoxGeometry(6.5, 0.22, 0.14), dark, 0, -2.6, side * 1.42);
+    mesh(frame, new THREE.BoxGeometry(6.5, 0.22, 0.16), dark, 0, -2.2, side * 1.1); // chassis rail
     for (const x of [-2.8, 0, 2.8]) {
-      mesh(frame, new THREE.BoxGeometry(0.2, 0.09, 0.025), amber, x, -2.53, side * 1.51);
+      mesh(frame, new THREE.BoxGeometry(0.2, 0.09, 0.025), amber, x, -2.0, side * 2.46); // deck-edge reflectors
     }
     for (const x of [-2, 2]) {
-      // Recessed wheel rims, hub caps, sidewalls and circumferential tread ribs.
-      const wheelZ = side * 1.4;
-      cylinder(frame, 0.31, 0.37, steel, x, -2.6, wheelZ);
-      cylinder(frame, 0.14, 0.43, dark, x, -2.6, wheelZ);
-      for (const offset of [-0.14, -0.07, 0, 0.07, 0.14]) {
-        mesh(frame, new THREE.TorusGeometry(0.48, 0.025, 6, 24), rubber, x, -2.6, wheelZ + offset);
+      const wz = side * 1.4;
+      zcyl(frame, 0.31, 0.37, steel, x, -2.6, wz);
+      zcyl(frame, 0.14, 0.43, dark, x, -2.6, wz);
+      for (const off of [-0.14, -0.07, 0, 0.07, 0.14]) {
+        mesh(frame, new THREE.TorusGeometry(0.48, 0.025, 6, 24), rubber, x, -2.6, wz + off);
       }
-      // Rolled fenders aligned to the wheels, with vertical mud flaps.
-      mesh(frame, new THREE.BoxGeometry(1.3, 0.07, 0.68), dark, x, -2.04, side * 1.5);
-      mesh(frame, new THREE.BoxGeometry(0.06, 0.42, 0.55), rubber, x + 0.62, -2.28, side * 1.5);
+      mesh(frame, new THREE.BoxGeometry(0.06, 0.42, 0.55), rubber, x + 0.62, -2.35, side * 1.4); // mud flap
     }
   }
-  bolts.instanceMatrix.needsUpdate = true;
-  bolts.castShadow = true;
-  spool.add(bolts);
+  // Slewing-ring bearing on the deck (fixed outer race) and the hydraulic slew drive.
+  vcyl(frame, 1.25, 1.3, 0.1, dark, 0, G.deckTopY + 0.05, 0, 48);
+  vcyl(frame, 1.32, 1.32, 0.04, paint, 0, G.deckTopY + 0.02, 0, 48);
+  mesh(frame, new THREE.BoxGeometry(0.42, 0.3, 0.36), paint, -1.45, G.deckTopY + 0.15, 0);
+  vcyl(frame, 0.13, 0.13, 0.32, dark, -1.45, G.deckTopY + 0.46, 0, 16); // drive motor
 
-  // Brake rotor and motor housing on the far bearing, clear of the wound rod.
-  cylinder(spool, 0.5, 0.06, dark, 0, 0, -1.43);
-  mesh(frame, new THREE.BoxGeometry(0.28, 0.35, 0.2), paint, 0.4, 0, -1.43);
-  cylinder(frame, 0.27, 0.5, dark, 0, 0, -1.98);
-  cylinder(frame, 0.3, 0.09, paint, 0, 0, -2.2);
+  // --- Rotating: platter, spokes, rim, containment posts, central stake ----------
+  const platterH = 0.08;
+  const platterY = G.platterTopY - platterH / 2;
+  vcyl(spool, G.rimR, G.rimR, platterH, steel, 0, platterY, 0, 64);
+  vcyl(spool, 1.2, 1.2, 0.06, dark, 0, platterY - 0.07, 0, 48); // inner race / hub plate
+  // Radial spokes under the platter (they read as the platter turning).
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const spoke = mesh(spool, new THREE.BoxGeometry(G.rimR - 0.2, 0.09, 0.12), paint,
+      Math.cos(a) * (G.rimR / 2), platterY - 0.065, Math.sin(a) * (G.rimR / 2));
+    spoke.rotation.y = -a;
+  }
+  // Rolled rim lip.
+  const lip = mesh(spool, new THREE.TorusGeometry(G.rimR, 0.05, 8, 72), steel, 0, G.platterTopY, 0);
+  lip.rotation.x = Math.PI / 2;
+  // Containment posts around the rim keep the outer wraps on the platter.
+  const postH = G.postTopY - G.platterTopY;
+  for (let i = 0; i < 12; i++) {
+    const a = (i * Math.PI) / 6;
+    const post = mesh(spool, new THREE.BoxGeometry(0.1, postH, 0.1), paint,
+      Math.cos(a) * (G.rimR - 0.04), G.platterTopY + postH / 2, Math.sin(a) * (G.rimR - 0.04));
+    post.rotation.y = -a;
+    vcyl(spool, 0.07, 0.07, 0.04, steel, Math.cos(a) * (G.rimR - 0.04), G.postTopY + 0.02, Math.sin(a) * (G.rimR - 0.04), 10);
+  }
+  // Central stake (spindle) the rod is coiled around, with a lifting cap.
+  const stakeH = G.stakeTopY - G.platterTopY;
+  vcyl(spool, G.stakeR, G.stakeR, stakeH, dark, 0, G.platterTopY + stakeH / 2, 0, 32);
+  vcyl(spool, G.stakeR + 0.08, G.stakeR + 0.08, 0.08, paint, 0, G.stakeTopY, 0, 32);
+  const eye = mesh(spool, new THREE.TorusGeometry(0.12, 0.03, 8, 16), steel, 0, G.stakeTopY + 0.16, 0);
+  eye.rotation.y = Math.PI / 2;
+
+  // Bolt circle on the platter (instanced).
+  const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 6), steel, 24);
+  const t = new THREE.Object3D();
+  for (let i = 0; i < 24; i++) {
+    const a = (i * Math.PI) / 12;
+    t.position.set(Math.cos(a) * (G.stakeR + 0.18), G.platterTopY + 0.02, Math.sin(a) * (G.stakeR + 0.18));
+    t.updateMatrix();
+    bolts.setMatrixAt(i, t.matrix);
+  }
+  bolts.instanceMatrix.needsUpdate = true;
+  spool.add(bolts);
 }
