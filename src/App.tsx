@@ -206,9 +206,9 @@ const INITIAL_STATE: SimulatorState = {
   scenarioTimeElapsedSeconds: 0,
   scenarioCompleted: false,
   isSimulating: true,
-  // Training time-acceleration: depth (and therefore reel/coil/rod motion)
-  // advances 5× faster than real time by default so trips don't drag.
-  simulationSpeedMultiplier: 5,
+  // Training time-acceleration (×1 = real time). Run speeds themselves are
+  // boosted via boostedRunSpeed(), so the default is real time.
+  simulationSpeedMultiplier: 1,
   soundEnabled: false,
   engineStartSequenceComplete: false,
   activeEmergency: 'none',
@@ -378,6 +378,31 @@ function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' | 'ins
   const view = params.get('view');
   if (view === '3d' || view === 'console' || view === 'gauges' || view === 'controls' || view === 'instructor') return view;
   return 'full';
+}
+
+
+/**
+ * Run-speed curve for normal joystick-driven RIH/POOH (ft/min, signed).
+ * The raw joystick × pressure speed is remapped onto faster working speeds:
+ *   13 → 30, 38 → 55, 75 → 100 ft/min (linear between points, same slope
+ *   beyond the last one). Free-fall / slip speeds are NOT affected.
+ * Reel RPM follows automatically since it's derived from rod speed.
+ */
+const RUN_SPEED_CURVE: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [13, 30],
+  [38, 55],
+  [75, 100],
+];
+function boostedRunSpeed(rawFtPerMin: number): number {
+  const a = Math.abs(rawFtPerMin);
+  const pts = RUN_SPEED_CURVE;
+  let i = 1;
+  while (i < pts.length - 1 && a > pts[i][0]) i++;
+  const [x0, y0] = pts[i - 1];
+  const [x1, y1] = pts[i];
+  const mapped = y0 + ((a - x0) * (y1 - y0)) / (x1 - x0);
+  return Math.sign(rawFtPerMin) * mapped;
 }
 
 export default function App() {
@@ -718,14 +743,14 @@ export default function App() {
           if (clampedJoystick > 0) {
             // Up / Surfacing — per manual: max 5000 PSI from closed loop pump
             const powerRatio = Math.min(1.0, hyd.upPressure / 3000);
-            targetSpeed = clampedJoystick * 65 * powerRatio;
+            targetSpeed = boostedRunSpeed(clampedJoystick * 65 * powerRatio);
             rod.rodInTensionOrCompression = 'tension';
           } else {
             // Down / Injecting — per manual: "The closed loop pump which drives
             // the gripper motors is set in the shop to deliver 5000psi" — down
             // pressure limits down speed just like up pressure limits up speed.
             const downPowerRatio = Math.min(1.0, hyd.downPressure / 3000);
-            targetSpeed = clampedJoystick * 75 * downPowerRatio;
+            targetSpeed = boostedRunSpeed(clampedJoystick * 75 * downPowerRatio);
             rod.rodInTensionOrCompression = rod.currentDepthFt < 1000 ? 'compression' : 'tension';
           }
           rod.rodGripSlipping = false;
