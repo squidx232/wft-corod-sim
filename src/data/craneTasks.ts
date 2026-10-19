@@ -41,8 +41,8 @@ export const CRANE_TASKS: CraneTask[] = [
     id: 'familiarisation',
     title: { en: 'Familiarisation — unfold, slew and stow', ar: 'التعرّف — الفتح والتدوير والطي' },
     brief: {
-      en: 'Start the MG engine and engage hydraulics, deploy the stabilizers, unfold the crane, slew at least 60°, then return the crane to its transport position and stow the stabilizers.',
-      ar: 'شغّل محرك وحدة MG وفعّل الهيدروليك، افرد المثبتات، افتح الرافعة، دوّرها 60° على الأقل، ثم أعدها لوضع النقل واطوِ المثبتات.',
+      en: 'Start the MG engine and engage hydraulics, extend and lower the MG outriggers, unfold the crane, slew at least 60°, then return the crane to its transport position and raise the outriggers.',
+      ar: 'شغّل محرك وحدة MG وفعّل الهيدروليك، افرد وأنزل مثبتات وحدة MG، افتح الرافعة، دوّرها 60° على الأقل، ثم أعدها لوضع النقل وارفع المثبتات.',
     },
     checks: ['power', 'stab-deployed', 'unfolded', 'slewed', 'stowed', 'stab-stowed'],
   },

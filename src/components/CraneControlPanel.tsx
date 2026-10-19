@@ -1,58 +1,84 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useT } from '../i18n';
-import { craneStore, CRANE_KEYS } from '../crane/craneStore';
-import { CRANE_JOINTS, CraneJoint, ratedCapacityAt } from '../crane/craneSim';
+import { craneStore, CRANE_KEYS, LEVER_ORDER } from '../crane/craneStore';
+import { CraneJoint, ratedCapacityAt } from '../crane/craneSim';
 import { CRANE_TASKS, CraneCheckId } from '../data/craneTasks';
 import type { SimulatorState } from '../types';
 
 /**
- * Fassi-style crane control station (matches the MG unit: yellow FX display
+ * Fassi F215A.0.24 crane control station (matches the MG unit: yellow FX display
  * with LEDs + STOP button above a bank of four proportional levers with yellow
  * pictogram labels). Drives `craneStore`; the 3D viewport steps the sim.
  */
 
+type DirWords = Record<CraneJoint, string>;
+
 const STR = {
   en: {
-    title: 'FASSI F215C — Crane control station', power: 'MG power pack', engine: 'Engine', pto: 'PTO / Hydraulics',
-    on: 'ON', off: 'OFF', stab: 'Stabilizers', deploy: 'Deploy', stow: 'Stow', hookOn: 'Hook on', release: 'Release load',
+    title: 'FASSI F215A.0.24 active — Crane control station', power: 'MG power pack', engine: 'Engine', pto: 'PTO / Hydraulics',
+    on: 'ON', off: 'OFF', stab: 'MG outriggers (crane stabilizers)', deployAll: 'Deploy all', stowAll: 'Stow all',
+    left: 'Left', right: 'Right', extend: 'Extend', retract: 'Retract', lower: 'Lower', raise: 'Raise', ready: 'READY', notReady: 'NOT SET',
+    hookOn: 'Hook on', release: 'Release load',
     reset: 'Reset task', task: 'Training task', checklist: 'Checklist', metrics: 'Performance', time: 'Time', maxLmi: 'Max LMI',
     limitHits: 'LMI cut-outs', hard: 'Hard landings', swing: 'Max swing', accuracy: 'Landing error', score: 'Score', done: 'Task complete',
     estop: 'STOP', estopOn: 'E-STOP ENGAGED — twist to release', radius: 'Radius', load: 'Load', cap: 'Rated', page: 'Page',
-    keys: 'Keys', levers: ['Slewing', 'Main boom', 'Outer boom', 'Extensions'], plus: ['Left', 'Up', 'Up', 'Out'], minus: ['Right', 'Down', 'Down', 'In'],
-    blocked: { lmi: 'Load-moment limiter cut-out: only moment-reducing motions allowed (boom up / extensions in).', stabilizers: 'Deploy the stabilizers before operating the crane.', power: 'No hydraulic power: start the MG engine and engage the PTO.', estop: 'Emergency stop engaged.', limit: 'Joint at its mechanical limit.' },
+    keys: 'Keys', leverDown: 'Lever down', leverUp: 'Lever up',
+    specs: 'F215A.0.24: 178 kNm · max 9,930 kg · reach 17.05 m · 2,435 kg · folded 2.475 × 0.87 × 2.255 m',
+    levers: { slew: 'Slewing', main: 'Main boom', outer: 'Second boom', extension: 'Extensions' } as DirWords,
+    plus: { slew: 'Slew left', main: 'Up', outer: 'Up', extension: 'Out' } as DirWords,
+    minus: { slew: 'Slew right', main: 'Down', outer: 'Down', extension: 'In' } as DirWords,
+    blocked: {
+      lmi: 'Load-moment limiter cut-out: only moment-reducing motions allowed (boom up / extensions in).',
+      outriggers: 'Extend and lower both MG outriggers before operating the crane.',
+      power: 'No hydraulic power: start the MG engine and engage the PTO.', estop: 'Emergency stop engaged.', limit: 'Joint at its mechanical limit.',
+      collision: 'Collision: the boom is touching an object — reverse the motion to back away.',
+    } as Record<string, string>,
     checks: {
-      power: 'Hydraulic power on (engine + PTO)', 'stab-deployed': 'Stabilizers deployed', unfolded: 'Crane unfolded from transport position', slewed: 'Slewed at least 60°',
+      power: 'Hydraulic power on (engine + PTO)', 'stab-deployed': 'MG outriggers extended and lowered', unfolded: 'Crane unfolded from transport position', slewed: 'Slewed at least 60°',
       hooked: 'Hooked on to the load', lifted: 'Load lifted clear (> 0.3 m)', 'over-target': 'Load over the landing mat', 'landed-on-target': 'Load landed on the mat',
-      released: 'Load released', stowed: 'Crane returned to transport position', 'stab-stowed': 'Stabilizers stowed',
+      released: 'Load released', stowed: 'Crane returned to transport position', 'stab-stowed': 'MG outriggers raised and retracted',
     } as Record<CraneCheckId, string>,
     events: {
       'lmi-warn': 'LMI warning: approaching rated capacity', 'lmi-limit': 'LMI limit reached — moment-increasing functions cut', 'hard-landing': 'Hard landing!',
       'load-lifted': 'Load lifted', 'hooked-on': 'Hooked on', released: 'Load released', 'release-suspended': 'Cannot release a suspended load — land it first',
-      'hook-too-far': 'Hook too far from the lifting point', 'stab-deployed': 'Stabilizers deployed', 'stab-stowed': 'Stabilizers stowed',
-      'stab-stow-blocked': 'Stow the crane (and unhook) before raising the stabilizers',
+      'hook-too-far': 'Hook too far from the lifting point', 'stab-deployed': 'Outriggers set', 'stab-stowed': 'Outriggers stowed',
+      'stab-stow-blocked': 'Fold the crane (and unhook) before raising the outriggers',
+      'boom-collision': 'Boom contact', 'load-strike': 'Load struck an object',
     } as Record<string, string>,
-    hint: 'Hold the levers (drag) or use the keys. Gamepad: left stick = slew / main boom, right stick = extensions / outer boom.',
+    hint: 'Pull a lever DOWN (towards you) for the + motion, push UP for the opposite. Drag the levers or use the keys. Gamepad: left stick = slew / main boom, right stick = extensions / second boom.',
   },
   ar: {
-    title: 'FASSI F215C — محطة التحكم بالرافعة', power: 'وحدة الطاقة MG', engine: 'المحرك', pto: 'مأخذ القدرة / الهيدروليك',
-    on: 'تشغيل', off: 'إيقاف', stab: 'المثبتات', deploy: 'فرد', stow: 'طي', hookOn: 'ربط الخطاف', release: 'فك الحمولة',
+    title: 'FASSI F215A.0.24 active — محطة التحكم بالرافعة', power: 'وحدة الطاقة MG', engine: 'المحرك', pto: 'مأخذ القدرة / الهيدروليك',
+    on: 'تشغيل', off: 'إيقاف', stab: 'مساند MG (مثبتات الرافعة)', deployAll: 'فرد الكل', stowAll: 'طي الكل',
+    left: 'يسار', right: 'يمين', extend: 'مدّ', retract: 'سحب', lower: 'إنزال', raise: 'رفع', ready: 'جاهزة', notReady: 'غير مثبتة',
+    hookOn: 'ربط الخطاف', release: 'فك الحمولة',
     reset: 'إعادة المهمة', task: 'مهمة التدريب', checklist: 'قائمة التحقق', metrics: 'الأداء', time: 'الوقت', maxLmi: 'أقصى عزم',
     limitHits: 'قطع محدد العزم', hard: 'هبوط عنيف', swing: 'أقصى تأرجح', accuracy: 'خطأ الإنزال', score: 'النتيجة', done: 'اكتملت المهمة',
     estop: 'إيقاف', estopOn: 'الإيقاف الطارئ مفعّل — أدر للتحرير', radius: 'نصف القطر', load: 'الحمولة', cap: 'المقنن', page: 'صفحة',
-    keys: 'المفاتيح', levers: ['التدوير', 'الذراع الرئيسية', 'الذراع الخارجية', 'الامتدادات'], plus: ['يسار', 'أعلى', 'أعلى', 'مدّ'], minus: ['يمين', 'أسفل', 'أسفل', 'سحب'],
-    blocked: { lmi: 'قطع محدد العزم: يُسمح فقط بالحركات التي تقلل العزم (رفع الذراع / سحب الامتدادات).', stabilizers: 'افرد المثبتات قبل تشغيل الرافعة.', power: 'لا توجد طاقة هيدروليكية: شغّل محرك MG وفعّل مأخذ القدرة.', estop: 'الإيقاف الطارئ مفعّل.', limit: 'المفصل عند حده الميكانيكي.' },
+    keys: 'المفاتيح', leverDown: 'الذراع لأسفل', leverUp: 'الذراع لأعلى',
+    specs: 'F215A.0.24: ‏178 كيلونيوتن·م · أقصى حمولة 9,930 كغ · مدى 17.05 م · الوزن 2,435 كغ · مطوية 2.475 × 0.87 × 2.255 م',
+    levers: { slew: 'التدوير', main: 'الذراع الرئيسية', outer: 'الذراع الثانية', extension: 'الامتدادات' } as DirWords,
+    plus: { slew: 'تدوير يسار', main: 'أعلى', outer: 'أعلى', extension: 'مدّ' } as DirWords,
+    minus: { slew: 'تدوير يمين', main: 'أسفل', outer: 'أسفل', extension: 'سحب' } as DirWords,
+    blocked: {
+      lmi: 'قطع محدد العزم: يُسمح فقط بالحركات التي تقلل العزم (رفع الذراع / سحب الامتدادات).',
+      outriggers: 'مدّ وأنزل مساندي وحدة MG قبل تشغيل الرافعة.',
+      power: 'لا توجد طاقة هيدروليكية: شغّل محرك MG وفعّل مأخذ القدرة.', estop: 'الإيقاف الطارئ مفعّل.', limit: 'المفصل عند حده الميكانيكي.',
+      collision: 'تصادم: الذراع تلامس جسماً — اعكس الحركة للابتعاد.',
+    } as Record<string, string>,
     checks: {
-      power: 'الطاقة الهيدروليكية (محرك + مأخذ قدرة)', 'stab-deployed': 'فرد المثبتات', unfolded: 'فتح الرافعة من وضع النقل', slewed: 'التدوير 60° على الأقل',
+      power: 'الطاقة الهيدروليكية (محرك + مأخذ قدرة)', 'stab-deployed': 'مدّ وإنزال مساند MG', unfolded: 'فتح الرافعة من وضع النقل', slewed: 'التدوير 60° على الأقل',
       hooked: 'ربط الخطاف بالحمولة', lifted: 'رفع الحمولة (> 0.3 م)', 'over-target': 'الحمولة فوق منصة الإنزال', 'landed-on-target': 'إنزال الحمولة على المنصة',
-      released: 'فك الحمولة', stowed: 'إعادة الرافعة لوضع النقل', 'stab-stowed': 'طي المثبتات',
+      released: 'فك الحمولة', stowed: 'إعادة الرافعة لوضع النقل', 'stab-stowed': 'رفع وسحب مساند MG',
     } as Record<CraneCheckId, string>,
     events: {
       'lmi-warn': 'تحذير العزم: الاقتراب من الحمولة المقننة', 'lmi-limit': 'بلوغ حد العزم — قطع الحركات التي تزيد العزم', 'hard-landing': 'هبوط عنيف!',
       'load-lifted': 'تم رفع الحمولة', 'hooked-on': 'تم ربط الخطاف', released: 'تم فك الحمولة', 'release-suspended': 'لا يمكن فك حمولة معلقة — أنزلها أولاً',
-      'hook-too-far': 'الخطاف بعيد عن نقطة الرفع', 'stab-deployed': 'تم فرد المثبتات', 'stab-stowed': 'تم طي المثبتات',
-      'stab-stow-blocked': 'اطوِ الرافعة (وفك الخطاف) قبل رفع المثبتات',
+      'hook-too-far': 'الخطاف بعيد عن نقطة الرفع', 'stab-deployed': 'تم تثبيت المساند', 'stab-stowed': 'تم طي المساند',
+      'stab-stow-blocked': 'اطوِ الرافعة (وفك الخطاف) قبل رفع المساند',
+      'boom-collision': 'تلامس الذراع', 'load-strike': 'اصطدام الحمولة بجسم',
     } as Record<string, string>,
-    hint: 'اسحب الأذرع أو استخدم المفاتيح. ذراع التحكم: العصا اليسرى = التدوير / الذراع الرئيسية، اليمنى = الامتدادات / الذراع الخارجية.',
+    hint: 'اسحب الذراع لأسفل (نحوك) للحركة +، وادفعها لأعلى للحركة المعاكسة. اسحب الأذرع أو استخدم المفاتيح. ذراع التحكم: العصا اليسرى = التدوير / الذراع الرئيسية، اليمنى = الامتدادات / الذراع الثانية.',
   },
 };
 
@@ -66,46 +92,99 @@ const Pictogram: React.FC<{ joint: CraneJoint }> = ({ joint }) => (
   </svg>
 );
 
-/** Spring-return proportional lever. Drag up = +, down = −. Shows the combined live input. */
-const Lever: React.FC<{ joint: CraneJoint; value: number; blocked: boolean }> = ({ joint, value, blocked }) => {
-  const track = useRef<HTMLDivElement>(null);
+/** Max lever throw (rad) — matches the 3D valve bank on the MG console. */
+const LEVER_THROW = 0.45;
+/** The operator looks down at the valve bank from about 35° above. */
+const VIEW_ELEV = (35 * Math.PI) / 180;
+/** Lever drawing geometry (SVG units): pivot, stem length, view-box height. */
+const PX = 40, PY = 132, L = 96, VB_H = 180;
+
+/**
+ * Spring-return proportional valve-bank lever, drawn as a real lever seen from
+ * the operator position: cast valve section + spool boss, rubber boot, chrome
+ * stem and black ball knob. Pulling DOWN (towards the operator) = "+".
+ */
+const Lever: React.FC<{ joint: CraneJoint; value: number; blocked: boolean; label: string }> = ({ joint, value, blocked, label }) => {
+  const ref = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
   const setFromEvent = (clientY: number) => {
-    const r = track.current?.getBoundingClientRect();
+    const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    const v = -((clientY - (r.top + r.height / 2)) / (r.height / 2));
+    // Invert the lever projection so the knob follows the pointer.
+    const y = ((clientY - r.top) / r.height) * VB_H;
+    const c = Math.max(-1, Math.min(1, ((PY - y) * Math.cos(VIEW_ELEV)) / L));
+    const v = (Math.acos(c) - VIEW_ELEV) / LEVER_THROW;
     craneStore.setLever(joint, Math.max(-1, Math.min(1, v)));
   };
   const release = () => { setDragging(false); craneStore.setLever(joint, 0); };
   const pos = Math.max(-1, Math.min(1, value));
+  const theta = pos * LEVER_THROW; // + = top of the lever tilted towards the operator
+  // Projection: screen-up component of a lever tilted θ towards a viewer elevated VIEW_ELEV.
+  const tipY = PY - (L * Math.cos(theta + VIEW_ELEV)) / Math.cos(VIEW_ELEV);
+  const knobScale = 1 + 0.25 * Math.sin(theta);
+  const id = `lv-${joint}`;
   return (
-    <div
-      ref={track}
-      className={`relative h-36 w-10 mx-auto rounded-full bg-zinc-800 border ${blocked ? 'border-red-500' : 'border-zinc-600'} touch-none select-none cursor-grab`}
-      onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); setDragging(true); setFromEvent(e.clientY); }}
+    <svg
+      ref={ref}
+      viewBox="0 0 80 180"
+      className="w-16 h-40 mx-auto touch-none select-none cursor-grab active:cursor-grabbing"
+      onPointerDown={(e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); setDragging(true); setFromEvent(e.clientY); }}
       onPointerMove={(e) => { if (dragging) setFromEvent(e.clientY); }}
       onPointerUp={release}
       onPointerCancel={release}
       role="slider"
+      aria-label={label}
+      aria-orientation="vertical"
       aria-valuemin={-1}
       aria-valuemax={1}
       aria-valuenow={Number(pos.toFixed(2))}
     >
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 w-1.5 bg-zinc-500" style={{ height: `${Math.abs(pos) * 50}%`, transform: `translate(-50%, ${pos > 0 ? '-100%' : '0'})` }} />
-      <div
-        className="absolute left-1/2 w-8 h-8 rounded-full bg-gradient-to-b from-zinc-700 to-black border border-zinc-500 shadow-lg"
-        style={{ top: `calc(${50 - pos * 42}% - 16px)`, transform: 'translateX(-50%)' }}
-      />
-    </div>
+      <defs>
+        <linearGradient id={`${id}-body`} x1="0" x2="1">
+          <stop offset="0" stopColor="#3f3f46" /><stop offset="0.45" stopColor="#a1a1aa" /><stop offset="1" stopColor="#27272a" />
+        </linearGradient>
+        <linearGradient id={`${id}-chrome`} x1="0" x2="1">
+          <stop offset="0" stopColor="#71717a" /><stop offset="0.35" stopColor="#f4f4f5" /><stop offset="0.6" stopColor="#d4d4d8" /><stop offset="1" stopColor="#52525b" />
+        </linearGradient>
+        <radialGradient id={`${id}-knob`} cx="0.35" cy="0.3" r="0.75">
+          <stop offset="0" stopColor="#71717a" /><stop offset="0.25" stopColor="#27272a" /><stop offset="1" stopColor="#000" />
+        </radialGradient>
+      </defs>
+      {/* Travel guide: + (down/towards operator) and − (up) */}
+      <text x="72" y="22" fontSize="11" fill="#a1a1aa" textAnchor="middle">−</text>
+      <text x="72" y="100" fontSize="11" fill="#a1a1aa" textAnchor="middle">+</text>
+      {/* Valve section (cast body with bolts and spool cap) */}
+      <rect x="8" y="138" width="64" height="38" rx="4" fill={`url(#${id}-body)`} stroke={blocked ? '#ef4444' : '#18181b'} strokeWidth={blocked ? 2.5 : 1.2} />
+      <rect x="8" y="150" width="64" height="6" fill="#18181b" opacity="0.35" />
+      {[16, 64].map((x) => <circle key={x} cx={x} cy="168" r="2.6" fill="#d4d4d8" stroke="#3f3f46" />)}
+      {/* Pivot boss + rubber boot */}
+      <ellipse cx={PX} cy={PY + 6} rx="17" ry="7" fill="#27272a" />
+      <path d={`M${PX - 12} ${PY + 6} Q${PX} ${PY - 14 + theta * 10} ${PX + 12} ${PY + 6} Z`} fill="#111" />
+      {[0, 1, 2].map((i) => <ellipse key={i} cx={PX} cy={PY + 2 - i * 4} rx={11 - i * 2.4} ry="2.2" fill="none" stroke="#3f3f46" strokeWidth="1" />)}
+      {/* Chrome stem */}
+      <line x1={PX} y1={PY - 6} x2={PX} y2={tipY} stroke={`url(#${id}-chrome)`} strokeWidth="7" strokeLinecap="round" />
+      <line x1={PX - 1.5} y1={PY - 6} x2={PX - 1.5} y2={tipY} stroke="#fff" strokeOpacity="0.5" strokeWidth="1.2" />
+      {/* Ball knob (closer when pulled → larger) */}
+      <g transform={`translate(${PX} ${tipY}) scale(${knobScale})`}>
+        <ellipse cx="0" cy="3" rx="15" ry="7" fill="#000" opacity="0.25" />
+        <ellipse cx="0" cy="-2" rx="14" ry="15" fill={`url(#${id}-knob)`} stroke="#000" strokeWidth="1" />
+        <ellipse cx="-4.5" cy="-8" rx="4" ry="2.6" fill="#fff" opacity="0.35" />
+      </g>
+    </svg>
   );
 };
+
+type Outriggers = SimulatorState['outriggers'];
 
 interface Props {
   hydraulics: SimulatorState['hydraulics'];
   onUpdateHydraulics: (u: Partial<SimulatorState['hydraulics']>) => void;
+  /** MG outriggers — they are the crane's stabilizers. */
+  outriggers: Outriggers;
+  onUpdateOutriggers: (u: Partial<Outriggers>) => void;
 }
 
-export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraulics }) => {
+export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraulics, outriggers, onUpdateOutriggers }) => {
   const { lang, dir } = useT();
   const s = STR[lang === 'ar' ? 'ar' : 'en'];
   const snap = useSyncExternalStore(craneStore.subscribe, craneStore.getSnapshot);
@@ -132,11 +211,17 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
     return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true); };
   }, []);
 
-  const blockedMsgs = Array.from(new Set(Object.values(st.blocked))).filter(Boolean) as Array<keyof typeof s.blocked>;
+  const blockedMsgs = Array.from(new Set(Object.values(st.blocked))).filter(Boolean) as string[];
   const led = (on: boolean, color: string) => <span className={`inline-block w-3 h-3 rounded-full border border-black/40 ${on ? color : 'bg-zinc-700'}`} />;
   const deg = (r: number) => `${Math.round((r * 180) / Math.PI)}°`;
   const secs = (snap.progress.completedAt ?? st.time) - snap.progress.startedAt;
   const capacity = ratedCapacityAt(snap.spec, Math.max(st.radius, 1));
+  /** The outriggers carry the crane: only raise/retract them with the crane folded and unhooked. */
+  const guardStow = () => {
+    if (craneStore.canStowOutriggers()) return true;
+    craneStore.noteOutriggerStowBlocked();
+    return false;
+  };
 
   const lcd = [
     [`LMI ${Math.round(st.lmiPercent)}%`, `${s.load} ${(suspendedKg / 1000).toFixed(2)} t`],
@@ -196,11 +281,42 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
               {s.pto}: {hydraulics.ptoEngaged ? s.on : s.off}
             </button>
           </div>
-          <div className="font-bold text-zinc-400">{s.stab} — {Math.round(st.stabilizers * 100)}%</div>
-          <div className="h-1.5 bg-zinc-700 rounded"><div className="h-full bg-amber-400 rounded" style={{ width: `${st.stabilizers * 100}%` }} /></div>
+          <div className="font-bold text-zinc-400 flex items-center justify-between gap-2">
+            <span>{s.stab}</span>
+            <span className={`px-1.5 rounded text-3xs ${st.outriggersReady ? 'bg-emerald-600' : 'bg-red-700'}`}>{st.outriggersReady ? s.ready : s.notReady}</span>
+          </div>
+          {(['left', 'right'] as const).map((side) => {
+            const ext = side === 'left' ? outriggers.leftExtended : outriggers.rightExtended;
+            const low = side === 'left' ? outriggers.leftLowered : outriggers.rightLowered;
+            const extKey = side === 'left' ? 'leftExtended' : 'rightExtended';
+            const lowKey = side === 'left' ? 'leftLowered' : 'rightLowered';
+            return (
+              <div key={side} className="flex items-center gap-1.5">
+                <span className="w-10 text-zinc-400">{s[side]}</span>
+                <button type="button" className={`flex-1 px-1.5 py-1 rounded ${ext ? 'bg-amber-600' : 'bg-zinc-700'} disabled:opacity-40`}
+                  disabled={ext && low}
+                  onClick={() => {
+                    if (ext && !guardStow()) return;
+                    onUpdateOutriggers({ [extKey]: !ext } as Partial<Outriggers>);
+                  }}>
+                  {ext ? s.retract : s.extend}
+                </button>
+                <button type="button" className={`flex-1 px-1.5 py-1 rounded ${low ? 'bg-amber-600' : 'bg-zinc-700'} disabled:opacity-40`}
+                  disabled={!ext}
+                  onClick={() => {
+                    if (low && !guardStow()) return;
+                    onUpdateOutriggers({ [lowKey]: !low } as Partial<Outriggers>);
+                  }}>
+                  {low ? s.raise : s.lower}
+                </button>
+              </div>
+            );
+          })}
           <div className="flex gap-2">
-            <button type="button" className="flex-1 px-2 py-1.5 rounded bg-zinc-700 hover:bg-zinc-600" onClick={() => craneStore.deployStabilizers()}>{s.deploy}</button>
-            <button type="button" className="flex-1 px-2 py-1.5 rounded bg-zinc-700 hover:bg-zinc-600" onClick={() => craneStore.stowStabilizers()}>{s.stow}</button>
+            <button type="button" className="flex-1 px-2 py-1.5 rounded bg-zinc-700 hover:bg-zinc-600"
+              onClick={() => onUpdateOutriggers({ leftExtended: true, rightExtended: true, leftLowered: true, rightLowered: true })}>{s.deployAll}</button>
+            <button type="button" className="flex-1 px-2 py-1.5 rounded bg-zinc-700 hover:bg-zinc-600"
+              onClick={() => { if (guardStow()) onUpdateOutriggers({ leftExtended: false, rightExtended: false, leftLowered: false, rightLowered: false }); }}>{s.stowAll}</button>
           </div>
           <div className="flex gap-2">
             <button type="button" disabled={!load || load.attached} className="flex-1 px-2 py-1.5 rounded bg-amber-600 disabled:opacity-40" onClick={() => craneStore.hookOn()}>{s.hookOn} (H)</button>
@@ -210,22 +326,31 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
       </div>
 
       {st.estop && <div className="rounded bg-red-700 px-3 py-1.5 text-xs font-bold text-center">{s.estopOn}</div>}
-      {blockedMsgs.map((b) => <div key={b} className="rounded bg-amber-500/20 border border-amber-500 px-3 py-1 text-2xs text-amber-200">{s.blocked[b]}</div>)}
+      {blockedMsgs.map((b) => (
+        <div key={b} className="rounded bg-amber-500/20 border border-amber-500 px-3 py-1 text-2xs text-amber-200">
+          {s.blocked[b] ?? b}{b === 'collision' && st.contact ? ` (${st.contact})` : ''}
+        </div>
+      ))}
 
-      {/* Lever bank */}
-      <div className="grid grid-cols-4 gap-2">
-        {CRANE_JOINTS.map((j, i) => (
-          <div key={j} className="text-center space-y-1">
-            <div className="rounded bg-yellow-400 text-zinc-900 px-1 py-1 flex flex-col items-center">
-              <Pictogram joint={j} />
-              <span className="text-3xs font-bold leading-tight">{s.levers[i]}</span>
+      {/* Lever bank — physical order seen from the operator (left → right): extensions,
+          second boom, main boom, slewing. Always laid out LTR to match the machine. */}
+      <div dir="ltr" className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-950/60 p-2 border border-zinc-800">
+        {LEVER_ORDER.map((j) => {
+          const [downKey, upKey] = CRANE_KEYS[j];
+          return (
+            <div key={j} dir={dir} className="text-center space-y-1">
+              <div className="rounded bg-yellow-400 text-zinc-900 px-1 py-1 flex flex-col items-center">
+                <Pictogram joint={j} />
+                <span className="text-3xs font-bold leading-tight">{s.levers[j]}</span>
+              </div>
+              <div className="text-3xs text-zinc-400">{s.leverUp} <kbd className="font-mono">{upKey.replace('Key', '')}</kbd>: −{s.minus[j]}</div>
+              <Lever joint={j} value={snap.inputs[j]} blocked={!!st.blocked[j]} label={s.levers[j]} />
+              <div className="text-3xs text-emerald-300">{s.leverDown} <kbd className="font-mono">{downKey.replace('Key', '')}</kbd>: +{s.plus[j]}</div>
             </div>
-            <div className="text-3xs text-zinc-400">▲ {s.plus[i]} <kbd className="font-mono">{CRANE_KEYS[j][0].replace('Key', '')}</kbd></div>
-            <Lever joint={j} value={snap.inputs[j]} blocked={!!st.blocked[j]} />
-            <div className="text-3xs text-zinc-400">▼ {s.minus[i]} <kbd className="font-mono">{CRANE_KEYS[j][1].replace('Key', '')}</kbd></div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      <p className="text-3xs text-zinc-500">{s.specs}</p>
       <p className="text-3xs text-zinc-500">{s.hint}</p>
 
       {/* Task */}
@@ -261,7 +386,7 @@ export const CraneControlPanel: React.FC<Props> = ({ hydraulics, onUpdateHydraul
         <ul className="text-3xs font-mono space-y-0.5 max-h-24 overflow-y-auto">
           {[...st.events].reverse().map((e, i) => (
             <li key={`${e.t}-${i}`} className={e.kind === 'error' ? 'text-red-400' : e.kind === 'warn' ? 'text-amber-300' : 'text-zinc-400'}>
-              {e.t.toFixed(1)}s — {s.events[e.code] ?? e.code}
+              {e.t.toFixed(1)}s — {s.events[e.code] ?? e.code}{e.detail ? ` (${e.detail})` : ''}
             </li>
           ))}
         </ul>
