@@ -44,6 +44,13 @@ export const REEL_GEOM = {
   hubR: 0.45,
 };
 
+/** Rod length in one wrap at the band's mean radius (ft) — ≈ 43 ft. */
+export const REEL_MEAN_WRAP_FT = (2 * Math.PI * ((REEL_GEOM.coilInnerR + REEL_GEOM.coilOuterR) / 2)) / 0.3048;
+/** Real reel RPM for a rod speed in ft/min (one drum turn per wrap of rod). */
+export function reelRpmForSpeed(ftPerMin: number): number {
+  return Math.abs(ftPerMin) / REEL_MEAN_WRAP_FT;
+}
+
 /** Inverse of `cradleToReelLocal`: reel-local point → cradle (untilted) coordinates. */
 export function reelLocalToCradle(x: number, y: number, z: number, out = new THREE.Vector3()): THREE.Vector3 {
   const G = REEL_GEOM;
@@ -207,6 +214,9 @@ export function buildReelDrum(topFlangeY: number): THREE.Group {
   };
   flange(G.platterTopY, true);
   flange(topFlangeY, false);
+  // Yellow index mark on the top flange rim — count drum turns by eye.
+  mesh(drum, new THREE.BoxGeometry(0.34, 0.06, 0.16), new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4, emissive: 0x3a2f00 }),
+    G.rimR - 0.04, topFlangeY + 0.05, 0);
 
   // Flange bolt circles (instanced).
   const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 6), steel, 48);
