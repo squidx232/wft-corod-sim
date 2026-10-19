@@ -1,6 +1,6 @@
 import {
   FASSI_F215A, CRANE_JOINTS, Collider, CraneInputs, CraneJoint, CraneLoadDef, CraneSpec, CraneState, CraneWorld, Vec3,
-  createCraneState, hookOff, hookOn, isStowed, stepCrane,
+  createCraneState, hookOff, hookOn, isStowed, stepCrane, boomClearance, STOWED_POSE,
 } from './craneSim';
 import { CRANE_TASKS, CraneCheckId, CraneTask } from '../data/craneTasks';
 
@@ -106,7 +106,13 @@ class CraneStore {
     this.colliders = list.filter((c) => {
       const dx = Math.max(c.min.x - b.x, 0, b.x - c.max.x);
       const dz = Math.max(c.min.z - b.z, 0, b.z - c.max.z);
-      return Math.hypot(dx, dz) < reach;
+      if (Math.hypot(dx, dz) >= reach) return false;
+      // Mounting neighbours: anything the booms already touch in their legitimate
+      // transport position (deck fittings, boom rest, parts beside the pedestal)
+      // is part of the installation, not an obstacle — otherwise the crane could
+      // never leave its rest.
+      const solo = { base: b, surfaceAt: this.world.surfaceAt, colliders: [c] };
+      return boomClearance(this.spec, solo, STOWED_POSE).clearance > 0.05;
     });
     this.world = { ...this.world, colliders: this.colliders };
   }
