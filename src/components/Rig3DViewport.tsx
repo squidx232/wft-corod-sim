@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addServiceReelDetails, buildReelDrum, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
+import { addServiceReelDetails, buildReelDrum, reelRpmForSpeed, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
 import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
@@ -4636,10 +4636,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                   }`}
                 >
                   {state.rod.rodSpeedFtPerMin > 0
-                    ? `+${state.rod.rodSpeedFtPerMin.toFixed(1)} POOH`
+                    ? `+${state.rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN POOH`
                     : state.rod.rodSpeedFtPerMin < 0
-                    ? `${state.rod.rodSpeedFtPerMin.toFixed(1)} RIH`
-                    : '0.0 FT/M'}
+                    ? `${state.rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN RIH`
+                    : '0.0 FT/MIN'}
+                </span>
+                {/* Same speed per second + the real reel RPM (one drum turn per ~43 ft wrap). */}
+                <span className="text-slate-500 text-[10px]">
+                  {`≈ ${(Math.abs(state.rod.rodSpeedFtPerMin) / 60).toFixed(2)} FT/S · REEL ${reelRpmForSpeed(state.rod.rodSpeedFtPerMin).toFixed(2)} RPM`}
                 </span>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import { reelRpmForSpeed } from './three/serviceReelDetails';
 import React, { useEffect, useRef, useState, useId } from 'react';
 import { SimulatorState } from '../types';
 import {
@@ -72,7 +73,8 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
   const isInjecting = rod.rodSpeedFtPerMin < -0.3;
   const isSlipping = rod.rodGripSlipping;
   const isSafetyEngaged = hydraulics.safetyClampLever === 'ON';
-  const reelRpm = Math.abs(Math.round((rod.rodSpeedFtPerMin / 15) * 10) / 10);
+  // Real reel RPM: one drum turn per wrap of rod (~43 ft) — same maths as the 3D reel.
+  const reelRpm = reelRpmForSpeed(rod.rodSpeedFtPerMin).toFixed(2);
 
   // Depth fraction for spool thickness
   const depthFraction = Math.min(Math.max(rod.currentDepthFt / (rod.totalWellDepthFt || 5000), 0), 1);
@@ -97,11 +99,11 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
         anim.fpsTimer = timestamp;
       }
 
-      // Physics rate: 1 ft/min = 28 deg/sec reel rotation & 45 px/sec rod travel
+      // Reel rotation at the REAL rate (deg/s = rpm × 6); rod travel 45 px/sec per ft/min
       const speed = rod.rodSpeedFtPerMin;
       if (Math.abs(speed) > 0.05) {
         // Reel rotation (Surfacing = Reel winds in clockwise; Injecting = Reel unwinds counter-clockwise)
-        anim.reelAngle = (anim.reelAngle - speed * dt * 28) % 360;
+        anim.reelAngle = (anim.reelAngle - Math.sign(speed) * reelRpmForSpeed(speed) * 6 * dt) % 360;
         // Continuous rod translation offset along guide path
         anim.rodLinearOffset = (anim.rodLinearOffset + speed * dt * 45) % 10000;
         // Gripper chain link cycle offset (40px pitch)

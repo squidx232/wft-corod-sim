@@ -1,3 +1,4 @@
+import { reelRpmForSpeed } from './three/serviceReelDetails';
 import React, { useState } from 'react';
 import { SimulatorState } from '../types';
 import { RealtimeRodAnimationLayer } from './RealtimeRodAnimationLayer';
@@ -65,7 +66,8 @@ export const DynamicRigSightline: React.FC<DynamicRigSightlineProps> = ({
   const isInjecting = rod.rodSpeedFtPerMin < -0.3;
   const isStationary = Math.abs(rod.rodSpeedFtPerMin) <= 0.3;
   const isSlipping = rod.rodGripSlipping;
-  const reelRpm = Math.abs(Math.round((rod.rodSpeedFtPerMin / 15) * 10) / 10);
+  // Real reel RPM: one drum turn per wrap of rod (~43 ft) — same maths as the 3D reel.
+  const reelRpm = reelRpmForSpeed(rod.rodSpeedFtPerMin).toFixed(2);
 
   // Depth positioning (RIH/POOH via the presets & slider) requires the engine to
   // be running and the start sequence complete — nothing hydraulic can move the
