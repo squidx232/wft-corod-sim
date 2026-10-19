@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addServiceReelDetails, REEL_GEOM } from './three/serviceReelDetails';
+import { addServiceReelDetails, cradleToReelLocal, createTiltedCradle, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
 import { addPullingUnitCarrierDetails, addMastDetails } from './three/pullingUnitDetails';
@@ -122,7 +122,7 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // threads through this guide head at the end of the reel's red containment arm,
 // and the arched rod guide (getRodGuideCurve) begins EXACTLY here so the rod
 // runs continuously coil edge → arm guide head → guide arch → injector.
-// Placed OUTBOARD of the horizontal reel's platter rim (radius 2.3), at a
+// Placed OUTBOARD of the horizontal reel's cradle frame (half-size 2.38), at a
 // low/side height (not above the reel), matching the field layout.
 // The arm/guide stands on the GROUND at the reel's FRONT-LEFT corner (toward the
 // MG/pulling unit). The reel centre is world (REEL_X=5, ·, REEL_Z=-11) with rim
@@ -130,36 +130,28 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // (toward the MG/camera, clear of the +Z rim edge at z≈-8.7) and only slightly
 // toward the well in +X — so the arm sits at the front-left corner beside the
 // reel, in the direction the guide arch travels toward the mast/injector.
-// Head sits above the horizontal reel's rim posts (the pack top is ≈3.0 m) and
-// just in front of the wider turntable trailer deck.
-const GUIDE_HEAD = { x: REEL_X + 1.4, y: 3.8, z: REEL_Z + 3.4 };
-// Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM). The rod
-// is coiled like a rope around the central stake in FLAT layers stacked upward;
-// each layer spirals stake → rim (or rim → stake on alternate layers). Rod pays
-// off the TOP layer, so the pack gets lower from the top down as rod runs in.
+// Head sits above the front rail of the tilted reel cradle and just in front of
+// the wide reel trailer deck.
+const GUIDE_HEAD = { x: REEL_X + 1.4, y: 4.2, z: REEL_Z + 3.6 };
+// Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM).
+// CoRod is solid (but flexible) steel rod: it can't be bent tight around a small
+// centre, so every wrap sits at the SAME large diameter on the drum core — one
+// continuous helix stacked from the bottom flange upward, like a spring. Rod
+// pays off the TOP wrap only, so the pack gets lower top → bottom and never
+// empties from the middle/inside like coiled tubing.
 const REEL_CENTER_Y = 3.1;             // world Y of the reel group origin (= reelGroup Y)
-const COIL_ROD_R = 0.075;              // drawn rod radius in the pack
-const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap and layer-to-layer pitch
-const COIL_BARREL_R = REEL_GEOM.stakeR + COIL_ROD_R; // first wrap against the stake
-const COIL_WRAPS_PER_LAYER = 11;       // wraps in one flat layer (stake → rim)
-const COIL_MAX_OUTER_R = COIL_BARREL_R + (COIL_WRAPS_PER_LAYER - 1) * COIL_PITCH; // ≈1.95, inside the rim
-const COIL_LAYERS = 11;                // layers at a FULL reel (pack ≈1.65 m tall)
-const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R; // local Y of the bottom layer
-/** Reel-local radius / height of the rod at `t` wraps from the bottom start. */
+const COIL_ROD_R = 0.055;              // drawn rod radius on the reel
+const COIL_PITCH = COIL_ROD_R * 2;     // wrap-to-wrap pitch (wraps touching)
+const COIL_HELIX_R = REEL_GEOM.coreR + COIL_ROD_R + 0.005; // every wrap at this radius
+const COIL_BASE_Y = REEL_GEOM.platterTopY + COIL_ROD_R;    // local Y of the bottom wrap
+/** Wraps on a FULL reel: as many as fit between the flanges. */
+const COIL_WRAPS_FULL = Math.floor((REEL_GEOM.topFlangeY - REEL_GEOM.platterTopY - 2 * COIL_ROD_R - 0.03) / COIL_PITCH);
+/** Cradle-local radius / height of the rod at `t` wraps from the bottom start. */
 function coilAt(t: number): { r: number; y: number } {
-  const W = COIL_WRAPS_PER_LAYER;
-  const layer = Math.max(0, Math.min(COIL_LAYERS - 1, Math.floor(t / W)));
-  const w = t - layer * W;
-  const f = Math.min(w, W - 1) / (W - 1);
-  const span = COIL_MAX_OUTER_R - COIL_BARREL_R;
-  const r = layer % 2 === 0 ? COIL_BARREL_R + f * span : COIL_MAX_OUTER_R - f * span;
-  // The last wrap of each layer (except the top one) climbs one pitch onto the next layer.
-  const climb = layer < COIL_LAYERS - 1 ? Math.max(0, Math.min(1, w - (W - 1))) : 0;
-  const y = COIL_BASE_Y + layer * COIL_PITCH + climb * COIL_PITCH;
-  return { r, y };
+  return { r: COIL_HELIX_R, y: COIL_BASE_Y + Math.max(0, t) * COIL_PITCH };
 }
 /** Wraps still on the reel for a fill fraction (1 = full, 0 = empty). */
-const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_LAYERS * COIL_WRAPS_PER_LAYER;
+const coilWrapsFor = (fill: number) => Math.max(0, Math.min(1, fill)) * COIL_WRAPS_FULL;
 
 // ---------------------------------------------------------------------------
 // Lease layout for the outlying production equipment. Shared by the props and
@@ -624,8 +616,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     } else if (preset === 'reel') {
       // Close up of the COROD Service Reel on its trailer (center-left).
       // Look down onto the flat reel so the coil-pack top (where rod pays off) shows.
-      targetLookAt.current.set(REEL_X, 2.4, REEL_Z);
-      cameraRef.current.position.set(REEL_X - 1, 7.0, REEL_Z + 8);
+      targetLookAt.current.set(REEL_X, 2.8, REEL_Z);
+      cameraRef.current.position.set(REEL_X - 1, 7.5, REEL_Z + 8);
       sphericalRef.current = { radius: 9, theta: 1.4, phi: 1.15 };
       cameraRef.current.lookAt(targetLookAt.current);
     } else if (preset === 'wellhead') {
@@ -3432,19 +3424,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     trailerDeck.receiveShadow = true;
     reelGroup.add(trailerDeck);
 
-    // Spool rotating assembly — turns about the VERTICAL centre axis (local Y):
-    // platter, central stake, rim posts (built in addServiceReelDetails) + the coil.
+    // Hinged cradle (CT-style containment frame laid flat), tilted up at the back
+    // by two hydraulic cylinders. The drum inside turns about the cradle's
+    // vertical axis: core barrel + bottom/top flanges + the coil.
+    const { pivot: reelTiltPivot, cradle: reelCradle } = createTiltedCradle();
+    reelGroup.add(reelTiltPivot);
     const spool = new THREE.Group();
-    addServiceReelDetails(reelGroup, spool);
+    addServiceReelDetails(reelGroup, reelCradle, spool);
 
-    // --- Continuous CoRod pack: ONE rod coiled like a rope around the stake ----
-    // Flat layers stacked upward (each layer spirals stake → rim, the next rim →
-    // stake). Rod pays off the TOP, so as fill drops whole top layers disappear
-    // and the pack gets LOWER (top → bottom), never thinner from outside in.
+    // --- Continuous CoRod pack: ONE rod wound as a single helix on the drum ----
+    // Every wrap at the same large diameter, stacked upward. Rod pays off the TOP,
+    // so as fill drops the top wraps disappear and the pack gets LOWER
+    // (top → bottom) — it never empties from the middle like coiled tubing.
     const buildCoilGeometry = (fill: number): THREE.TubeGeometry | null => {
       const wraps = coilWrapsFor(fill);
-      if (wraps < 0.75) return null; // essentially bare platter
-      const TURN_SEG = 40;           // path samples per wrap
+      if (wraps < 0.3) return null; // essentially bare drum
+      const TURN_SEG = 72;          // path samples per wrap (large diameter)
       const steps = Math.max(2, Math.round(wraps * TURN_SEG));
       const path: THREE.Vector3[] = [];
       for (let i = 0; i <= steps; i++) {
@@ -3469,7 +3464,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     coilFillRef.current = 1;
     coilTube.userData.buildCoilGeometry = buildCoilGeometry;
 
-    reelGroup.add(spool);
+    reelCradle.add(spool);
     reelSpoolRef.current = spool;
 
     // (Removed the blue level-wind sheave cylinder — it read as a stray floating
@@ -3532,8 +3527,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // of the reel (+X) at a low/side height, so the rod runs sideways out of the
     // coil edge and through it — never over the top, never toward the reel centre.
     const headLX = GUIDE_HEAD.x - REEL_X;   // = 1.4
-    const headLY = GUIDE_HEAD.y;            // = 3.8 (above the horizontal reel's rim posts)
-    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 3.4 (in front of the trailer deck)
+    const headLY = GUIDE_HEAD.y;            // = 4.2 (above the tilted cradle's front rail)
+    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 3.6 (in front of the trailer deck)
     const headPt = new THREE.Vector3(headLX, headLY, headLZ);
 
     // The containment arm is a COMPACT free-standing frame planted on the ground
@@ -4251,22 +4246,29 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // DYNAMIC rod-strand geometry builder, parameterised by the reel FILL fraction
     // (1 = full reel, 0 = empty). The horizontal reel pays rod off the TOP layer:
     // the rod leaves the top of the pack at the current wrap radius on the side
-    // facing the guide head, lifts over the rim containment posts and runs into
-    // the guide head. As the pack gets lower during RIH the take-off point drops
-    // with it (rod stays glued to the top wrap). Rebuilt when fill changes.
+    // facing the guide head, rises through the gap between drum core and top
+    // flange ring, crosses the
+    // cradle's front rail and runs into the guide head. Points are built in the
+    // cradle's untilted frame and mapped through the cradle tilt. As the pack
+    // gets lower during RIH the take-off point drops with it. Rebuilt on fill change.
     const buildRodStrandGeometry = (fill: number): THREE.TubeGeometry => {
       const top = coilAt(Math.max(0, coilWrapsFor(fill) - 0.001)); // current top wrap
       const ux0 = GUIDE_HEAD.x - REEL_X, uz0 = GUIDE_HEAD.z - REEL_Z;
       const ul = Math.hypot(ux0, uz0) || 1;
       const ux = ux0 / ul, uz = uz0 / ul;            // reel centre → guide head (horizontal)
-      const at = (radius: number, y: number) => new THREE.Vector3(REEL_X + ux * radius, y, REEL_Z + uz * radius);
-      const yTop = REEL_CENTER_Y + top.y + COIL_ROD_R * 0.6;    // sitting on the top wrap
-      const postClear = REEL_CENTER_Y + REEL_GEOM.postTopY + 0.3; // above the rim posts
+      // Cradle-local (untilted) point along the pay-off direction → world.
+      const at = (radius: number, y: number) => {
+        const p = cradleToReelLocal(ux * radius, y, uz * radius);
+        return p.add(new THREE.Vector3(REEL_X, REEL_CENTER_Y, REEL_Z));
+      };
+      const yTop = top.y + COIL_ROD_R * 0.6;                        // sitting on the top wrap
+      const flangeClear = REEL_GEOM.topFlangeY + 0.3;              // above the open top flange + spokes
+      const railR = REEL_GEOM.frameHalf / Math.max(Math.abs(ux), Math.abs(uz)); // where it meets the frame
       const rodPoints: THREE.Vector3[] = [
         at(top.r, yTop),                                                     // leave the top wrap
-        at(top.r + 0.12, yTop + 0.22),                                       // lift off the pack
-        at(Math.min(REEL_GEOM.rimR - 0.1, Math.max(top.r + 0.3, 1.6)), Math.max(yTop + 0.45, postClear)), // rise inside the rim
-        at(REEL_GEOM.rimR + 0.35, postClear + 0.1),                          // over the rim posts
+        at(top.r + 0.02, yTop + 0.2),                                        // lift off the pack
+        at(top.r + 0.05, Math.max(yTop + 0.4, flangeClear)),                 // up through the gap inside the top flange ring
+        at(railR + 0.15, REEL_GEOM.frameTopY + 0.3),                         // over the cradle's front rail
         new THREE.Vector3(GUIDE_HEAD.x, GUIDE_HEAD.y, GUIDE_HEAD.z),         // through the guide head
       ];
       for (let i = 0; i <= ARC_SAMPLES; i++) {
