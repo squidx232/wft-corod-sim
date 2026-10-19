@@ -206,7 +206,9 @@ const INITIAL_STATE: SimulatorState = {
   scenarioTimeElapsedSeconds: 0,
   scenarioCompleted: false,
   isSimulating: true,
-  simulationSpeedMultiplier: 1.0,
+  // Training time-acceleration: depth (and therefore reel/coil/rod motion)
+  // advances 5× faster than real time by default so trips don't drag.
+  simulationSpeedMultiplier: 5,
   soundEnabled: false,
   engineStartSequenceComplete: false,
   activeEmergency: 'none',
@@ -1211,6 +1213,12 @@ export default function App() {
     }));
   };
 
+  // Training time-acceleration (×1 real time … ×10). Clamped to a sane range.
+  const handleSetSimSpeed = (multiplier: number) => {
+    const m = Math.min(10, Math.max(0.25, Number.isFinite(multiplier) ? multiplier : 1));
+    setState((prev) => ({ ...prev, simulationSpeedMultiplier: m }));
+  };
+
   const handleResetEmergencyShutdown = () => {
     soundManager.playMetalTap();
     // Reset all ESD-engaged states (including safety clamp which is now
@@ -1962,6 +1970,7 @@ export default function App() {
         <Rig3DViewport
           state={state}
           fillHeight={true}
+          onSetSimSpeed={handleSetSimSpeed}
         />
       </div>
     );
@@ -2221,6 +2230,7 @@ export default function App() {
               onSoundAirHorn={() => handleAirHorn(1.5)}
               onTriggerEmergencyStop={handleEmergencyShutdown}
               onResetEmergencyStop={handleResetEmergencyShutdown}
+              onSetSimSpeed={handleSetSimSpeed}
               onSetTripMode={handleSetTripMode}
               onSetDepth={handleSetDepth}
               onInstallClamp={() => {
@@ -2342,7 +2352,7 @@ export default function App() {
         {/* TAB: KNUCKLE CRANE — Fassi F215C on the MG unit */}
         {state.activeTab === 'crane' && (
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_480px] gap-4 items-start">
-            <Rig3DViewport state={state} craneMode onUpdateHydraulics={updateHydraulics} />
+            <Rig3DViewport state={state} craneMode onUpdateHydraulics={updateHydraulics} onSetSimSpeed={handleSetSimSpeed} />
             <CraneControlPanel hydraulics={state.hydraulics} onUpdateHydraulics={updateHydraulics} outriggers={state.outriggers} onUpdateOutriggers={updateOutriggers} />
           </div>
         )}
@@ -2409,6 +2419,7 @@ export default function App() {
               onSoundAirHorn={() => handleAirHorn(1.5)}
               onTriggerEmergencyStop={handleEmergencyShutdown}
               onResetEmergencyStop={handleResetEmergencyShutdown}
+              onSetSimSpeed={handleSetSimSpeed}
               onInstallClamp={() => {
                 const count = Math.min(2, state.rod.mechanicalClampsInstalled + 1);
                 setState((prev) => ({

@@ -74,7 +74,9 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
   const isSlipping = rod.rodGripSlipping;
   const isSafetyEngaged = hydraulics.safetyClampLever === 'ON';
   // Real reel RPM: one drum turn per wrap of rod (~43 ft) — same maths as the 3D reel.
-  const reelRpm = reelRpmForSpeed(rod.rodSpeedFtPerMin).toFixed(2);
+  // Training time-acceleration: visual motion runs at gauge speed × multiplier.
+  const simSpeed = state.simulationSpeedMultiplier ?? 1;
+  const reelRpm = (reelRpmForSpeed(rod.rodSpeedFtPerMin) * simSpeed).toFixed(2);
 
   // Depth fraction for spool thickness
   const depthFraction = Math.min(Math.max(rod.currentDepthFt / (rod.totalWellDepthFt || 5000), 0), 1);
@@ -103,7 +105,7 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
       const speed = rod.rodSpeedFtPerMin;
       if (Math.abs(speed) > 0.05) {
         // Reel rotation (Surfacing = Reel winds in clockwise; Injecting = Reel unwinds counter-clockwise)
-        anim.reelAngle = (anim.reelAngle - Math.sign(speed) * reelRpmForSpeed(speed) * 6 * dt) % 360;
+        anim.reelAngle = (anim.reelAngle - Math.sign(speed) * reelRpmForSpeed(speed) * simSpeed * 6 * dt) % 360;
         // Continuous rod translation offset along guide path
         anim.rodLinearOffset = (anim.rodLinearOffset + speed * dt * 45) % 10000;
         // Gripper chain link cycle offset (40px pitch)
@@ -154,7 +156,7 @@ export const RealtimeRodAnimationLayer: React.FC<RealtimeRodAnimationLayerProps>
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [rod.rodSpeedFtPerMin, rod.currentDepthFt, rod.totalWellDepthFt, isSlipping, viewMode, hydraulics, bop]);
+  }, [rod.rodSpeedFtPerMin, simSpeed, rod.currentDepthFt, rod.totalWellDepthFt, isSlipping, viewMode, hydraulics, bop]);
 
   // Main Canvas Render Routine
   const drawScene = (
