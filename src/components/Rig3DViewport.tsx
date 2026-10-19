@@ -16,8 +16,8 @@ import { createEmergencyEffects, EmergencyEffects } from './three/emergencyEffec
 import { createFloorhandCharacter, FloorhandCharacter } from './three/floorhandCharacter';
 import { requestEnvironmentChange } from '../utils/simEvents';
 import { createKnuckleCrane, KnuckleCraneVisual } from './three/knuckleCrane';
-import { craneStore } from '../crane/craneStore';
-import type { Vec3 } from '../crane/craneSim';
+import { craneStore, LEVER_ORDER } from '../crane/craneStore';
+import type { Vec3, Collider } from '../crane/craneSim';
 import { createOperatorCharacter, OperatorCharacter } from './three/operatorCharacter';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -203,6 +203,16 @@ const FLOORHAND_POS = { x: WELL_X - 4.6 - 2.0, z: 4.6 + 1.6 };
 const CREW_SCALE = 1.1;
 /** Floorhand drawn larger still so his hand signals read clearly from the console camera. */
 const FLOORHAND_SCALE = 1.2;
+/** MG rear outriggers (local to the MG unit group). */
+const OG = {
+  AX: 2.6,            // along the truck (rear of the bed)
+  ARM_Y: 1.4,         // arm height off the chassis
+  ARM_INNER_Z: 1.8,   // arm leaves the truck side
+  ARM_OUTER_Z: 4.4,   // fully extended reach
+  ARM_STOWED_Z: 2.1,  // retracted: beam end just proud of the side
+  SEC: 0.24,          // square section
+  LEG_RAISED: 0.45,   // leg length when raised (pad clear of the ground)
+};
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -364,6 +374,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const floorhandRef = useRef<FloorhandCharacter | null>(null);
   const craneVisualRef = useRef<KnuckleCraneVisual | null>(null);
   const craneModeRef = useRef(craneMode);
+  /** MG outriggers (also the crane's stabilizers), animated live from state.outriggers. */
+  const mgOutriggersRef = useRef<{
+    group: THREE.Group;
+    sides: Array<{ side: 1 | -1; arm: THREE.Mesh; leg: THREE.Mesh; pad: THREE.Mesh; ext: number; low: number }>;
+  } | null>(null);
+  const craneColliderTimerRef = useRef(0);
   /** Truck deck footprint (world) — crane loads can rest on it. */
   const truckDeckRef = useRef({ minX: MG_UNIT_X - 1.51, maxX: MG_UNIT_X + 5.96, minZ: -1.3, maxZ: 1.43, top: 1.38 });
   const [showStats, setShowStats] = useState(true);
@@ -493,12 +509,68 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       scene.remove(craneVisualRef.current.root, craneVisualRef.current.world);
       craneVisualRef.current.dispose();
     }
-    const side = base.z > 0.3 ? 1 : -1;
-    const visual = createKnuckleCrane(craneStore.spec, { side, truckCenterZ: -base.z, baseY: base.y });
+    // The crane's valve bank sits on top of the MG console box (operator stands
+    // on the +Z side facing the truck, levers left→right along +X).
+    const visual = createKnuckleCrane(craneStore.spec, {
+      leverBank: { position: new THREE.Vector3(-0.9, 0.5, 0.75), yaw: 0, order: LEVER_ORDER },
+    });
     visual.root.position.set(base.x, base.y, base.z);
+    visual.setVisible(craneModeRef.current);
     scene.add(visual.root, visual.world);
     craneVisualRef.current = visual;
     craneStore.mount(base, craneSurfaceAt);
+    refreshCraneColliders();
+  };
+
+  /**
+   * Solid scene geometry for the crane (booms, hook and load collide with it):
+   * world AABB of every visible mesh near the crane, excluding the crane itself,
+   * the crew figures, the MG outriggers (they ARE the crane's stabilizers), sky
+   * domes, ground planes and see-through helpers.
+   */
+  const refreshCraneColliders = () => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.updateMatrixWorld(true);
+    const skip = new Set<THREE.Object3D>();
+    const crane = craneVisualRef.current;
+    if (crane) { skip.add(crane.root); skip.add(crane.world); }
+    if (floorhandRef.current) skip.add(floorhandRef.current.root);
+    if (operatorRef.current) skip.add(operatorRef.current.root);
+    if (mgOutriggersRef.current) skip.add(mgOutriggersRef.current.group);
+    const out: Collider[] = [];
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
+    const visit = (obj: THREE.Object3D) => {
+      if (!obj.visible || skip.has(obj)) return;
+      const mesh = obj as THREE.Mesh;
+      // Curved tubes (rod line, hoses) have mostly-empty AABBs — not usable as solids.
+      if (mesh.isMesh && mesh.geometry && mesh.geometry.type !== 'TubeGeometry') {
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const ok = mats.every((m) => m && m.side !== THREE.BackSide && !(m.transparent && m.opacity < 0.6));
+        if (ok) {
+          if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+          const gb = mesh.geometry.boundingBox;
+          if (gb && Number.isFinite(gb.min.x)) {
+            box.copy(gb).applyMatrix4(mesh.matrixWorld);
+            box.getSize(size);
+            const flat = box.max.y < 0.12;
+            const huge = size.x > 30 || size.z > 30;
+            const tiny = size.x < 0.04 && size.y < 0.04 && size.z < 0.04;
+            if (!flat && !huge && !tiny) {
+              out.push({
+                min: { x: box.min.x, y: box.min.y, z: box.min.z },
+                max: { x: box.max.x, y: box.max.y, z: box.max.z },
+                name: mesh.name || mesh.parent?.name || 'equipment',
+              });
+            }
+          }
+        }
+      }
+      obj.children.forEach(visit);
+    };
+    visit(scene);
+    craneStore.setColliders(out);
   };
 
   // Set Camera Preset Handler
@@ -1229,10 +1301,40 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // 6c. Knuckle crane: hydraulics come from the MG power pack (engine + PTO).
       craneStore.setPowerAvailable(liveState.hydraulics.engineRunning && liveState.hydraulics.ptoEngaged);
+      // The MG outriggers are the crane's stabilizers: all four movements
+      // (extend + lower, both sides) must be complete before the crane can unfold.
+      const og = liveState.outriggers;
+      craneStore.setOutriggers(
+        og.leftExtended && og.rightExtended && og.leftLowered && og.rightLowered,
+        !og.leftExtended && !og.rightExtended && !og.leftLowered && !og.rightLowered,
+      );
       craneStore.step(delta);
       if (craneVisualRef.current) {
         const live = craneStore.live;
-        craneVisualRef.current.update(live.state, { groundAt: craneSurfaceAt, target: live.target, showTarget: craneModeRef.current });
+        // Crane only exists in the knuckle-crane module.
+        craneVisualRef.current.setVisible(craneModeRef.current);
+        craneVisualRef.current.update(live.state, {
+          groundAt: craneSurfaceAt, target: live.target, showTarget: craneModeRef.current, inputs: live.inputs,
+        });
+      }
+      if (craneModeRef.current) {
+        craneColliderTimerRef.current -= delta;
+        if (craneColliderTimerRef.current <= 0) { craneColliderTimerRef.current = 5; refreshCraneColliders(); }
+      } else {
+        craneColliderTimerRef.current = 0; // refresh immediately on entering crane mode
+      }
+
+      // 6d. MG outriggers: telescope out/in and lower/raise with smooth hydraulic easing.
+      const ogr = mgOutriggersRef.current;
+      if (ogr) {
+        const k = Math.min(1, delta * 1.6);
+        for (const sd of ogr.sides) {
+          const extended = sd.side === 1 ? og.leftExtended : og.rightExtended;
+          const lowered = sd.side === 1 ? og.leftLowered : og.rightLowered;
+          sd.ext += ((extended ? 1 : 0) - sd.ext) * k;
+          sd.low += ((lowered && sd.ext > 0.95 ? 1 : 0) - sd.low) * k;
+          layoutMgOutrigger(sd);
+        }
       }
 
       // 7. Live 3D Joystick Tilt Movement
@@ -3242,31 +3344,41 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Carbon-black, semi-glossy steel (low roughness → visible shine).
     const ogBlack = new THREE.MeshStandardMaterial({ color: 0x0c0d0f, metalness: 0.85, roughness: 0.25 });
     const ogPadWhite = new THREE.MeshStandardMaterial({ color: 0xe8e8ea, metalness: 0.2, roughness: 0.7 });
-    const ARM_Y = 1.4;          // height the horizontal arm runs at (off the chassis)
-    const ARM_INNER_Z = 1.8;    // where the arm leaves the truck side
-    const ARM_OUTER_Z = 4.4;    // how far the arm reaches out
-    const ARM_LEN = ARM_OUTER_Z - ARM_INNER_Z;
-    const SEC = 0.24;           // THIN square section for the L members
     // Only the REAR pair (one per side) — rear of the MG bed (+X toward the well).
-    const ax = 2.6;
-    [1, -1].forEach((side) => {
-      // Horizontal arm (runs along Z, out from the truck side).
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(SEC, SEC, ARM_LEN), ogBlack);
-      arm.position.set(ax, ARM_Y, side * (ARM_INNER_Z + ARM_LEN / 2));
+    // Parts are unit-sized and laid out live by `layoutMgOutrigger` from
+    // state.outriggers (telescoping arm + lowering leg). They double as the
+    // knuckle crane's stabilizers.
+    const sides: NonNullable<typeof mgOutriggersRef.current>['sides'] = [];
+    ([1, -1] as const).forEach((side) => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(OG.SEC, OG.SEC, 1), ogBlack);
       arm.castShadow = true; ogGroup.add(arm);
       // Small pivot housing where the arm leaves the chassis.
       const pivot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), ogBlack);
-      pivot.position.set(ax, ARM_Y, side * ARM_INNER_Z); ogGroup.add(pivot);
-      // Vertical leg dropping from the arm end down to the ground (the L corner).
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(SEC, ARM_Y + 0.2, SEC), ogBlack);
-      leg.position.set(ax, (ARM_Y + 0.2) / 2, side * ARM_OUTER_Z);
+      pivot.position.set(OG.AX, OG.ARM_Y, side * OG.ARM_INNER_Z); ogGroup.add(pivot);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(OG.SEC, 1, OG.SEC), ogBlack);
       leg.castShadow = true; ogGroup.add(leg);
-      // Round WHITE foot pad on the ground under the leg.
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.13, 20), ogPadWhite);
-      pad.position.set(ax, 0.07, side * ARM_OUTER_Z);
       pad.castShadow = true; pad.receiveShadow = true; ogGroup.add(pad);
+      const sd = { side, arm, leg, pad, ext: 1, low: 1 };
+      layoutMgOutrigger(sd);
+      sides.push(sd);
     });
+    mgOutriggersRef.current = { group: ogGroup, sides };
     scene.add(ogGroup);
+  }
+
+  /** Pose one MG outrigger from its eased extension (0 stowed..1 out) and lowering (0 raised..1 on pad). */
+  function layoutMgOutrigger(sd: { side: 1 | -1; arm: THREE.Mesh; leg: THREE.Mesh; pad: THREE.Mesh; ext: number; low: number }) {
+    const outerZ = OG.ARM_STOWED_Z + (OG.ARM_OUTER_Z - OG.ARM_STOWED_Z) * sd.ext;
+    const armLen = outerZ - OG.ARM_INNER_Z;
+    sd.arm.scale.z = armLen;
+    sd.arm.position.set(OG.AX, OG.ARM_Y, sd.side * (OG.ARM_INNER_Z + armLen / 2));
+    const top = OG.ARM_Y + 0.2;
+    const fullLeg = top - 0.13; // leg bottom sits on the pad top
+    const legLen = OG.LEG_RAISED + (fullLeg - OG.LEG_RAISED) * sd.low;
+    sd.leg.scale.y = legLen;
+    sd.leg.position.set(OG.AX, top - legLen / 2, sd.side * outerZ);
+    sd.pad.position.set(OG.AX, top - legLen - 0.065, sd.side * outerZ);
   }
 
   function buildServiceReel(scene: THREE.Scene) {

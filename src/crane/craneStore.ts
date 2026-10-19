@@ -1,5 +1,5 @@
 import {
-  FASSI_F215C, CRANE_JOINTS, CraneInputs, CraneJoint, CraneLoadDef, CraneSpec, CraneState, CraneWorld, Vec3,
+  FASSI_F215A, CRANE_JOINTS, Collider, CraneInputs, CraneJoint, CraneLoadDef, CraneSpec, CraneState, CraneWorld, Vec3,
   createCraneState, hookOff, hookOn, isStowed, stepCrane,
 } from './craneSim';
 import { CRANE_TASKS, CraneCheckId, CraneTask } from '../data/craneTasks';
@@ -43,17 +43,30 @@ export interface CraneSnapshot {
 
 const zeroInputs = (): CraneInputs => ({ slew: 0, main: 0, outer: 0, extension: 0 });
 
-/** Keyboard map: one key pair per lever (+ / −), matching the panel labels. */
+/**
+ * Lever bank order as seen by the operator, LEFT → RIGHT (the real MG station
+ * reads pivot, main boom, outer boom, extensions from RIGHT to LEFT).
+ */
+export const LEVER_ORDER: CraneJoint[] = ['extension', 'outer', 'main', 'slew'];
+
+/**
+ * Keyboard map per lever: [lever DOWN key, lever UP key]. Pulling a lever DOWN
+ * gives the "+" direction (slew left, booms up, extensions out), as on the MG
+ * unit. Keys follow the lever positions: Q/A, W/S, E/D, R/F left → right, the
+ * top-row key pushes the lever up, the home-row key pulls it down.
+ */
 export const CRANE_KEYS: Record<CraneJoint, [string, string]> = {
-  slew: ['KeyQ', 'KeyA'],
-  main: ['KeyW', 'KeyS'],
-  outer: ['KeyE', 'KeyD'],
-  extension: ['KeyR', 'KeyF'],
+  extension: ['KeyA', 'KeyQ'],
+  outer: ['KeyS', 'KeyW'],
+  main: ['KeyD', 'KeyE'],
+  slew: ['KeyF', 'KeyR'],
 };
 
 class CraneStore {
-  readonly spec: CraneSpec = FASSI_F215C;
-  private world: CraneWorld = { base: { x: -5.6, y: 1.5, z: -0.8 }, surfaceAt: () => 0 };
+  readonly spec: CraneSpec = FASSI_F215A;
+  private world: CraneWorld = { base: { x: -4.17, y: 1.49, z: 0.94 }, surfaceAt: () => 0 };
+  private colliders: Collider[] = [];
+  private outriggersRetracted = true;
   private side = -1;
   private task: CraneTask = CRANE_TASKS[1];
   private state: CraneState;
@@ -79,11 +92,34 @@ class CraneStore {
   // --- configuration -------------------------------------------------------------
   /** Called by the viewport once the truck model is loaded and the pedestal measured. */
   mount(base: Vec3, surfaceAt: (x: number, z: number) => number) {
-    this.world = { base, surfaceAt };
+    this.world = { base, surfaceAt, colliders: this.colliders };
     // Loads go on the crane's side of the truck (away from the MG console when centred).
     this.side = base.z > 0.3 ? 1 : -1;
     this.mounted = true;
     this.reset();
+  }
+
+  /** Solid scene objects (world AABBs). Only those within reach of the crane are kept. */
+  setColliders(list: Collider[]) {
+    const b = this.world.base;
+    const reach = this.spec.pivotOffset + this.spec.mainBoomLength + this.spec.outerBoomLength + this.spec.maxExtension + 2;
+    this.colliders = list.filter((c) => {
+      const dx = Math.max(c.min.x - b.x, 0, b.x - c.max.x);
+      const dz = Math.max(c.min.z - b.z, 0, b.z - c.max.z);
+      return Math.hypot(dx, dz) < reach;
+    });
+    this.world = { ...this.world, colliders: this.colliders };
+  }
+
+  /** MG outrigger status (the crane uses the MG unit's outriggers as its stabilizers). */
+  setOutriggers(ready: boolean, retracted: boolean) {
+    this.state.outriggersReady = ready;
+    this.outriggersRetracted = retracted;
+  }
+
+  /** Outriggers may only be raised with the crane folded and nothing on the hook. */
+  canStowOutriggers(): boolean {
+    return isStowed(this.state) && !this.state.load?.attached;
   }
 
   setActive(active: boolean) {
@@ -102,9 +138,10 @@ class CraneStore {
 
   /** Reset crane to stowed, stabilizers in, and re-place the task load. */
   reset() {
-    const power = this.state.powerAvailable;
+    const { powerAvailable, outriggersReady } = this.state;
     this.state = createCraneState(this.spec, this.world, this.task.load ? [this.resolveLoad(this.task)] : []);
-    this.state.powerAvailable = power;
+    this.state.powerAvailable = powerAvailable;
+    this.state.outriggersReady = outriggersReady;
     this.lastEventCount = 0;
     this.resetProgress();
     this.notify(true);
@@ -136,8 +173,8 @@ class CraneStore {
     if (this.state.estop) this.progress.estopUses++;
     this.notify(true);
   }
-  deployStabilizers() { this.state.stabilizerCommand = 'deploy'; }
-  stowStabilizers() { this.state.stabilizerCommand = 'stow'; }
+  /** Log that the trainee tried to raise the outriggers with the crane unfolded/loaded. */
+  noteOutriggerStowBlocked() { this.state.events.push({ t: this.state.time, kind: 'warn', code: 'stab-stow-blocked' }); this.notify(true); }
   hookOn() { const ok = hookOn(this.spec, this.state); this.notify(true); return ok; }
   hookOff() {
     const ok = hookOff(this.spec, this.state);
@@ -194,7 +231,7 @@ class CraneStore {
     const onTarget = () => !!(load && target && Math.hypot(load.position.x - target.x, load.position.z - target.z) <= target.radius);
     switch (id) {
       case 'power': return s.powerAvailable;
-      case 'stab-deployed': return s.stabilizers >= 1;
+      case 'stab-deployed': return s.outriggersReady;
       case 'unfolded': return s.joints.main < 60 * Math.PI / 180 && s.joints.outer > -120 * Math.PI / 180;
       case 'slewed': return Math.abs(s.joints.slew) > 60 * Math.PI / 180;
       case 'hooked': return !!load?.attached;
@@ -203,7 +240,7 @@ class CraneStore {
       case 'landed-on-target': return !!load?.attached && load.landed && onTarget();
       case 'released': return !!load && !load.attached && onTarget();
       case 'stowed': return isStowed(s);
-      case 'stab-stowed': return s.stabilizers <= 0;
+      case 'stab-stowed': return this.outriggersRetracted;
     }
   }
 
@@ -252,8 +289,8 @@ class CraneStore {
   getSnapshot = (): CraneSnapshot => this.snapshot;
 
   /** Read the live (mutable) state directly — for the 3D render loop. */
-  get live(): { state: CraneState; world: CraneWorld; task: CraneTask; target: ReturnType<CraneStore['targetWorld']>; mounted: boolean } {
-    return { state: this.state, world: this.world, task: this.task, target: this.targetWorld(), mounted: this.mounted };
+  get live(): { state: CraneState; world: CraneWorld; task: CraneTask; target: ReturnType<CraneStore['targetWorld']>; mounted: boolean; inputs: CraneInputs } {
+    return { state: this.state, world: this.world, task: this.task, target: this.targetWorld(), mounted: this.mounted, inputs: this.inputs };
   }
 
   private buildSnapshot(): CraneSnapshot {
@@ -289,7 +326,7 @@ class CraneStore {
   }
 }
 
-/** Gamepad: left stick X = slew, left Y = main boom, right Y = outer boom, right X = extension. */
+/** Gamepad: left stick X = slew, left Y = main boom, right Y = outer boom, right X = extension. Stick DOWN = "+" (like pulling a lever down). */
 function readGamepad(): Partial<CraneInputs> | null {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
   const pad = Array.from(navigator.getGamepads()).find((g) => g && g.connected);
@@ -297,8 +334,8 @@ function readGamepad(): Partial<CraneInputs> | null {
   const dz = (v: number) => (Math.abs(v) < 0.12 ? 0 : v);
   return {
     slew: -dz(pad.axes[0] ?? 0),
-    main: -dz(pad.axes[1] ?? 0),
-    outer: -dz(pad.axes[3] ?? 0),
+    main: dz(pad.axes[1] ?? 0),
+    outer: dz(pad.axes[3] ?? 0),
     extension: dz(pad.axes[2] ?? 0),
   };
 }

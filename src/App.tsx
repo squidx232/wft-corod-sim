@@ -2343,7 +2343,7 @@ export default function App() {
         {state.activeTab === 'crane' && (
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_480px] gap-4 items-start">
             <Rig3DViewport state={state} craneMode onUpdateHydraulics={updateHydraulics} />
-            <CraneControlPanel hydraulics={state.hydraulics} onUpdateHydraulics={updateHydraulics} />
+            <CraneControlPanel hydraulics={state.hydraulics} onUpdateHydraulics={updateHydraulics} outriggers={state.outriggers} onUpdateOutriggers={updateOutriggers} />
           </div>
         )}
 
