@@ -349,6 +349,7 @@ export const OperatorStationView: React.FC<OperatorStationViewProps> = ({
             {[
               { view: '3d', label: t('station.popout.3d'), icon: <Monitor className="w-3.5 h-3.5" /> },
               { view: 'console', label: t('station.popout.console'), icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+              { view: 'instructor', label: t('station.popout.instructor'), icon: <Monitor className="w-3.5 h-3.5" /> },
             ].map((item) => (
               <button
                 key={item.view}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  DEFAULT_ENVIRONMENT,
+  EnvironmentState,
   SimulatorState,
   SimulatorTab,
   DifficultyLevel,
@@ -59,8 +61,10 @@ import { EngineStartModal } from './components/EngineStartModal';
 import { EmergencyResponseHud } from './components/EmergencyResponseHud';
 import { Rig3DViewport } from './components/Rig3DViewport';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
+import { InstructorConsole } from './components/InstructorConsole';
 import { Button, Badge, SegmentedControl, cx } from './components/ui';
 import { useT } from './i18n';
+import { InstructorCommand, onEnvironmentChangeRequest } from './utils/simEvents';
 
 import {
   Gauge,
@@ -207,6 +211,7 @@ const INITIAL_STATE: SimulatorState = {
   emergencyTriggerTime: null,
   emergencyResolved: false,
   emergencyScenarioId: null,
+  environment: DEFAULT_ENVIRONMENT,
   emergencyStepIndex: 0,
   assessment: null,
   airHornSounded: false,
@@ -268,15 +273,19 @@ const INITIAL_STATE: SimulatorState = {
 // ======================================================================
 const BROADCAST_CHANNEL_NAME = 'corod-sim-state';
 
+
 function useMultiScreenSync(
   state: SimulatorState,
   setState: React.Dispatch<React.SetStateAction<SimulatorState>>,
   isSecondary: boolean,
+  onInstructorCommand?: (cmd: InstructorCommand) => void,
 ) {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const lastBroadcastRef = useRef(0);
   const isSecondaryRef = useRef(isSecondary);
+  const onInstructorCommandRef = useRef(onInstructorCommand);
   isSecondaryRef.current = isSecondary;
+  onInstructorCommandRef.current = onInstructorCommand;
 
   useEffect(() => {
     const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
@@ -284,23 +293,24 @@ function useMultiScreenSync(
     ch.onmessage = (e) => {
       if (e.data?.type === 'state-update') {
         // Only SECONDARY windows accept full-state snapshots (from the primary).
-        // The primary must never overwrite its own authoritative state with an
-        // echo (which could arrive from another window).
-        if (isSecondaryRef.current) setState(e.data.state);
+        // Normalise snapshots from older builds that predate `environment`.
+        if (isSecondaryRef.current) {
+          const incoming = e.data.state as SimulatorState;
+          setState({ ...incoming, environment: incoming.environment ?? DEFAULT_ENVIRONMENT });
+        }
       } else if (e.data?.type === 'state-patch') {
         // Only the PRIMARY applies control patches sent by secondary windows.
-        // It then re-broadcasts authoritative state on its next tick. Secondary
-        // windows ignore patches (they never receive their own echo, and should
-        // not act on other secondaries' patches).
         if (!isSecondaryRef.current) {
           setState((prev) => ({ ...prev, ...e.data.patch }));
-          // Immediately re-broadcast so the originating pop-up sees the applied
-          // value without waiting up to a full tick (prevents the visible
-          // "snap back then apply" flicker).
           setState((prev) => {
             channelRef.current?.postMessage({ type: 'state-update', state: prev });
             return prev;
           });
+        }
+      } else if (e.data?.type === 'instructor-command') {
+        // Only the PRIMARY executes instructor commands.
+        if (!isSecondaryRef.current) {
+          onInstructorCommandRef.current?.(e.data.command);
         }
       }
     };
@@ -321,7 +331,18 @@ function useMultiScreenSync(
     channelRef.current?.postMessage({ type: 'state-patch', patch });
   }, []);
 
-  return { broadcastPatch };
+  // Send an instructor command (primary executes locally, secondaries broadcast)
+  const sendInstructorCommand = useCallback((cmd: InstructorCommand) => {
+    if (isSecondaryRef.current) {
+      // Secondary: broadcast to primary
+      channelRef.current?.postMessage({ type: 'instructor-command', command: cmd });
+    } else {
+      // Primary: execute locally
+      onInstructorCommandRef.current?.(cmd);
+    }
+  }, []);
+
+  return { broadcastPatch, sendInstructorCommand };
 }
 
 // ---------------------------------------------------------------------------
@@ -348,10 +369,10 @@ function patchActiveAssessmentEvent(
   return { ...a, events: patchLastEvent(a.events, fn) };
 }
 
-function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' {
+function getViewMode(): 'full' | '3d' | 'console' | 'gauges' | 'controls' | 'instructor' {
   const params = new URLSearchParams(window.location.search);
   const view = params.get('view');
-  if (view === '3d' || view === 'console' || view === 'gauges' || view === 'controls') return view;
+  if (view === '3d' || view === 'console' || view === 'gauges' || view === 'controls' || view === 'instructor') return view;
   return 'full';
 }
 
@@ -360,7 +381,31 @@ export default function App() {
   const [state, setState] = useState<SimulatorState>(INITIAL_STATE);
   const viewMode = useRef(getViewMode()).current;
   const isSecondary = viewMode !== 'full';
-  const { broadcastPatch } = useMultiScreenSync(state, setState, isSecondary);
+
+  // Handler for instructor commands (only runs in the primary window). Recreated
+  // every render on purpose: the sync hook keeps a ref to the LATEST handler, so
+  // commands always use the current emergency functions/state.
+  const handleInstructorCommand = (cmd: InstructorCommand) => {
+    if (cmd.kind === 'trigger-emergency') {
+      triggerEmergencyScenario(cmd.scenarioId, { assessment: false });
+    } else if (cmd.kind === 'resolve-emergency') {
+      resolveEmergencyScenario();
+    } else if (cmd.kind === 'cancel-emergency') {
+      cancelEmergencyScenario();
+    } else if (cmd.kind === 'set-environment') {
+      setState((prev) => ({
+        ...prev,
+        environment: { ...(prev.environment ?? DEFAULT_ENVIRONMENT), ...cmd.patch },
+      }));
+    }
+  };
+
+  const { broadcastPatch, sendInstructorCommand } = useMultiScreenSync(
+    state,
+    setState,
+    isSecondary,
+    handleInstructorCommand,
+  );
 
   // Per-WINDOW (local) audio enable. This is NOT synced across windows, so each
   // pop-up (3D / console / gauges) and the main dashboard can be muted
@@ -375,6 +420,14 @@ export default function App() {
 
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Environment (time of day / weather) changes requested by nested UI such as
+  // the 3D viewport toolbar. Routed through the instructor-command path so a
+  // pop-out window forwards the change to the primary, which owns the state.
+  useEffect(
+    () => onEnvironmentChangeRequest((patch) => sendInstructorCommand({ kind: 'set-environment', patch })),
+    [sendInstructorCommand],
+  );
 
   // Available injector profiles (presets + saved custom), loaded once and kept
   // in a ref so the physics tick can read the active profile's curve without
@@ -1948,6 +2001,18 @@ export default function App() {
           onTriggerEmergencyStop={handleEmergencyShutdown}
           onResetEmergencyStop={handleResetEmergencyShutdown}
           embedded={true}
+        />
+      </div>
+    );
+  }
+
+  if (viewMode === 'instructor') {
+    return (
+      <div className="h-screen w-screen bg-slate-900 overflow-hidden">
+        {localAudioToggle}
+        <InstructorConsole
+          state={state}
+          onSendCommand={sendInstructorCommand}
         />
       </div>
     );

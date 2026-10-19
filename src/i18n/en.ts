@@ -65,6 +65,7 @@ export const en: Record<string, string> = {
   'station.popout': 'Pop out',
   'station.popout.3d': '3D View',
   'station.popout.console': 'Console',
+  'station.popout.instructor': 'Instructor',
   'telemetry.depth': 'Depth',
   'telemetry.speed': 'Speed',
   'telemetry.weight': 'Weight',
