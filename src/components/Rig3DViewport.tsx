@@ -133,7 +133,7 @@ const MAST_OFFSET_X = 7.5;  // pulling-unit mast stands this far to the SIDE of 
 // Containment arm stands to the SIDE of the reel trailer, at the front end next
 // to the fire extinguishers (beside the tongue), so the rod comes off the EDGE
 // of the reel along a tangent — never out of the middle.
-const GUIDE_HEAD = { x: REEL_X - 3.85, y: 3.9, z: REEL_Z + 1.3 };
+const GUIDE_HEAD = { x: REEL_X - 4.6, y: 3.9, z: REEL_Z + 1.9 };
 // Horizontal CoRod reel coil (must match buildServiceReel / REEL_GEOM).
 // CoRod is solid (but flexible) steel rod: it can't be bent tight around a small
 // centre, so every wrap sits at the SAME large diameter on the drum core — one
@@ -172,8 +172,20 @@ const REEL_PAYOFF = (() => {
   const along = -Math.sin(angle) * dir.x + Math.cos(angle) * dir.z;
   return { angle, dir, hand: along >= 0 ? 1 : -1 };
 })();
-/** Spool rotation for `wraps` still on the reel: keeps the coil's top end at the pay-off point. */
-const reelSpinFor = (wraps: number) => REEL_PAYOFF.hand * wraps * Math.PI * 2 - REEL_PAYOFF.angle;
+/** Real rod length per drum turn (ft): one wrap at the helix radius. */
+const REEL_FT_PER_TURN = (2 * Math.PI * COIL_HELIX_R) / 0.3048;
+/**
+ * Drum rotation for a run depth: the drum turns at the TRUE rod rate (one turn
+ * per wrap length paid out), edge moving toward the containment arm; reverses
+ * on POOH. Independent of how many wraps are drawn.
+ */
+const reelSpinForDepth = (depthFt: number) => -REEL_PAYOFF.hand * (depthFt / REEL_FT_PER_TURN) * Math.PI * 2;
+/**
+ * Extra rotation of the (rotationally symmetric) coil mesh inside the turning
+ * drum so the top end of the drawn helix always sits at the tangent pay-off point.
+ */
+const coilOffsetFor = (wraps: number, spoolSpin: number) =>
+  REEL_PAYOFF.hand * wraps * Math.PI * 2 - REEL_PAYOFF.angle - spoolSpin;
 
 // ---------------------------------------------------------------------------
 // Lease layout for the outlying production equipment. Shared by the props and
@@ -970,10 +982,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
       // 2./2a. Service reel: rod pays off the TOP of the helix. Fill = rod still
       // on the reel = 1 − depth / total. The displayed fill eases toward it and
-      // drives BOTH the visible wraps (draw range of the pre-built helix — cheap,
-      // every frame) and the spool rotation (tied to rod paid out, so the coil's
-      // top end stays exactly at the tangent pay-off point while the reel turns
-      // toward the containment arm).
+      // drives the visible wraps (draw range of the pre-built helix — cheap, every
+      // frame) and the drum rotation at the TRUE rod rate (one turn per ~40 ft,
+      // edge toward the containment arm, reversed on POOH). The coil mesh is
+      // counter-rotated inside the drum so the top end of the helix stays at the
+      // tangent pay-off point.
       if (coilTubeRef.current) {
         const rodS = stateRef.current.rod;
         const total = rodS.totalWellDepthFt > 0 ? rodS.totalWellDepthFt : 1;
@@ -986,7 +999,11 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
         const radial = (coilTubeRef.current.userData.radial as number) ?? 8;
         if (geo.index && segsPerWrap > 0) geo.setDrawRange(0, Math.floor(wraps * segsPerWrap) * radial * 6);
         coilTubeRef.current.visible = wraps > 0.02;
-        if (reelSpoolRef.current) reelSpoolRef.current.rotation.y = reelSpinFor(wraps);
+        if (reelSpoolRef.current) {
+          const spin = reelSpinForDepth((1 - shown) * total);
+          reelSpoolRef.current.rotation.y = spin;
+          coilTubeRef.current.rotation.y = coilOffsetFor(wraps, spin);
+        }
         // Rod strand take-off height follows the top wrap down (rebuild per ~5 mm).
         if (Math.abs(shown - coilFillRef.current) * COIL_WRAPS_FULL * COIL_PITCH > 0.005 && rodStrandRef.current) {
           const rodBuilder = (rodStrandRef.current.userData as {
@@ -3469,7 +3486,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     coilTube.userData.segsPerWrap = TURN_SEG;
     coilTube.userData.radial = RADIAL;
     spool.add(coilTube);
-    spool.rotation.y = reelSpinFor(COIL_WRAPS_FULL);
+    spool.rotation.y = reelSpinForDepth(0);
+    coilTube.rotation.y = coilOffsetFor(COIL_WRAPS_FULL, spool.rotation.y);
     coilTubeRef.current = coilTube;
     coilMatRef.current = coilMat;
     coilFillRef.current = 1;
@@ -3536,9 +3554,9 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // Guide-head point in LOCAL coords (group is at REEL_X). The arm stands to the
     // SIDE of the reel trailer at its front end, beside the fire extinguishers; the
     // rod arrives along the reel's tangent and leaves toward the well.
-    const headLX = GUIDE_HEAD.x - REEL_X;   // = -3.85 (front end, past the deck)
+    const headLX = GUIDE_HEAD.x - REEL_X;   // = -4.6 (front end, clear of the extinguishers)
     const headLY = GUIDE_HEAD.y;            // = 3.9 (above the reel's top flange)
-    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 1.3 (beside the tongue)
+    const headLZ = GUIDE_HEAD.z;            // = REEL_Z + 1.9 (beside the tongue)
 
     // Orient the arm along the rod's incoming travel (the reel tangent); the arch
     // then carries the rod on and swings it round toward the well.

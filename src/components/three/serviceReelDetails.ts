@@ -159,11 +159,16 @@ export function addServiceReelDetails(frame: THREE.Group, cradle: THREE.Group, s
   // Large hollow drum core between the flanges (wraps sit on its outside), the
   // centre hub/axle + axle stubs into the bearings.
   const coreH = G.topFlangeY - G.platterTopY;
-  const core = mesh(spool, new THREE.CylinderGeometry(G.coreR, G.coreR, coreH, 72, 1, true), dark.clone(), 0, G.platterTopY + coreH / 2, 0);
-  (core.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
-  for (const fy of [0.25, 0.5, 0.75]) { // internal stiffener rings
-    const ring = mesh(spool, new THREE.TorusGeometry(G.coreR - 0.04, 0.03, 6, 72), paint, 0, G.platterTopY + coreH * fy, 0);
+  // Painted RED (not dark) so the bare drum never reads as a second layer of rod.
+  const corePaint = paint.clone(); corePaint.side = THREE.DoubleSide;
+  mesh(spool, new THREE.CylinderGeometry(G.coreR, G.coreR, coreH, 72, 1, true), corePaint, 0, G.platterTopY + coreH / 2, 0);
+  for (const fy of [0.25, 0.5, 0.75]) { // internal stiffener rings (inside the drum)
+    const ring = mesh(spool, new THREE.TorusGeometry(G.coreR - 0.06, 0.03, 6, 72), steel, 0, G.platterTopY + coreH * fy, 0);
     ring.rotation.x = Math.PI / 2;
+  }
+  for (let i = 0; i < 6; i++) { // vertical drum ribs inside — make the drum's turning visible
+    const a = (i * Math.PI) / 3;
+    mesh(spool, new THREE.BoxGeometry(0.08, coreH - 0.04, 0.08), steel, Math.cos(a) * (G.coreR - 0.07), G.platterTopY + coreH / 2, Math.sin(a) * (G.coreR - 0.07));
   }
   vcyl(spool, 0.2, 0.2, coreH, steel, 0, G.platterTopY + coreH / 2, 0, 16); // centre axle
   vcyl(spool, 0.24, 0.24, 0.12, steel, 0, G.topFlangeY + 0.1, 0, 16); // axle cap
