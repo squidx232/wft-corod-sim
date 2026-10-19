@@ -33,6 +33,7 @@ export const ar: Record<string, string> = {
 
   // --- Navigation tabs ---
   'tabs.3dview': 'العرض ثلاثي الأبعاد',
+  'tabs.crane': 'الرافعة المفصلية',
   'tabs.procedures': 'الخطوات بالتفصيل',
   'tabs.emergency': 'تدريب الطوارئ',
   'tabs.logbook': 'السجل والنتائج',

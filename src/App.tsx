@@ -62,6 +62,7 @@ import { EmergencyResponseHud } from './components/EmergencyResponseHud';
 import { Rig3DViewport } from './components/Rig3DViewport';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
 import { InstructorConsole } from './components/InstructorConsole';
+import { CraneControlPanel } from './components/CraneControlPanel';
 import { Button, Badge, SegmentedControl, cx } from './components/ui';
 import { useT } from './i18n';
 import { InstructorCommand, onEnvironmentChangeRequest } from './utils/simEvents';
@@ -71,6 +72,7 @@ import {
   Sliders,
   BookOpen,
   ShieldAlert,
+  Construction,
   Activity,
   FileText,
   Volume2,
@@ -2134,6 +2136,7 @@ export default function App() {
             { id: 'setup', label: t('tabs.setup'), icon: Sliders },
             { id: 'scenarios', label: t('tabs.procedures'), icon: BookOpen },
             { id: 'drills', label: t('tabs.emergency'), icon: ShieldAlert },
+            { id: 'crane', label: t('tabs.crane'), icon: Construction },
             { id: 'logbook', label: t('tabs.logbook'), icon: Activity },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -2336,6 +2339,14 @@ export default function App() {
         )}
 
         {/* TAB: WELL SETUP — equipment config (injector profiles) + well design */}
+        {/* TAB: KNUCKLE CRANE — Fassi F215C on the MG unit */}
+        {state.activeTab === 'crane' && (
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_480px] gap-4 items-start">
+            <Rig3DViewport state={state} craneMode onUpdateHydraulics={updateHydraulics} />
+            <CraneControlPanel hydraulics={state.hydraulics} onUpdateHydraulics={updateHydraulics} />
+          </div>
+        )}
+
         {state.activeTab === 'setup' && (
           <WellSetupPanel
             state={state}

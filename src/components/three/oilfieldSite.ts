@@ -60,6 +60,9 @@ function ribbon(points: THREE.Vector3[], width: number, surfaceAt: (x: number, z
  * dry grass, portable light towers, a crew/doghouse trailer, a tubular pipe
  * rack, a windsock, a muster-point sign and a portable toilet.
  */
+/** Muster-point sign location (world XZ); crew evacuate to just in front of it. */
+export const MUSTER_SIGN = { x: -15, z: 18.5 };
+
 /** Live handles for lighting / wind animation (see siteAtmosphere.ts). */
 export interface OilfieldSiteHandles {
   /** Lamp-lens material on the light towers (emissive driven by time of day). */
@@ -286,7 +289,7 @@ export function addOilfieldSiteDetails(scene: THREE.Scene, kit: MeshKit, site: S
   buildDoghouse(-30, 14);
   buildPipeRack(-27, -6);
   buildWindsock(22, 16);
-  buildMusterSign(-15, 18.5, 0);
+  buildMusterSign(MUSTER_SIGN.x, MUSTER_SIGN.z, 0);
   buildToilet(-36.5, 14);
 
   return {

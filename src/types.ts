@@ -5,7 +5,7 @@
 
 export type DifficultyLevel = 'trainee' | 'operator' | 'specialist';
 
-export type SimulatorTab = 'simulator' | 'console' | 'auxiliary' | 'scenarios' | 'drills' | 'logbook' | 'manual' | 'setup';
+export type SimulatorTab = 'simulator' | 'console' | 'auxiliary' | 'scenarios' | 'drills' | 'logbook' | 'manual' | 'setup' | 'crane';
 
 /**
  * Multi-tiered squeeze-pressure alarm state (Slip & Free-Fall detection).

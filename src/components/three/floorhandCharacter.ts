@@ -30,7 +30,19 @@ export interface FloorhandAnchors {
   engine?: THREE.Vector3;
   /** BOP stack (hydraulic / air leak hazards). */
   bop?: THREE.Vector3;
+  /** Muster point he walks to when an emergency requires evacuation. */
+  muster?: THREE.Vector3;
+  /** Ground height for walking over graded terrain. */
+  groundAt?: (x: number, z: number) => number;
 }
+
+/** Emergencies where the crew evacuates to the muster point, and the delay (s) before walking off. */
+const EVACUATE: Record<string, number> = { 'emg-h2s': 2.5, 'emg-blowout': 5 };
+const THIGH = 0.44;
+const SHIN = 0.47; // knee → sole
+const REST_DEPTH = THIGH + SHIN;
+const STRIDE = 1.3; // m per full gait cycle (two steps) at scale 1
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Where the floorhand points for each emergency (what he's warning the operator about). */
 function hazardPoint(id: string | null, a: FloorhandAnchors): THREE.Vector3 {
@@ -100,7 +112,14 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
   // Emergency reaction state: when it started and for which emergency.
   let emergencyKey: string | null = null;
   let emergencyStart = 0;
-  let pointing = false; // a LOWER/HOIST signal is in progress (persists across frames)
+  let pointing = false;
+  // Locomotion state
+  let home: THREE.Vector3 | null = null;
+  let homeYaw = 0;
+  let gaitPhase = 0;
+  let walkBlend = 0;
+  let heading = 0;
+  const footBox = new THREE.Box3(); // a LOWER/HOIST signal is in progress (persists across frames)
 
   /** Hips yaw (relative to the root) that faces a world point; rig faces local +X. */
   const yawToward = (p: THREE.Vector3) => {
@@ -197,6 +216,32 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     const sinceStart = t - emergencyStart;
     pointing = false;
 
+    // --- Locomotion: evacuate to the muster point, walk back when clear ----------
+    if (!home) { home = root.position.clone(); homeYaw = root.rotation.y; heading = homeYaw; }
+    const evacDelay = f.emergencyId ? EVACUATE[f.emergencyId] : undefined;
+    const evacuate = !!anchors.muster && evacDelay !== undefined && sinceStart > evacDelay;
+    const dest = evacuate ? anchors.muster! : home;
+    const dx = dest.x - root.position.x;
+    const dz = dest.z - root.position.z;
+    const dist = Math.hypot(dx, dz);
+    const sc = root.scale.x;
+    const walking = dist > 0.12;
+    if (walking) {
+      heading = Math.atan2(-dz, dx);
+      root.rotation.y += wrapAngle(heading - root.rotation.y) * damp(5, dt);
+      // Turn toward the destination first, then stride; slow down on arrival.
+      const facing = Math.abs(wrapAngle(heading - root.rotation.y));
+      const speed = (evacuate ? 1.7 : 1.1) * sc * Math.min(1, 0.35 + dist / 0.8) * (facing < 0.9 ? 1 : 0.15);
+      const step = Math.min(dist, speed * dt);
+      root.position.x += (dx / dist) * step;
+      root.position.z += (dz / dist) * step;
+      gaitPhase += (step / (STRIDE * sc)) * Math.PI * 2;
+    } else if (!evacuate) {
+      // Back at the station: resume the original stance.
+      root.rotation.y += wrapAngle(homeYaw - root.rotation.y) * damp(4, dt);
+    }
+    walkBlend += ((walking ? 1 : 0) - walkBlend) * damp(walking ? 6 : 4, dt);
+
     if (f.alarm) {
       isSignalling = true;
       // Reaction sequence: E-STOP to the operator for 5 s, then alternate
@@ -259,6 +304,12 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     hips.rotation.y = bodYaw;
 
     // Posture: slightly upright even during work
+    // While walking: no work/E-STOP signals (H2S keeps the hand over the mouth), hips square to the path.
+    if (walkBlend > 0.3) {
+      if (signalType !== 'h2s') { isSignalling = false; pointing = false; }
+      turnBody(0, 10, dt);
+    }
+
     const swayAmp = f.alarm ? 0.006 : f.activity !== 'idle' ? 0.008 : 0.015;
     const sway = Math.sin(t * 0.4) * swayAmp + Math.sin(t * 1.1) * swayAmp * 0.2;
     hips.position.z = sway;
@@ -274,6 +325,31 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
       leg.hip.rotation.z = 0.01 + 0.02 * unweighted;
     });
 
+    // Walk cycle: hips swing ±24°, the swinging leg's knee bends; the body
+    // drops so the lowest (stance) foot stays on the ground.
+    let bob = 0;
+    if (walkBlend > 0.001) {
+      let maxDepth = 0;
+      legs.forEach((leg, i) => {
+        const ph = gaitPhase + (i === 0 ? 0 : Math.PI);
+        const th = 0.42 * Math.sin(ph) * walkBlend;
+        const k = -0.95 * Math.max(0, Math.cos(ph)) * walkBlend;
+        leg.hip.rotation.z = THREE.MathUtils.lerp(leg.hip.rotation.z, th, walkBlend);
+        leg.knee.rotation.z = THREE.MathUtils.lerp(leg.knee.rotation.z, k, walkBlend);
+        maxDepth = Math.max(maxDepth, THIGH * Math.cos(leg.hip.rotation.z) + SHIN * Math.cos(leg.hip.rotation.z + leg.knee.rotation.z));
+      });
+      bob = (REST_DEPTH - maxDepth) * sc;
+    }
+    const groundY = anchors.groundAt ? anchors.groundAt(root.position.x, root.position.z) : home.y;
+    root.position.y = groundY - bob;
+    if (walkBlend > 0.001) {
+      // Refine with the real boot geometry: put the lowest point of either foot on the ground.
+      root.updateMatrixWorld(true);
+      let lowest = Infinity;
+      for (const leg of legs) lowest = Math.min(lowest, footBox.setFromObject(leg.knee).min.y);
+      if (Number.isFinite(lowest)) root.position.y += (groundY - lowest) * walkBlend;
+    }
+
     // Breathing
     const breath = Math.sin(t * (f.alarm ? 2.8 : 1.4));
     torso.scale.set(0.72 * (1 + breath * 0.01), 1 + breath * 0.007, 1.05 * (1 + breath * 0.009));
@@ -283,6 +359,10 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
 
     // Gaze
     gazeTarget.copy(chooseGaze(f));
+    if (walkBlend > 0.5) {
+      // Look where he's going (a few metres ahead, at eye height).
+      gazeTarget.set(root.position.x + Math.cos(heading) * 6, root.position.y + 1.5 * sc, root.position.z - Math.sin(heading) * 6);
+    }
     if (!initialised) gaze.copy(gazeTarget);
     gaze.lerp(gazeTarget, damp(f.alarm ? 8 : 4, dt));
 
@@ -326,6 +406,14 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
         leftGoal = bodyToWorld(new THREE.Vector3(-0.05, 0.98, -0.25));
         rightGoal = bodyToWorld(new THREE.Vector3(-0.05, 0.98, 0.25));
       }
+    }
+
+    if (walkBlend > 0.05) {
+      // Arms swing opposite to the legs.
+      const swing = Math.sin(gaitPhase) * 0.2 * walkBlend;
+      const walkRight = bodyToWorld(restRight.clone().add(tmp.set(swing, 0.03, 0)));
+      rightGoal.lerp(walkRight, walkBlend);
+      if (signalType !== 'h2s' || !isSignalling) leftGoal.lerp(bodyToWorld(restLeft.clone().add(tmp.set(-swing, 0.03, 0))), walkBlend);
     }
 
     if (!initialised) {

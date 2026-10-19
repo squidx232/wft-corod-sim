@@ -10,11 +10,14 @@ import {
   PUMPJACK_HORSEHEAD_REACH,
   TankBatteryLayout,
 } from './three/productionEquipment';
-import { addOilfieldSiteDetails, OilfieldSiteHandles } from './three/oilfieldSite';
+import { addOilfieldSiteDetails, OilfieldSiteHandles, MUSTER_SIGN } from './three/oilfieldSite';
 import { createSiteAtmosphere, SiteAtmosphere } from './three/siteAtmosphere';
 import { createEmergencyEffects, EmergencyEffects } from './three/emergencyEffects';
 import { createFloorhandCharacter, FloorhandCharacter } from './three/floorhandCharacter';
 import { requestEnvironmentChange } from '../utils/simEvents';
+import { createKnuckleCrane, KnuckleCraneVisual } from './three/knuckleCrane';
+import { craneStore } from '../crane/craneStore';
+import type { Vec3 } from '../crane/craneSim';
 import { createOperatorCharacter, OperatorCharacter } from './three/operatorCharacter';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -64,13 +67,15 @@ interface Rig3DViewportProps {
       instead of using its own fixed 520/620px height. The internal
       ResizeObserver keeps the WebGL canvas correctly sized either way. */
   fillHeight?: boolean;
+  /** Knuckle-crane training module: crane is operable and the camera frames it. */
+  craneMode?: boolean;
   /** Cab/windshield mode: locks the camera to the rig sightline, hides the
       redundant "Console Dials" 3D preset and the bottom HUD dock (because the
       real HTML console dashboard is docked directly below the windshield). */
   cabMode?: boolean;
 }
 
-export type CameraViewPreset = 'operator' | 'orbit' | 'injector' | 'reel' | 'wellhead' | 'console';
+export type CameraViewPreset = 'operator' | 'orbit' | 'injector' | 'reel' | 'wellhead' | 'console' | 'crane';
 
 // ---------------------------------------------------------------------------
 // Site coordinate layout (side-on, matching the field diagram, X = left→right):
@@ -196,6 +201,8 @@ const SAFETY_CONE_POSITIONS: [number, number][] = [
 const FLOORHAND_POS = { x: WELL_X - 4.6 - 2.0, z: 4.6 + 1.6 };
 /** Crew figures are modelled at ~1.80 m; scale up slightly for presence/readability. */
 const CREW_SCALE = 1.1;
+/** Floorhand drawn larger still so his hand signals read clearly from the console camera. */
+const FLOORHAND_SCALE = 1.2;
 
 // Shared glTF loader for the imported Blender equipment models.
 const gltfLoader = new GLTFLoader();
@@ -329,6 +336,7 @@ function loadEquipmentModel(
 
 export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   state,
+  craneMode = false,
   onInstallClamp,
   onTapTest,
   onToggleReelSafetyFork,
@@ -354,6 +362,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const atmosphereRef = useRef<SiteAtmosphere | null>(null);
   const emergencyFxRef = useRef<EmergencyEffects | null>(null);
   const floorhandRef = useRef<FloorhandCharacter | null>(null);
+  const craneVisualRef = useRef<KnuckleCraneVisual | null>(null);
+  const craneModeRef = useRef(craneMode);
+  /** Truck deck footprint (world) — crane loads can rest on it. */
+  const truckDeckRef = useRef({ minX: MG_UNIT_X - 1.51, maxX: MG_UNIT_X + 5.96, minZ: -1.3, maxZ: 1.43, top: 1.38 });
   const [showStats, setShowStats] = useState(true);
   // In cab mode the bottom HUD dock is redundant (real console is docked below).
   const [showHudControls, setShowHudControls] = useState(!cabMode);
@@ -457,6 +469,38 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabMode]);
 
+  // Crane module on/off: activate the sim and frame the crane.
+  useEffect(() => {
+    craneModeRef.current = craneMode;
+    craneStore.setActive(craneMode);
+    if (!craneMode) return;
+    const t = setTimeout(() => { if (cameraRef.current) setCameraPositionPreset('crane'); }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [craneMode]);
+  useEffect(() => () => craneStore.setActive(false), []);
+
+  /** Surface height for crane loads/hook: graded terrain, or the truck deck. */
+  const craneSurfaceAt = (x: number, z: number) => {
+    const d = truckDeckRef.current;
+    if (x >= d.minX && x <= d.maxX && z >= d.minZ && z <= d.maxZ) return d.top;
+    return terrain.groundAt(x, z);
+  };
+
+  /** (Re)build the working crane at `base` (slew axis on the deck). */
+  const mountKnuckleCrane = (scene: THREE.Scene, base: Vec3) => {
+    if (craneVisualRef.current) {
+      scene.remove(craneVisualRef.current.root, craneVisualRef.current.world);
+      craneVisualRef.current.dispose();
+    }
+    const side = base.z > 0.3 ? 1 : -1;
+    const visual = createKnuckleCrane(craneStore.spec, { side, truckCenterZ: -base.z, baseY: base.y });
+    visual.root.position.set(base.x, base.y, base.z);
+    scene.add(visual.root, visual.world);
+    craneVisualRef.current = visual;
+    craneStore.mount(base, craneSurfaceAt);
+  };
+
   // Set Camera Preset Handler
   const setCameraPositionPreset = (preset: CameraViewPreset) => {
     setCameraPreset(preset);
@@ -495,6 +539,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       targetLookAt.current.set(WELL_X, 2.2, 0);
       cameraRef.current.position.set(WELL_X + 2, 2.6, 7);
       sphericalRef.current = { radius: 7, theta: 1.1, phi: 1.35 };
+      cameraRef.current.lookAt(targetLookAt.current);
+    } else if (preset === 'crane') {
+      // Crane working side of the MG unit: frame the crane, loads and mats.
+      const b = craneStore.live.world.base;
+      const side = b.z > 0.3 ? 1 : -1;
+      targetLookAt.current.set(b.x + 0.5, 2.8, b.z + side * 3.2);
+      cameraRef.current.position.set(b.x + 4.5, 7.5, b.z + side * 15);
+      const off = cameraRef.current.position.clone().sub(targetLookAt.current);
+      const r = off.length();
+      sphericalRef.current = { radius: r, theta: Math.atan2(off.x, off.z), phi: Math.acos(off.y / r) };
       cameraRef.current.lookAt(targetLookAt.current);
     } else if (preset === 'orbit') {
       const siteCenterX = (MG_UNIT_X + WELL_X) / 2;
@@ -754,12 +808,18 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       wellhead: new THREE.Vector3(WELL_X, WELLHEAD_TOP_Y, 0),
       engine: new THREE.Vector3(MG_UNIT_X - 1.2, 3.2, 1.1),
       bop: new THREE.Vector3(WELL_X, BOP_BASE_Y + BOP_H * 0.45, 0),
+      muster: new THREE.Vector3(MUSTER_SIGN.x + 1.2, 0, MUSTER_SIGN.z - 1.4),
+      groundAt: terrain.groundAt,
     });
     floorhand.root.position.set(FLOORHAND_POS.x, terrain.groundAt(FLOORHAND_POS.x, FLOORHAND_POS.z), FLOORHAND_POS.z);
-    floorhand.root.scale.setScalar(CREW_SCALE);
+    floorhand.root.scale.setScalar(FLOORHAND_SCALE);
     floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
     scene.add(floorhand.root);
     floorhandRef.current = floorhand;
+
+    // 5e. Knuckle crane (Fassi F215C) at the rear of the MG deck. Re-mounted on
+    // the truck model's own crane pedestal once mg_truck.glb has loaded.
+    mountKnuckleCrane(scene, { x: MG_UNIT_X + 5.83, y: 1.49, z: 0.94 }); // measured from mg_truck.glb
 
     // 6. Resize Observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -1165,6 +1225,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           alarm: alarmActive,
           emergencyId: scenarioId,
         });
+      }
+
+      // 6c. Knuckle crane: hydraulics come from the MG power pack (engine + PTO).
+      craneStore.setPowerAvailable(liveState.hydraulics.engineRunning && liveState.hydraulics.ptoEngaged);
+      craneStore.step(delta);
+      if (craneVisualRef.current) {
+        const live = craneStore.live;
+        craneVisualRef.current.update(live.state, { groundAt: craneSurfaceAt, target: live.target, showTarget: craneModeRef.current });
       }
 
       // 7. Live 3D Joystick Tilt Movement
@@ -3131,6 +3199,25 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           // Reverse the truck so its BACK (deck/crane/console) faces the
           // wellhead (+X) and the cab points away to the left, per the photo.
           root.rotation.y = Math.PI;
+          // Knuckle crane: measure the model's crane pedestal + bed floor, hide
+          // the model's static crane and mount the working crane in its place.
+          modelHolder.updateWorldMatrix(true, true);
+          const craneParts: THREE.Object3D[] = [];
+          root.traverse((c) => { if (/^MG_Crane/i.test(c.name)) craneParts.push(c); });
+          const pedestal = craneParts.find((c) => /CranePed/i.test(c.name));
+          const bed = root.getObjectByName('MG_BedFloor');
+          if (bed) {
+            const bb = new THREE.Box3().setFromObject(bed);
+            if (Number.isFinite(bb.max.y)) truckDeckRef.current = { minX: bb.min.x, maxX: bb.max.x, minZ: bb.min.z, maxZ: bb.max.z, top: bb.max.y };
+          }
+          if (pedestal && sceneRef.current) {
+            const pb = new THREE.Box3().setFromObject(pedestal);
+            if (Number.isFinite(pb.min.x)) {
+              craneParts.forEach((c) => { c.visible = false; });
+              const deckTop = bed ? truckDeckRef.current.top : pb.min.y;
+              mountKnuckleCrane(sceneRef.current, { x: (pb.min.x + pb.max.x) / 2, y: Math.max(deckTop, pb.min.y), z: (pb.min.z + pb.max.z) / 2 });
+            }
+          }
           // Hide the model's own simplified console so our detailed procedural
           // console (with working gauges) shows instead.
           root.traverse((child) => {
