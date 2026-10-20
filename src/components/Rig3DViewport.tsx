@@ -448,6 +448,9 @@ function loadEquipmentModel(
         if ((child as THREE.Mesh).isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          // Boolean cutters / reference paths exported from Blender have no
+          // material and would otherwise render as default white boxes.
+          if (/Cutter|_Ref$/.test(child.name)) child.visible = false;
         }
       });
       // Normalise: measure bounds, scale to target height, seat base on ground.
@@ -1074,7 +1077,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
     scene.add(floorhand.root);
     floorhandRef.current = floorhand;
-    const pullingCrew = createPullingUnitCrew(scene, { groundAt: terrain.groundAt });
+    const pullingCrew = createPullingUnitCrew(scene, {
+      groundAt: terrain.groundAt,
+      unitX: WELL_X + MAST_OFFSET_X,
+      muster: new THREE.Vector3(MUSTER_SIGN.x + 2.6, 0, MUSTER_SIGN.z - 0.6),
+      injector: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 2.5, 0),
+    });
     const fieldSky = createFieldSky(scene, quality.clouds);
 
     // 5e. Knuckle crane (Fassi F215C) at the rear of the MG deck. Re-mounted on
@@ -1471,7 +1479,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 6b. Atmosphere, emergencies and the floorhand.
       const liveEnv = liveState.environment ?? DEFAULT_ENVIRONMENT;
       const scenarioId = liveState.emergencyScenarioId;
-      pullingCrew.update(delta, time / 1000, scenarioId);
       fieldSky.update(liveEnv, time / 1000, cameraRef.current?.position ?? camera.position);
       // A high-wind drill forces a visible gale regardless of the set weather.
       const effectiveEnv: EnvironmentState = scenarioId === 'emg-wind'
@@ -1499,6 +1506,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           wind: atmosphere?.wind ?? new THREE.Vector3(),
         });
       }
+      pullingCrew.update({
+        time: time / 1000,
+        delta,
+        activity: speed < -0.1 ? 'rih' : speed > 0.1 ? 'pooh' : 'idle',
+        speedRatio: Math.min(1, Math.abs(speed) / 85),
+        alarm: alarmActive,
+        emergencyId: scenarioId,
+      });
       if (floorhandRef.current) {
         floorhandRef.current.update({
           time: time / 1000,
@@ -4157,6 +4172,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               injectorDetailsRef.current = addInjectorDetails(injectorGroup, sceneRef.current, bounds, {
                 groundWorldY: 0,
                 hoseEndWorld: new THREE.Vector3(MG_UNIT_X + 6.4, 1.0, -0.9),
+                model: root,
+                rodRadiusWorld: 0.045,
               });
             }
           }

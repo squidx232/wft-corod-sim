@@ -9,15 +9,51 @@ try {
   const { soundManager } = await vite.ssrLoadModule('/src/utils/audio.ts');
   soundManager.setMuted(true);
   const scene = new THREE.Scene(), group = new THREE.Group(); scene.add(group);
-  const chains = addInjectorDetails(group, scene, new THREE.Box3(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,6,1)), {groundWorldY:0,hoseEndWorld:new THREE.Vector3(-10,1,0)});
-  const left = group.getObjectByName('LeftGripperChain'), m = new THREE.Matrix4();
-  chains.update(0,0,0); left.getMatrixAt(2,m); const y0=m.elements[13];
-  chains.update(0.1,1,0); left.getMatrixAt(2,m); assert.ok(Math.abs(m.elements[13]-y0-0.03048)<1e-5,'POOH chain surface speed');
-  chains.update(0.1,-1,0); left.getMatrixAt(2,m); assert.ok(Math.abs(m.elements[13]-y0)<1e-5,'RIH reverses chain travel');
-  for(let i=0;i<300;i++) chains.update(0.1,i%2?-3:3,0);
-  for(let i=0;i<left.count;i++){left.getMatrixAt(i,m);assert.ok(m.elements.every(Number.isFinite));assert.ok(m.elements[13]>=0.89&&m.elements[13]<=5.11);}
-  const crew=createPullingUnitCrew(scene,{groundAt:()=>0});
-  for(let t=0;t<600;t+=0.5){crew.update(0.5,t,null);for(const member of crew.root.children){assert.ok(member.position.x>15&&member.position.z>=4.2);assert.equal(member.scale.x,1.2);member.traverse(o=>assert.ok([...o.position.toArray(),...o.rotation.toArray().slice(0,3)].every(Number.isFinite)));}}
+  // Fake imported injector model (model units, scaled ×2 like the 6.75 m GLB).
+  const model = new THREE.Group(); model.scale.setScalar(2); group.add(model);
+  const staticChain = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()); staticChain.name = 'Chain_L_Block_00001'; model.add(staticChain);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()); frame.name = 'Injector_FrameBody'; model.add(frame);
+  const chains = addInjectorDetails(group, scene, new THREE.Box3(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,6,1)), {groundWorldY:0,hoseEndWorld:new THREE.Vector3(-10,1,0),model,rodRadiusWorld:0.045});
+  assert.equal(staticChain.visible, false, 'static model chain replaced by animated chain');
+  assert.equal(frame.material.clippingPlanes.length, 1, 'front wall opened as inspection face');
+  const left = model.getObjectByName('LeftGripperChain'), right = model.getObjectByName('RightGripperChain'), m = new THREE.Matrix4();
+  const worldY = (mesh, i) => { mesh.getMatrixAt(i, m); return new THREE.Vector3().setFromMatrixPosition(m).applyMatrix4(mesh.matrixWorld).y; };
+  scene.updateMatrixWorld(true);
+  chains.update(0,0,0); const y0 = worldY(left, 2);
+  chains.update(0.1,1,0); assert.ok(Math.abs(worldY(left,2)-y0-0.03048)<1e-5,'POOH chain surface speed (world)');
+  chains.update(0.1,-1,0); assert.ok(Math.abs(worldY(left,2)-y0)<1e-5,'RIH reverses chain travel');
+  const F = { halfX: 0.4, minY: 0, maxY: 1.9 };
+  let minInner = Infinity;
+  for(let k=0;k<300;k++) chains.update(0.1,k%2?-3:3,0);
+  for (const chain of [left, right]) for(let i=0;i<chain.count;i++){
+    chain.getMatrixAt(i,m); assert.ok(m.elements.every(Number.isFinite));
+    const p = new THREE.Vector3().setFromMatrixPosition(m);
+    assert.ok(Math.abs(p.x) + 0.044 < F.halfX && p.y - 0.044 > F.minY && p.y + 0.044 < F.maxY, 'chain link inside housing '+p.toArray());
+    minInner = Math.min(minInner, Math.abs(p.x) - 0.03 - 0.014);
+  }
+  assert.ok(Math.abs(minInner - (0.045/2 + 0.002)) < 0.003, 'gripper pads close on the rod surface: '+minInner);
+  // --- Pulling-unit crew: works ON the carrier, evacuates to the muster point ---
+  const muster = new THREE.Vector3(-12.4, 0, 17.9);
+  const crew=createPullingUnitCrew(scene,{groundAt:()=>0,unitX:16.5,muster,injector:new THREE.Vector3(9,8,0)});
+  const frameAt=(t,emergencyId=null,activity='rih')=>({time:t,delta:0.05,activity,speedRatio:0.5,alarm:false,emergencyId});
+  const visited = crew.root.children.map(()=>new Set());
+  let onDeck = 0, minX = Infinity, maxX = -Infinity;
+  for(let t=0;t<180;t+=0.05){crew.update(frameAt(t));crew.root.children.forEach((member,i)=>{
+    assert.equal(member.scale.x,1.2);
+    member.traverse(o=>assert.ok([...o.position.toArray(),...o.rotation.toArray().slice(0,3)].every(Number.isFinite)));
+    visited[i].add(crew.states()[i].at);
+    if (member.position.y > 1.6) onDeck++;
+    minX = Math.min(minX, member.position.x); maxX = Math.max(maxX, member.position.x);
+  });}
+  assert.ok(onDeck > 0 && minX > 12 && maxX < 21, `crew works on/around the carrier (${minX.toFixed(1)}..${maxX.toFixed(1)})`);
+  assert.ok(visited[1].size >= 2 && visited[2].has('stairTop') && visited[2].has('groundSide'), 'floorman/roustabout move between stations and use the stairs');
+  assert.equal(crew.root.getObjectByName('driller').position.y, 1.7, 'driller stays on the deck at the console');
+  let t = 180;
+  for(;t<300;t+=0.05) crew.update(frameAt(t,'emg-h2s'));
+  crew.musterSpots().forEach((spot,i)=>{const p=crew.root.children[i].position; assert.ok(Math.hypot(p.x-spot.x,p.z-spot.z)<0.2, `${crew.root.children[i].name} reached muster`); assert.equal(crew.states()[i].mode,'evac');});
+  for(;t<420;t+=0.05) crew.update(frameAt(t));
+  crew.states().forEach(st=>assert.ok(st.mode==='work', st.name+' returned to work: '+st.mode));
+  assert.equal(crew.root.getObjectByName('driller').position.y, 1.7, 'driller climbed back to the console');
   const anchors={beaconPoles:[new THREE.Vector3(4,0,4)],beaconHeads:[],gripper:new THREE.Vector3(9,10,0),wellheadLeak:new THREE.Vector3(9,1,0),bop:new THREE.Vector3(9,4,0),engine:new THREE.Vector3(-10,3,0)};
   const ids=['freefall','charge','blowout','h2s','engine','hydraulic','lightning','outrigger','overpull','chain','overheat','bopair','wind'];
   for(const id of ids) {
@@ -80,5 +116,5 @@ try {
   assert.ok(isInstructorCommand({ kind: 'trigger-emergency', scenarioId: 'emg-h2s' }));
   assert.ok(!isInstructorCommand({ kind: 'trigger-emergency' }));
   assert.ok(!isInstructorCommand({ kind: 'rm -rf' }));
-  console.log('PASS: signed chain speed/direction, bounded links, 10-minute crew paths, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations; seamless compact engine loop; storage/broadcast guards');
+  console.log('PASS: chains inside the housing gripping the rod, crew working on the carrier + muster evacuation, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations; seamless compact engine loop; storage/broadcast guards');
 } finally { await vite.close(); }
