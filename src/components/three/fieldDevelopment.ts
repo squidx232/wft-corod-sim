@@ -77,6 +77,7 @@ export interface FieldDevelopmentHandles {
 }
 
 export interface FieldDevelopmentOptions {
+  detailDistance?: number;
   groundAt: (x: number, z: number) => number;
   /** Main-lease battery outlet — start of the export pipe rack to the plant. */
   leaseBattery: XZ;
@@ -595,10 +596,12 @@ export function addFieldDevelopment(scene: THREE.Scene, opts: FieldDevelopmentOp
   // =========================================================================
   // PLACEMENT + GATHERING SYSTEM
   // =========================================================================
+  const detailDistance = opts.detailDistance ?? 350;
+  const inRange = (w: XZ) => Math.hypot(w.x, w.z) <= detailDistance;
   const [neBat, swBat, nwBat] = SAT_BATTERIES.map(battery);
-  FAR_PUMPJACK_WELLS.forEach((w, i) => flowline(farPumpjack(w, i), neBat.header, false));
-  PCP_WELLS.forEach((w, i) => flowline(pcpWell(w, i), swBat.header, false));
-  ESP_WELLS.forEach((w) => flowline(espWell(w), nwBat.header, false));
+  FAR_PUMPJACK_WELLS.filter(inRange).forEach((w, i) => flowline(farPumpjack(w, i), neBat.header, false));
+  PCP_WELLS.filter(inRange).forEach((w, i) => flowline(pcpWell(w, i), swBat.header, false));
+  ESP_WELLS.filter(inRange).forEach((w) => flowline(espWell(w), nwBat.header, false));
   const plant = station();
   const crudeOut = crudeStorage();
   // Main lease battery → plant on an elevated rack (crosses open ground).

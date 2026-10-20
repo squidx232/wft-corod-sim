@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { soundManager } from '../utils/audio';
 import { ArrowUp, ArrowDown, Pause } from 'lucide-react';
 
@@ -17,6 +17,56 @@ export const PhysicalJoystick: React.FC<PhysicalJoystickProps> = ({
 }) => {
   const isUp = position > 0.05;
   const isDown = position < -0.05;
+  const trackRef = useRef<HTMLDivElement>(null);
+  const activePointerId = useRef<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const updateFromPointer = (clientY: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const rect = track.getBoundingClientRect();
+    // Keep the centre of the 56 px knob inside the 192 px track.
+    const travel = Math.max(1, (rect.height - 56) / 2);
+    const offsetFromCentre = clientY - (rect.top + rect.height / 2);
+    const nextPosition = Math.max(-1, Math.min(1, -offsetFromCentre / travel));
+    onChange(Math.abs(nextPosition) < 0.025 ? 0 : nextPosition);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    activePointerId.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsDragging(true);
+    soundManager.playMetalTap();
+    updateFromPointer(event.clientY);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled || activePointerId.current !== event.pointerId) return;
+    updateFromPointer(event.clientY);
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerId.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    activePointerId.current = null;
+    setIsDragging(false);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    let nextPosition: number | null = null;
+    if (event.key === 'ArrowUp') nextPosition = Math.min(1, position + 0.1);
+    if (event.key === 'ArrowDown') nextPosition = Math.max(-1, position - 0.1);
+    if (event.key === 'Home' || event.key === ' ') nextPosition = 0;
+    if (nextPosition === null) return;
+    event.preventDefault();
+    soundManager.playMetalTap();
+    onChange(nextPosition);
+  };
 
   return (
     <div
@@ -44,7 +94,31 @@ export const PhysicalJoystick: React.FC<PhysicalJoystickProps> = ({
         </div>
 
         {/* Rubber Boot & Lever Track */}
-        <div className="relative w-16 h-48 bg-slate-950 rounded-full border border-slate-800 flex items-center justify-center shadow-inner overflow-hidden">
+        <div
+          ref={trackRef}
+          role="slider"
+          aria-label="RIH and POOH drive joystick"
+          aria-orientation="vertical"
+          aria-valuemin={-100}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(position * 100)}
+          aria-valuetext={isUp ? `POOH ${Math.round(position * 100)} percent` : isDown ? `RIH ${Math.round(Math.abs(position) * 100)} percent` : 'Neutral'}
+          aria-disabled={disabled}
+          tabIndex={disabled ? -1 : 0}
+          onKeyDown={handleKeyDown}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishDrag}
+          onPointerCancel={finishDrag}
+          onLostPointerCapture={() => {
+            activePointerId.current = null;
+            setIsDragging(false);
+          }}
+          className={`relative w-16 h-48 bg-slate-950 rounded-full border flex items-center justify-center shadow-inner overflow-hidden touch-none outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+            disabled ? 'border-slate-800 opacity-50 cursor-not-allowed' : isDragging ? 'border-amber-400 cursor-grabbing' : 'border-slate-700 cursor-grab'
+          }`}
+          title={disabled ? 'Start the engine and reset E-Stop to operate' : 'Drag up for POOH, down for RIH'}
+        >
           {/* Rubber bellows lines */}
           <div className="absolute inset-x-0 top-2 h-0.5 bg-slate-800" />
           <div className="absolute inset-x-0 top-6 h-0.5 bg-slate-800" />
@@ -59,7 +133,7 @@ export const PhysicalJoystick: React.FC<PhysicalJoystickProps> = ({
           <div
             style={{
               transform: `translateY(${-position * 62}px)`,
-              transition: 'transform 0.08s ease-out',
+              transition: isDragging ? 'none' : 'transform 0.08s ease-out',
             }}
             className="relative z-10 w-14 h-14 rounded-full bg-gradient-to-tr from-slate-600 via-slate-400 to-slate-200 border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing"
           >

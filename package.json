@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:scene": "node tests/scene-behavior.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
