@@ -1,11 +1,28 @@
 import * as THREE from 'three';
 import type { AlarmTier } from '../../types';
+import { createEmergencyAudioController } from './emergencyAudio';
+import { createMechanicalFaults } from './mechanicalFaults';
 
 /**
  * Visible consequences of emergencies in the 3D scene: strobe beacons, sparks
  * at the gripper during rod slip / free-fall, fluid or air spray at the
  * wellhead/BOP, and engine smoke or steam. Driven every frame from the live
  * alarm tier and active emergency scenario id.
+ *
+ * All 13 scenarios with distinctive animated fault cues:
+ * 1. emg-freefall: Red strobes, continuous spark shower
+ * 2. emg-charge: Orange strobes, weak spray at wellhead
+ * 3. emg-blowout: Red strobes, dark mud/oil spray upward
+ * 4. emg-h2s: Red strobes, no visible gas (per spec), green safety markers
+ * 5. emg-engine: Red strobes, black engine smoke, spark trail
+ * 6. emg-hydraulic: Orange strobes, red hydraulic mist at BOP
+ * 7. emg-lightning: White/blue flickering strobes, rig geometry highlights
+ * 8. emg-outrigger: Red strobes, tilt/sag geometry indicators, ground damage
+ * 9. emg-overpull: Red strobes, chain tension sparks, upward rod stress cues
+ * 10. emg-chain: Orange strobes, chain wear particles, oiler failure spray
+ * 11. emg-overheat: Red strobes, white steam plumes from hydraulic lines
+ * 12. emg-bopair: Red strobes, white air/fog at BOP, reduced pressure spray
+ * 13. emg-wind: Blue/white strobes, wind-driven particle trails, gust effect
  */
 
 export interface EmergencyEffectAnchors {
@@ -21,6 +38,11 @@ export interface EmergencyEffectAnchors {
   bop: THREE.Vector3;
   /** Engine compartment / exhaust outlet on the MG unit. */
   engine: THREE.Vector3;
+  /** Optional: pulling unit base for outrigger/chain visualization. */
+  pullingUnit?: THREE.Vector3;
+  /** Optional: outrigger pad position for sinking/tilt effects. */
+  outrigger?: THREE.Vector3;
+  particleScale?: number;
 }
 
 export interface EmergencyEffectsFrame {
@@ -55,6 +77,8 @@ interface Emitter {
 }
 
 function createEmitter(scene: THREE.Scene, o: EmitterOptions): Emitter {
+  const scale = Number(scene.userData.emergencyParticleScale ?? 1);
+  o = { ...o, count: Math.max(12, Math.floor(o.count * scale)) };
   const pos = new Float32Array(o.count * 3);
   const vel = new Float32Array(o.count * 3);
   const life = new Float32Array(o.count); // remaining seconds; <= 0 = dead
@@ -82,7 +106,7 @@ function createEmitter(scene: THREE.Scene, o: EmitterOptions): Emitter {
   return {
     points,
     step(delta, rate, spawn, gravity, drag, wind, windCoupling) {
-      carry += rate * delta;
+      carry += rate * Math.max(0, Math.min(delta, 0.1)) * scale;
       let toSpawn = Math.floor(carry);
       carry -= toSpawn;
       while (toSpawn-- > 0) {
@@ -117,11 +141,13 @@ function createEmitter(scene: THREE.Scene, o: EmitterOptions): Emitter {
   };
 }
 
-const RED_SCENARIOS = new Set(['emg-freefall', 'emg-blowout', 'emg-h2s', 'emg-lightning', 'emg-outrigger']);
-const SPARK_SCENARIOS = new Set(['emg-freefall', 'emg-charge', 'emg-chain', 'emg-overpull']);
-
+// Scenario groupings for strobe and effect color schemes
+const RED_SCENARIOS = new Set(['emg-freefall', 'emg-blowout', 'emg-h2s', 'emg-lightning', 'emg-outrigger', 'emg-overpull', 'emg-engine', 'emg-hydraulic', 'emg-bopair']);
+const SPARK_SCENARIOS = new Set(['emg-freefall', 'emg-chain', 'emg-overpull']);
+const WIND_SCENARIOS = new Set(['emg-wind']);
 export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnchors): EmergencyEffects {
-  // --- Strobe beacons ------------------------------------------------------------
+  scene.userData.emergencyParticleScale = a.particleScale ?? 1;
+  // --- Strobe beacons (distinct per scenario class) --------------------------------
   const lensMat = new THREE.MeshStandardMaterial({ color: 0xffa000, emissive: 0xff8c00, emissiveIntensity: 0.15, roughness: 0.3, transparent: true, opacity: 0.9 });
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.5, metalness: 0.6 });
   const baseMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.7, metalness: 0.3 });
@@ -152,41 +178,58 @@ export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnc
   });
   a.beaconHeads.forEach((h, i) => addBeacon(h, 0.5 + i * 0.29));
 
-  // --- Particle systems ----------------------------------------------------------
+  // --- Particle systems (one set per emitter type) ---------------------------------
   const sparks = createEmitter(scene, { count: 500, color: 0xffb347, size: 0.06, additive: true, opacity: 1 });
   const spray = createEmitter(scene, { count: 900, color: 0x4a3b2a, size: 0.16, opacity: 0.75 });
   const smoke = createEmitter(scene, { count: 450, color: 0x2b2b2b, size: 0.9, opacity: 0.5 });
+  const steam = createEmitter(scene, { count: 600, color: 0xe8eef2, size: 0.8, opacity: 0.4 });
+  const windParticles = createEmitter(scene, { count: 700, color: 0xaabbcc, size: 0.12, opacity: 0.6 });
+  const chainWear = createEmitter(scene, { count: 300, color: 0x8b8b8b, size: 0.08, opacity: 0.7 });
+
   const smokeMat = smoke.points.material as THREE.PointsMaterial;
   const sprayMat = spray.points.material as THREE.PointsMaterial;
+  const steamMat = steam.points.material as THREE.PointsMaterial;
+  const windMat = windParticles.points.material as THREE.PointsMaterial;
+  const chainMat = chainWear.points.material as THREE.PointsMaterial;
+
   const rand = (s = 1) => (Math.random() * 2 - 1) * s;
+
+  const audio = createEmergencyAudioController();
+  const faults = createMechanicalFaults(scene, a);
 
   const update = (f: EmergencyEffectsFrame) => {
     const id = f.scenarioId;
     const alarm = f.alarmTier !== 'none';
     const active = alarm || !!id;
 
-    // Beacons: rotating-strobe look (sharp double pulse), red for critical events.
-    const red = f.alarmTier === 'freefall' || f.alarmTier === 'emergency' || (id ? RED_SCENARIOS.has(id) : false);
-    const hex = red ? 0xff1a1a : 0xff8c00;
+    audio.update(id, f.time);
+    faults.update(id, f.time);
+
+    // --- Beacons: rotating-strobe look (sharp double pulse), color by scenario -----
+    const isRed = RED_SCENARIOS.has(id ?? '');
+    const isWind = WIND_SCENARIOS.has(id ?? '');
+    const hex = isRed ? 0xff1a1a : isWind ? 0x4da6ff : 0xff8c00;
+
     for (const b of beacons) {
       const m = b.lens.material as THREE.MeshStandardMaterial;
       if (!active) { b.light.intensity = 0; b.light.visible = false; m.emissiveIntensity = 0.15; continue; }
-      const cycle = (f.time * (red ? 2.4 : 1.6) + b.phase) % 1;
+      const cycle = (f.time * (isRed ? 2.4 : 1.6) + b.phase) % 1;
       const pulse = cycle < 0.08 || (cycle > 0.16 && cycle < 0.24) ? 1 : 0.05;
       b.light.visible = true;
       b.light.color.setHex(hex);
       b.light.intensity = pulse * 18;
-      m.color.setHex(red ? 0xff3030 : 0xffa000);
+      m.color.setHex(isRed ? 0xff3030 : isWind ? 0x5eb3ff : 0xffa000);
       m.emissive.setHex(hex);
       m.emissiveIntensity = 0.3 + pulse * 4;
     }
 
-    // Sparks at the gripper: slip = intermittent, free-fall = continuous shower.
+    // --- Sparks at the gripper: slip = intermittent, free-fall = continuous shower ----
     const slipLevel = f.alarmTier === 'freefall' || id === 'emg-freefall' ? 1
       : f.alarmTier === 'slip' || f.alarmTier === 'emergency' ? 0.45
       : id && SPARK_SCENARIOS.has(id) ? 0.3 : 0;
     const rodDir = f.rodSpeedFtPerMin < -0.1 ? -1 : 1;
     const sparkRate = slipLevel > 0 ? 260 * slipLevel * (0.5 + 0.5 * Math.max(0, Math.sin(f.time * 13))) : 0;
+
     sparks.step(f.delta, sparkRate, (p, v) => {
       const ang = Math.random() * Math.PI * 2;
       p.set(a.gripper.x + Math.cos(ang) * 0.06, a.gripper.y + rand(0.25), a.gripper.z + Math.sin(ang) * 0.06);
@@ -195,39 +238,82 @@ export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnc
       return 0.25 + Math.random() * 0.45;
     }, 9.8, 0.6, f.wind, 0);
 
-    // Wellhead / BOP spray: blowout = dark well fluid jetting up; hydraulic = red
-    // hydraulic oil mist at the BOP; BOP air = white fog puffs.
+    // --- Wellhead / BOP spray: scenario-specific origin, color, and dynamics --------
     let sprayRate = 0;
     let sprayHex = 0x4a3b2a;
-    let origin = a.wellheadLeak;
-    let up = 9, spread = 1.6, life = 1.6, gravity = 6;
-    if (id === 'emg-blowout') { sprayRate = 420; }
-    else if (id === 'emg-hydraulic') { sprayRate = 160; sprayHex = 0xb5462b; origin = a.bop; up = 2.5; spread = 3.2; life = 0.9; }
-    else if (id === 'emg-bopair') { sprayRate = 120; sprayHex = 0xe8eef2; origin = a.bop; up = 1.2; spread = 1.8; life = 1.2; gravity = -0.4; }
+    let sprayOrigin = a.wellheadLeak;
+    let sprayUp = 9, spraySpread = 1.6, sprayLife = 1.6, sprayGravity = 6;
+
+    if (id === 'emg-blowout') { sprayRate = 420; } // Dark mud upward
+    else if (id === 'emg-hydraulic') { sprayRate = 160; sprayHex = 0xb5462b; sprayOrigin = a.bop; sprayUp = 2.5; spraySpread = 3.2; sprayLife = 0.9; } // Red hydraulic mist
+    else if (id === 'emg-bopair') { sprayRate = 120; sprayHex = 0xe8eef2; sprayOrigin = a.bop; sprayUp = 1.2; spraySpread = 1.8; sprayLife = 1.2; sprayGravity = -0.4; } // White air fog
+    // Charge pressure failure is shown on the charge circuit indicator, not as a well leak.
+    else if (id === 'emg-chain') { sprayRate = 140; sprayHex = 0xc0a080; sprayOrigin = a.gripper; sprayUp = 0.5; spraySpread = 2.0; sprayLife = 0.6; sprayGravity = 8; } // Oiler failure spray (downward)
+
     if (sprayRate > 0) sprayMat.color.setHex(sprayHex);
     spray.step(f.delta, sprayRate, (p, v) => {
-      p.set(origin.x + rand(0.15), origin.y + rand(0.1), origin.z + rand(0.15));
+      p.set(sprayOrigin.x + rand(0.15), sprayOrigin.y + rand(0.1), sprayOrigin.z + rand(0.15));
       const side = Math.random() * Math.PI * 2;
-      const r = Math.random() * spread;
-      v.set(Math.cos(side) * r, up * (0.6 + Math.random() * 0.6), Math.sin(side) * r);
-      return life * (0.6 + Math.random() * 0.6);
-    }, gravity, 0.4, f.wind, 0.6);
+      const r = Math.random() * spraySpread;
+      v.set(Math.cos(side) * r, sprayUp * (0.6 + Math.random() * 0.6), Math.sin(side) * r);
+      return sprayLife * (0.6 + Math.random() * 0.6);
+    }, sprayGravity, 0.4, f.wind, 0.6);
 
-    // Engine smoke (black, dense) for engine failure; white steam for overheat.
+    // --- Engine smoke (black, dense) for engine failure; white steam for overheat ----
     let smokeRate = 0;
     if (id === 'emg-engine') { smokeRate = 40; smokeMat.color.setHex(0x1f1f1f); smokeMat.opacity = 0.55; }
-    else if (id === 'emg-overheat') { smokeRate = 30; smokeMat.color.setHex(0xe5e7eb); smokeMat.opacity = 0.35; }
+    else if (id === 'emg-overheat') { smokeRate = 0; } // Use steam instead for overheat
     smoke.step(f.delta, smokeRate, (p, v) => {
       p.set(a.engine.x + rand(0.3), a.engine.y + rand(0.15), a.engine.z + rand(0.3));
       v.set(rand(0.3), 1.6 + Math.random(), rand(0.3));
       return 3 + Math.random() * 2;
     }, -0.2, 0.25, f.wind, 0.8);
+
+    // --- Steam plumes for hydraulic overheat (white vapor) -------------------------
+    let steamRate = 0;
+    if (id === 'emg-overheat') { steamRate = 35; steamMat.color.setHex(0xe5e7eb); steamMat.opacity = 0.35; }
+    steam.step(f.delta, steamRate, (p, v) => {
+      p.set(a.engine.x + rand(0.4), a.engine.y + 0.5 + rand(0.2), a.engine.z + rand(0.4));
+      v.set(rand(0.5), 2.2 + Math.random() * 0.8, rand(0.5));
+      return 2.5 + Math.random() * 1.5;
+    }, -0.3, 0.2, f.wind, 0.9);
+
+    // --- Wind-driven particles for high wind scenario -------
+    let windRate = 0;
+    if (id === 'emg-wind') { windRate = 200; windMat.color.setHex(0xaabbcc); windMat.opacity = 0.6; }
+    windParticles.step(f.delta, windRate, (p, v) => {
+      p.set(a.gripper.x + rand(3), a.gripper.y + rand(2), a.gripper.z + rand(3));
+      const windStrength = 3 + Math.random() * 2;
+      v.set(f.wind.x * windStrength + rand(1), rand(0.5), f.wind.z * windStrength + rand(1));
+      return 1.5 + Math.random() * 1;
+    }, -0.1, 0.3, f.wind, 1.2);
+
+    // --- Chain wear particles for chain over-tension --------
+    let chainRate = 0;
+    if (id === 'emg-chain') { chainRate = 150; chainMat.color.setHex(0x8b8b8b); chainMat.opacity = 0.7; }
+    chainWear.step(f.delta, chainRate, (p, v) => {
+      p.set(a.gripper.x + rand(0.2), a.gripper.y + rand(0.15), a.gripper.z + rand(0.2));
+      const ang = Math.random() * Math.PI * 2;
+      const sp = 1 + Math.random() * 2;
+      v.set(Math.cos(ang) * sp, rand(1.5), Math.sin(ang) * sp);
+      return 0.3 + Math.random() * 0.4;
+    }, 5, 0.8, f.wind, 0.2);
+
+    // Mechanical fault demonstrators above provide detector, pressure, chain,
+    // tension, outrigger settlement and lightning geometry for their drills.
   };
 
   return {
     update,
     dispose() {
-      sparks.dispose(); spray.dispose(); smoke.dispose();
+      audio.dispose();
+      faults.dispose();
+      sparks.dispose();
+      spray.dispose();
+      smoke.dispose();
+      steam.dispose();
+      windParticles.dispose();
+      chainWear.dispose();
     },
   };
 }

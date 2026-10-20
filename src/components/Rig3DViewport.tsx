@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPullingUnitCrew } from './three/pullingUnitCrew';
+import { createFieldSky } from './three/fieldSky';
+import { GRAPHICS_PRESETS, GraphicsQuality, readGraphicsQuality } from './three/graphicsQuality';
 import { addServiceReelDetails, buildReelDrum, reelRpmForSpeed, cradleToReelLocal, createTiltedCradle, reelLocalToCradle, REEL_GEOM } from './three/serviceReelDetails';
 import { createMeshKit } from './three/meshKit';
 import { createTerrainSampler, GradedPad } from './three/fieldTerrain';
@@ -476,6 +479,12 @@ function loadEquipmentModel(
       root.position.x -= alignX - (opts.offsetX ?? 0);
       root.position.z -= alignZ - (opts.offsetZ ?? 0);
       root.position.y -= box2.min.y;
+      let owner: THREE.Object3D = parent;
+      while (owner.parent) owner = owner.parent;
+      if (owner.userData.disposed) {
+        root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.geometry.dispose(); (Array.isArray(m.material) ? m.material : [m.material]).forEach(mat => mat.dispose()); } });
+        return;
+      }
       parent.add(root);
       opts.onLoaded?.(root);
     },
@@ -530,6 +539,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
   const mgMastPartsRef = useRef<THREE.Object3D[]>([]);
   /** Truck deck footprint (world) — crane loads can rest on it. */
   const truckDeckRef = useRef({ minX: MG_UNIT_X - 1.51, maxX: MG_UNIT_X + 5.96, minZ: -1.3, maxZ: 1.43, top: 1.38 });
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>(readGraphicsQuality);
   const [showStats, setShowStats] = useState(true);
   // In cab mode the bottom HUD dock is redundant (real console is docked below).
   const [showHudControls, setShowHudControls] = useState(!cabMode);
@@ -698,7 +708,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const box = new THREE.Box3();
     const size = new THREE.Vector3();
     const visit = (obj: THREE.Object3D) => {
-      if (!obj.visible || skip.has(obj)) return;
+      if (!obj.visible || skip.has(obj) || obj.name === 'PullingUnitCrew' || obj.name === 'FieldSky' || obj.name === 'EmergencyFaultDemonstrators') return;
       const mesh = obj as THREE.Mesh;
       // Curved tubes (rod line, hoses) have mostly-empty AABBs — not usable as solids.
       if (mesh.isMesh && mesh.geometry && mesh.geometry.type !== 'TubeGeometry') {
@@ -917,6 +927,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     const width = containerRef.current.clientWidth || 800;
     const height = containerRef.current.clientHeight || 450;
 
+    const quality = GRAPHICS_PRESETS[graphicsQuality];
+    try { localStorage.setItem('corod-graphics-quality', graphicsQuality); } catch { /* optional persistence */ }
     // 1. Scene
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -932,12 +944,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // 3. Renderer
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
-      antialias: true,
+      antialias: graphicsQuality === 'ultra' || graphicsQuality === 'high',
       powerPreference: 'high-performance',
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
+    renderer.localClippingEnabled = true;
+    renderer.shadowMap.enabled = quality.shadows > 0;
     // VSMShadowMap gives soft shadows without the PCFSoftShadowMap deprecation
     // warning emitted by newer Three.js builds.
     renderer.shadowMap.type = THREE.VSMShadowMap;
@@ -954,8 +967,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     sunLight.position.set(30, 45, 25);
     sunLight.castShadow = true;
     // Item 36/97: Higher shadow map resolution for crisper shadows
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.mapSize.set(Math.max(1, quality.shadows), Math.max(1, quality.shadows));
     sunLight.shadow.camera.near = 5;
     sunLight.shadow.camera.far = 100;
     sunLight.shadow.camera.left = -30;
@@ -1031,6 +1043,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       ],
       lampMaterials: [...(site ? [site.lampMaterial] : []), nightLights.lampMaterial],
       center: new THREE.Vector3((MG_UNIT_X + WELL_X) / 2, 0, 0),
+      particleScale: quality.particles,
     });
     scene.add(sunLight.target);
 
@@ -1042,6 +1055,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       wellheadLeak: new THREE.Vector3(WELL_X, WELLHEAD_TOP_Y + 0.2, 0),
       bop: new THREE.Vector3(WELL_X, BOP_BASE_Y + BOP_H * 0.45, 0),
       engine: new THREE.Vector3(MG_UNIT_X - 1.2, 4.6, 1.1),
+      outrigger: new THREE.Vector3(MG_UNIT_X + OG.AX, 0.05, OG.ARM_OUTER_Z),
+      particleScale: quality.particles,
     });
 
     // 5d. Floorhand at the wellhead: relays hand signals to the console operator.
@@ -1059,6 +1074,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
     scene.add(floorhand.root);
     floorhandRef.current = floorhand;
+    const pullingCrew = createPullingUnitCrew(scene, { groundAt: terrain.groundAt });
+    const fieldSky = createFieldSky(scene, quality.clouds);
 
     // 5e. Knuckle crane (Fassi F215C) at the rear of the MG deck. Re-mounted on
     // the truck model's own crane pedestal once mg_truck.glb has loaded.
@@ -1454,6 +1471,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 6b. Atmosphere, emergencies and the floorhand.
       const liveEnv = liveState.environment ?? DEFAULT_ENVIRONMENT;
       const scenarioId = liveState.emergencyScenarioId;
+      pullingCrew.update(delta, time / 1000, scenarioId);
+      fieldSky.update(liveEnv, time / 1000, cameraRef.current?.position ?? camera.position);
       // A high-wind drill forces a visible gale regardless of the set weather.
       const effectiveEnv: EnvironmentState = scenarioId === 'emg-wind'
         ? { ...liveEnv, windSpeedMph: Math.max(liveEnv.windSpeedMph, 38), weather: liveEnv.weather === 'clear' ? 'windy' : liveEnv.weather }
@@ -1528,6 +1547,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           sd.ext += ((extended ? 1 : 0) - sd.ext) * k;
           sd.low += ((lowered && sd.ext > 0.95 ? 1 : 0) - sd.low) * k;
           layoutMgOutrigger(sd);
+          const settling = scenarioId === 'emg-outrigger' && sd.side === 1 && sd.low > 0.8;
+          sd.pad.rotation.z = settling ? -0.12 : 0;
+          if (settling) {
+            sd.pad.position.y -= 0.12 + Math.sin(time * 0.0015) * 0.025;
+            sd.leg.position.y -= 0.06;
+          }
         }
       }
 
@@ -1644,6 +1669,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     return () => {
       if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
       resizeObserver.disconnect();
+      scene.userData.disposed = true;
+      injectorDetailsRef.current = null;
       // Points/Lines from the atmosphere & emergency systems aren't Meshes, so
       // the traverse below would miss them.
       atmosphereRef.current?.dispose();
@@ -1680,9 +1707,10 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           }
         }
       });
+      fieldSky.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [graphicsQuality]);
 
 
   // ---------------------------------------------------------------------------
@@ -2514,6 +2542,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     // pipe rack / trunk lines, and the near-lease flowlines.
     fieldDevRef.current?.dispose();
     fieldDevRef.current = addFieldDevelopment(scene, {
+      detailDistance: GRAPHICS_PRESETS[graphicsQuality].sceneryDistance,
       groundAt: terrain.groundAt,
       leaseBattery: { x: PRODUCTION_FACILITY.x + 10, z: PRODUCTION_FACILITY.z },
       leaseInlet: { x: LEASE_HEADER_X - 6, z: TANK_BATTERY.z - 7 },
@@ -4584,6 +4613,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       {/* 3D WebGL Canvas Container */}
       <div ref={containerRef} className="w-full h-full relative cursor-grab active:cursor-grabbing">
         <canvas
+          key={graphicsQuality}
           ref={canvasRef}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -4627,6 +4657,16 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
           {/* Environmental Controls (Day/Night, HUD Toggle, Orbit/Pan) */}
           <div className="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-lg pointer-events-auto">
+            <select
+              aria-label="Graphics quality"
+              title="Graphics quality: resolution, shadow memory, weather particles and scenery detail"
+              value={graphicsQuality}
+              onChange={e => setGraphicsQuality(e.target.value as GraphicsQuality)}
+              className="bg-slate-800 text-slate-200 text-[11px] rounded-lg px-2 py-1.5 border border-slate-600"
+            >
+              <option value="ultra">Ultra</option><option value="high">High</option>
+              <option value="medium">Medium</option><option value="low">Low</option>
+            </select>
             {/* Time of day / weather (synced; also instructor-controllable) */}
             <button
               type="button"

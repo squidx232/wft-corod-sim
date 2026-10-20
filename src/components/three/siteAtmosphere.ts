@@ -24,6 +24,7 @@ export interface AtmosphereTargets {
   lampMaterials: THREE.MeshStandardMaterial[];
   /** World-space point the sun orbits around and particles are spawned around. */
   center: THREE.Vector3;
+  particleScale?: number;
 }
 
 export interface AtmosphereFrame {
@@ -112,6 +113,8 @@ export function resolveLook(env: EnvironmentState): Look & { rain: number; dust:
 
 export function createSiteAtmosphere(t: AtmosphereTargets): SiteAtmosphere {
   const { scene, renderer, ambient, sun, sky, workLights, lampMaterials, center } = t;
+  const rainCount = Math.max(1, Math.floor(RAIN_COUNT * (t.particleScale ?? 1)));
+  const dustCount = Math.max(1, Math.floor(DUST_COUNT * (t.particleScale ?? 1)));
   if (!(scene.fog instanceof THREE.FogExp2)) scene.fog = new THREE.FogExp2(0xbfd4e6, 0.0045);
   const fog = scene.fog as THREE.FogExp2;
   if (!(scene.background instanceof THREE.Color)) scene.background = new THREE.Color(0x9fc0dc);
@@ -131,9 +134,9 @@ export function createSiteAtmosphere(t: AtmosphereTargets): SiteAtmosphere {
   let nextFlashAt = 2;
 
   // --- Rain: short line streaks, slanted by the wind -------------------------------
-  const rainPos = new Float32Array(RAIN_COUNT * 6);
-  const rainSeed = new Float32Array(RAIN_COUNT * 3);
-  for (let i = 0; i < RAIN_COUNT; i++) {
+  const rainPos = new Float32Array(rainCount * 6);
+  const rainSeed = new Float32Array(rainCount * 3);
+  for (let i = 0; i < rainCount; i++) {
     rainSeed[i * 3] = (Math.random() * 2 - 1) * BOX.half;
     rainSeed[i * 3 + 1] = Math.random() * BOX.height;
     rainSeed[i * 3 + 2] = (Math.random() * 2 - 1) * BOX.half;
@@ -147,8 +150,8 @@ export function createSiteAtmosphere(t: AtmosphereTargets): SiteAtmosphere {
   scene.add(rain);
 
   // --- Dust: soft drifting points ----------------------------------------------------
-  const dustPos = new Float32Array(DUST_COUNT * 3);
-  for (let i = 0; i < DUST_COUNT; i++) {
+  const dustPos = new Float32Array(dustCount * 3);
+  for (let i = 0; i < dustCount; i++) {
     dustPos[i * 3] = (Math.random() * 2 - 1) * BOX.half;
     dustPos[i * 3 + 1] = Math.pow(Math.random(), 2) * 9;
     dustPos[i * 3 + 2] = (Math.random() * 2 - 1) * BOX.half;
@@ -229,7 +232,7 @@ export function createSiteAtmosphere(t: AtmosphereTargets): SiteAtmosphere {
       rainMat.opacity = 0.55 * cur.rain;
       const fall = 14;
       const streak = 0.55;
-      for (let i = 0; i < RAIN_COUNT; i++) {
+      for (let i = 0; i < rainCount; i++) {
         let y = rainSeed[i * 3 + 1] - fall * delta;
         if (y < 0) y += BOX.height;
         rainSeed[i * 3 + 1] = y;
@@ -251,7 +254,7 @@ export function createSiteAtmosphere(t: AtmosphereTargets): SiteAtmosphere {
       dust.position.set(cameraPosition.x, 0, cameraPosition.z);
       const drift = Math.max(1.5, wind.length());
       const dir = wind.lengthSq() > 0.01 ? wind.clone().normalize() : new THREE.Vector3(1, 0, 0);
-      for (let i = 0; i < DUST_COUNT; i++) {
+      for (let i = 0; i < dustCount; i++) {
         const o = i * 3;
         dustPos[o] = wrap(dustPos[o] + (dir.x * drift + Math.sin(time * 0.7 + i) * 0.4) * delta, BOX.half);
         dustPos[o + 2] = wrap(dustPos[o + 2] + (dir.z * drift + Math.cos(time * 0.6 + i * 1.3) * 0.4) * delta, BOX.half);
