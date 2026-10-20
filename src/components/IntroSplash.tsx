@@ -31,7 +31,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onEnter }) => {
       {/* Blurred hero backdrop */}
       <div
         className="intro-splash__bg"
-        style={{ backgroundImage: "url('/branding/intro-bg.jfif')" }}
+        style={{ backgroundImage: "url('/branding/intro-bg.webp')" }}
       />
       <div className="intro-splash__scrim" />
 

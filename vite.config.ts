@@ -11,10 +11,11 @@ import {defineConfig, type Plugin} from 'vite';
  */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
-  // React inline style attributes + the Google Fonts stylesheet.
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com data:",
+  // 'wasm-unsafe-eval' lets the meshopt decoder (WebAssembly) unpack the GLB models.
+  "script-src 'self' 'wasm-unsafe-eval'",
+  // React inline style attributes. Fonts are self-hosted (@fontsource).
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   "img-src 'self' data: blob:",
   "media-src 'self' blob: data:",
   // GLTFLoader / audio fetches; embedded GLB textures are decoded via blob: URLs.
@@ -24,6 +25,23 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
 ].join('; ');
+
+/** HTTP response headers for `vite preview` (and documented for the production host). */
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': `${CONTENT_SECURITY_POLICY}; frame-ancestors 'self'`,
+  'X-Frame-Options': 'SAMEORIGIN',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+};
+
+/** Dev/preview Host allow-list from ALLOWED_HOSTS (unset = Vite default: localhost + IPs only). */
+const ALLOWED_HOSTS: true | string[] | undefined = (() => {
+  const raw = process.env.ALLOWED_HOSTS?.trim();
+  if (!raw) return undefined;
+  if (raw === 'all' || raw === 'true') return true;
+  return raw.split(',').map((h) => h.trim()).filter(Boolean);
+})();
 
 function securityHeadersPlugin(): Plugin {
   return {
@@ -63,15 +81,22 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // Allow access through hosted preview proxies (e.g. sandbox live preview),
-      // which forward requests with a non-localhost Host header that Vite 6
-      // would otherwise reject with 403 "Blocked request".
-      allowedHosts: true as const,
+      // Host-header allow-list (DNS-rebinding protection). Vite's default only
+      // accepts localhost / IP hosts. Opt in explicitly for hosted preview
+      // proxies: ALLOWED_HOSTS=all, or ALLOWED_HOSTS=my.proxy.dev,other.host
+      allowedHosts: ALLOWED_HOSTS,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify - file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    preview: {
+      allowedHosts: ALLOWED_HOSTS,
+      // Production-like security headers (incl. click-jacking protection, which
+      // cannot be expressed in a <meta> CSP). Mirror these on the real host —
+      // see public/_headers for Netlify / Cloudflare Pages.
+      headers: SECURITY_HEADERS,
     },
   };
 });

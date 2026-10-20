@@ -90,6 +90,20 @@ try {
     atmosphere.dispose(); return n;
   };
   assert.ok(weatherCount(0.18) < weatherCount(1)*0.2);
+  // --- perf: compressed (meshopt + quantized) models decode with names intact ---
+  {
+    const { readFile } = await import('node:fs/promises');
+    const { GLTFLoader } = await vite.ssrLoadModule('three/examples/jsm/loaders/GLTFLoader.js');
+    const { MeshoptDecoder } = await vite.ssrLoadModule('three/examples/jsm/libs/meshopt_decoder.module.js');
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const parse = async f => { const b = await readFile(new URL('../public/models/' + f, import.meta.url)); return new Promise((res, rej) => loader.parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), '', res, rej)); };
+    const inj = (await parse('injector.glb')).scene;
+    const named = n => { let hit = null; inj.traverse(o => { if (!hit && o.isMesh && o.name.startsWith(n)) hit = o; }); return hit; };
+    for (const n of ['Chain_L_Block', 'Sprocket_R_Top', 'Injector_FrameBody', 'Injector_ChainPocket_L_Cutter', 'SqueezeCyl_L_Bot']) assert.ok(named(n), 'injector mesh keeps name ' + n);
+    const size = new THREE.Box3().setFromObject(inj).getSize(new THREE.Vector3());
+    assert.ok(Math.abs(size.y - 3.358) < 0.01 && Math.abs(size.x - 1.07) < 0.01, 'injector bounds preserved ' + size.toArray());
+    for (const f of ['mg_truck.glb', 'wellhead.glb', 'bop.glb']) { let meshes = 0; (await parse(f)).scene.traverse(o => { if (o.isMesh) meshes++; }); assert.ok(meshes > 100, f + ' decodes'); }
+  }
   // --- perf: engine loop compaction is mono, bounded and seamless ---------
   const { compactLoopBuffer } = await vite.ssrLoadModule('/src/utils/audio.ts');
   const mkBuf = (ch, len, sr) => { const data = Array.from({length: ch}, () => new Float32Array(len)); return { numberOfChannels: ch, length: len, sampleRate: sr, duration: len / sr, getChannelData: c => data[c] }; };
@@ -116,5 +130,18 @@ try {
   assert.ok(isInstructorCommand({ kind: 'trigger-emergency', scenarioId: 'emg-h2s' }));
   assert.ok(!isInstructorCommand({ kind: 'trigger-emergency' }));
   assert.ok(!isInstructorCommand({ kind: 'rm -rf' }));
-  console.log('PASS: chains inside the housing gripping the rod, crew working on the carrier + muster evacuation, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations; seamless compact engine loop; storage/broadcast guards');
+  // --- perf: render isolation store ---------------------------------------
+  const S = await vite.ssrLoadModule('/src/state/simStore.tsx');
+  let calls = 0;
+  const unsub = S.simStore.subscribe(() => { calls++; });
+  const st1 = { tick: 1 }; S.simStore.publish(st1); S.simStore.publish(st1);
+  assert.equal(calls, 1, 'same state object does not re-notify');
+  assert.equal(S.simStore.get(), st1);
+  unsub(); S.simStore.publish({ tick: 2 });
+  assert.equal(calls, 1, 'unsubscribed listener is not called');
+  const f = () => 0;
+  assert.ok(S.propsEqualExcept({ state: 1, a: f, b: 2 }, { state: 9, a: f, b: 2 }, ['state']));
+  assert.ok(!S.propsEqualExcept({ state: 1, b: 2 }, { state: 1, b: 3 }, ['state']));
+  assert.ok(S.shallowEqual({ x: 1, y: 'a' }, { x: 1, y: 'a' }) && !S.shallowEqual({ x: 1 }, { x: 2 }));
+  console.log('PASS: chains inside the housing gripping the rod, crew working on the carrier + muster evacuation, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations; compressed GLBs decode with names; seamless compact engine loop; storage/broadcast guards; isolated viewport store');
 } finally { await vite.close(); }

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { simStore } from './state/simStore';
 import {
   DEFAULT_ENVIRONMENT,
   EnvironmentState,
@@ -488,6 +489,9 @@ function boostedRunSpeed(rawFtPerMin: number): number {
 export default function App() {
   const { t, tData, lang, toggle: toggleLang } = useT();
   const [state, setState] = useState<SimulatorState>(INITIAL_STATE);
+  // Mirror each committed state into the external store so render-isolated
+  // children (the 3D viewport) can subscribe to just the slices they display.
+  useLayoutEffect(() => { simStore.publish(state); }, [state]);
   const viewMode = useRef(getViewMode()).current;
   const isSecondary = viewMode !== 'full';
 
