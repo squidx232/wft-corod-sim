@@ -162,9 +162,16 @@ export function loadBindings(): BindingMap {
       if (memoryBindings) return memoryBindings;
       return structuredCloneSafe(DEFAULT_BINDINGS);
     }
-    const parsed = JSON.parse(raw) as BindingMap;
-    // Merge with defaults so newly-added controls always have an entry.
-    const merged = { ...structuredCloneSafe(DEFAULT_BINDINGS), ...parsed };
+    const parsed: unknown = JSON.parse(raw);
+    // Merge with defaults so newly-added controls always have an entry; only
+    // known controls and well-typed binding fields are accepted.
+    const merged = structuredCloneSafe(DEFAULT_BINDINGS);
+    if (isRecord(parsed)) {
+      for (const id of Object.keys(merged)) {
+        const b = parsed[id];
+        if (isRecord(b)) merged[id] = { ...merged[id], ...sanitizeFields<Binding>(b, BINDING_FIELDS) };
+      }
+    }
     if (import.meta.env?.DEV) console.info('[input] loaded bindings from localStorage');
     return merged;
   } catch (err) {
@@ -213,7 +220,8 @@ export function loadSharedAxes(): SharedAxisConfig {
   try {
     const raw = localStorage.getItem(AXES_KEY);
     if (!raw) return memoryAxes ?? { ...DEFAULT_SHARED_AXES };
-    return { ...DEFAULT_SHARED_AXES, ...(JSON.parse(raw) as Partial<SharedAxisConfig>) };
+    const parsed: unknown = JSON.parse(raw);
+    return { ...DEFAULT_SHARED_AXES, ...(isRecord(parsed) ? sanitizeFields<SharedAxisConfig>(parsed, AXES_FIELDS) : {}) };
   } catch {
     return memoryAxes ?? { ...DEFAULT_SHARED_AXES };
   }
@@ -226,6 +234,37 @@ export function saveSharedAxes(cfg: SharedAxisConfig) {
   } catch {
     /* ignore */
   }
+}
+
+type FieldKind = 'string' | 'number' | 'boolean';
+const BINDING_FIELDS: Record<keyof Binding, FieldKind> = {
+  key: 'string', gamepadButton: 'number', gamepadAxis: 'number', axisInvert: 'boolean',
+  keyInc: 'string', keyDec: 'string', gamepadButtonInc: 'number', gamepadButtonDec: 'number',
+  selectorKey: 'string', selectorButton: 'number', axisModeOverride: 'string',
+};
+const AXES_FIELDS: Record<keyof SharedAxisConfig, FieldKind> = {
+  movementAxis: 'number', movementInvert: 'boolean', valueAxis: 'number', valueInvert: 'boolean',
+  movementUpKey: 'string', movementDownKey: 'string', valueUpKey: 'string', valueDownKey: 'string',
+  movementIncButton: 'number', movementDecButton: 'number', valueIncButton: 'number', valueDecButton: 'number',
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Keep only schema fields whose value matches the declared kind (or null). */
+function sanitizeFields<T>(src: Record<string, unknown>, schema: Record<string, FieldKind>): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [field, kind] of Object.entries(schema)) {
+    if (!Object.prototype.hasOwnProperty.call(src, field)) continue;
+    const v = src[field];
+    if (v === null && kind !== 'boolean') out[field] = null;
+    else if (kind === 'number' ? typeof v === 'number' && Number.isFinite(v) : typeof v === kind && (kind !== 'string' || (v as string).length <= 64)) out[field] = v;
+  }
+  if (out.axisModeOverride !== undefined && out.axisModeOverride !== null && out.axisModeOverride !== 'rate' && out.axisModeOverride !== 'absolute') {
+    delete out.axisModeOverride;
+  }
+  return out as Partial<T>;
 }
 
 function structuredCloneSafe<T>(v: T): T {

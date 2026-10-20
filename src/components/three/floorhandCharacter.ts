@@ -101,6 +101,10 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
   const leftHand = new THREE.Vector3();
   const rightHand = new THREE.Vector3();
   const tmp = new THREE.Vector3();
+  // Per-frame scratch / constant objects (update() runs every frame).
+  const _gazeLocal = new THREE.Vector3();
+  const REST_LEFT = new THREE.Vector3(0.02, 0.84, -0.27);
+  const REST_RIGHT = new THREE.Vector3(0.03, 0.84, 0.27);
   let initialised = false;
   let yaw = 0;
   let pitch = 0;
@@ -366,7 +370,7 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     if (!initialised) gaze.copy(gazeTarget);
     gaze.lerp(gazeTarget, damp(f.alarm ? 8 : 4, dt));
 
-    const local = hips.worldToLocal(gaze.clone()).sub(tmp.set(0, spine.position.y + neck.position.y, 0));
+    const local = hips.worldToLocal(_gazeLocal.copy(gaze)).sub(tmp.set(0, spine.position.y + neck.position.y, 0));
     const targetYaw = THREE.MathUtils.clamp(Math.atan2(-local.z, local.x), -1.2, 1.2);
     const targetPitch = THREE.MathUtils.clamp(Math.atan2(local.y - 0.2, Math.hypot(local.x, local.z)), -0.6, 0.5);
     yaw += (targetYaw - yaw) * damp(f.alarm ? 10 : 6, dt);
@@ -377,8 +381,8 @@ export function createFloorhandCharacter(kit: MeshKit, anchors: FloorhandAnchors
     root.updateMatrixWorld(true);
 
     // Hands
-    const restLeft = new THREE.Vector3(0.02, 0.84, -0.27);
-    const restRight = new THREE.Vector3(0.03, 0.84, 0.27);
+    const restLeft = REST_LEFT;
+    const restRight = REST_RIGHT;
     let leftGoal = bodyToWorld(restLeft);
     let rightGoal = bodyToWorld(restRight);
 

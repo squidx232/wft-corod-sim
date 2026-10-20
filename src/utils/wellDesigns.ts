@@ -3,6 +3,7 @@
  * leaderboard.ts. Presets are always merged in and cannot be overwritten.
  */
 import { WellDesign, WELL_DESIGN_PRESETS } from '../data/wellDesigns';
+import { isWellDesign, parseStoredArray } from './storageGuards';
 
 const DESIGNS_KEY = 'corod-well-designs-v1';
 const SELECTION_KEY = 'corod-well-design-selection-v1';
@@ -10,10 +11,7 @@ const SELECTION_KEY = 'corod-well-design-selection-v1';
 /** Load user-saved designs (excludes presets). */
 export function loadCustomWellDesigns(): WellDesign[] {
   try {
-    const raw = localStorage.getItem(DESIGNS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as WellDesign[];
-    if (!Array.isArray(parsed)) return [];
+    const parsed = parseStoredArray(localStorage.getItem(DESIGNS_KEY), isWellDesign);
     return parsed.filter((d) => !d.isPreset);
   } catch {
     return [];

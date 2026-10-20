@@ -27,6 +27,8 @@ class SoundSynthesizer {
   // samples at the start and remainder padding at the end), which the media
   // element does not trim.
   private engineBuffer: AudioBuffer | null = null;
+  /** True when engineBuffer was rebuilt by compactLoopBuffer (loops seamlessly end→start). */
+  private engineLoopSeamless = false;
   private engineSource: AudioBufferSourceNode | null = null;
   private engineLoopGain: GainNode | null = null;
   private enginePlaybackStarted = false;
@@ -134,7 +136,10 @@ class SoundSynthesizer {
         return this.ctx.decodeAudioData(data);
       })
       .then((buffer) => {
-        this.engineBuffer = buffer;
+        const ctx = this.ctx;
+        const compact = ctx ? compactLoopBuffer(ctx, buffer) : null;
+        this.engineBuffer = compact ?? buffer;
+        this.engineLoopSeamless = compact !== null;
         this.engineAudioReady = true;
         this.engineDecoding = false;
       })
@@ -166,7 +171,8 @@ class SoundSynthesizer {
       // residual click/gap at the loop boundary.
       const dur = this.engineBuffer.duration;
       const edge = Math.min(0.04, dur * 0.02); // up to 40ms, capped at 2% of clip
-      if (dur > edge * 2 + 0.05) {
+      // A compacted buffer is already crossfaded into a seamless loop.
+      if (!this.engineLoopSeamless && dur > edge * 2 + 0.05) {
         src.loopStart = edge;
         src.loopEnd = dur - edge;
       }
@@ -833,3 +839,41 @@ class SoundSynthesizer {
 }
 
 export const soundManager = new SoundSynthesizer();
+
+/**
+ * The engine-loop MP3 is ~2 minutes of 48 kHz stereo; decoded to float PCM it
+ * holds ~45 MB of RAM for the whole session. A steady idle/run engine drone
+ * does not need that much unique material, so keep a short MONO segment and
+ * equal-power crossfade its tail into its head so it loops seamlessly
+ * (≈ 3.8 MB at 48 kHz). Returns null when the clip is already short enough.
+ */
+export function compactLoopBuffer(
+  ctx: BaseAudioContext,
+  src: AudioBuffer,
+  maxSeconds = 20,
+  fadeSeconds = 0.35,
+  leadInSeconds = 0.05,
+): AudioBuffer | null {
+  const sr = src.sampleRate;
+  const lead = Math.round(leadInSeconds * sr);
+  const len = Math.round(maxSeconds * sr);
+  const fade = Math.round(fadeSeconds * sr);
+  if (fade <= 0 || lead + len + fade > src.length) return null;
+  const out = ctx.createBuffer(1, len, sr);
+  const dst = out.getChannelData(0);
+  const channels = Array.from({ length: src.numberOfChannels }, (_, c) => src.getChannelData(c));
+  const gain = 1 / channels.length;
+  const sample = (i: number) => {
+    let v = 0;
+    for (const ch of channels) v += ch[i];
+    return v * gain;
+  };
+  for (let i = 0; i < len; i++) dst[i] = sample(lead + i);
+  // Head i in [0, fade) blends from the audio that follows the segment's end
+  // (lead + len + i) into the head itself, so dst[len-1] → dst[0] is continuous.
+  for (let i = 0; i < fade; i++) {
+    const w = (i / fade) * (Math.PI / 2);
+    dst[i] = dst[i] * Math.sin(w) + sample(lead + len + i) * Math.cos(w);
+  }
+  return out;
+}

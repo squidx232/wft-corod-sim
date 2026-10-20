@@ -8,6 +8,7 @@ import {
   INJECTOR_PROFILE_PRESETS,
   MeasurementUnits,
 } from '../data/injectorProfiles';
+import { isInjectorProfile, isShortString, parseStoredArray } from './storageGuards';
 
 const PROFILES_KEY = 'corod-injector-profiles-v1';
 const SELECTION_KEY = 'corod-equipment-config-v1';
@@ -20,10 +21,7 @@ interface StoredSelection {
 /** Load user-created custom profiles (excludes presets). */
 export function loadCustomInjectorProfiles(): InjectorProfile[] {
   try {
-    const raw = localStorage.getItem(PROFILES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as InjectorProfile[];
-    if (!Array.isArray(parsed)) return [];
+    const parsed = parseStoredArray(localStorage.getItem(PROFILES_KEY), isInjectorProfile);
     return parsed.filter((p) => !p.isPreset);
   } catch {
     return [];
@@ -67,9 +65,10 @@ export function loadEquipmentSelection(): StoredSelection {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<StoredSelection>;
     return {
-      activeInjectorProfileId:
-        parsed.activeInjectorProfileId ?? fallback.activeInjectorProfileId,
-      measurementUnits: parsed.measurementUnits === 'metric' ? 'metric' : 'imperial',
+      activeInjectorProfileId: isShortString(parsed?.activeInjectorProfileId)
+        ? parsed.activeInjectorProfileId
+        : fallback.activeInjectorProfileId,
+      measurementUnits: parsed?.measurementUnits === 'metric' ? 'metric' : 'imperial',
     };
   } catch {
     return fallback;

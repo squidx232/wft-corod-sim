@@ -58,8 +58,13 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 function readInitialLang(): Lang {
   if (typeof window === 'undefined') return 'en';
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  return saved === 'ar' ? 'ar' : 'en';
+  try {
+    // Storage access throws (SecurityError) when cookies/site data are blocked
+    // or in some sandboxed iframes; never let that crash the app at startup.
+    return window.localStorage.getItem(STORAGE_KEY) === 'ar' ? 'ar' : 'en';
+  } catch {
+    return 'en';
+  }
 }
 
 function interpolate(str: string, vars?: Record<string, string | number>): string {

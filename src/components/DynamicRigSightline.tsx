@@ -1,8 +1,8 @@
-import { reelRpmForSpeed } from './three/serviceReelDetails';
+import { reelRpmForSpeed } from './three/serviceReelGeometry';
 import React, { useState } from 'react';
 import { SimulatorState } from '../types';
 import { RealtimeRodAnimationLayer } from './RealtimeRodAnimationLayer';
-import { Rig3DViewport } from './Rig3DViewport';
+import { Rig3DViewport } from './lazy';
 import { useT } from '../i18n';
 import {
   Wrench,

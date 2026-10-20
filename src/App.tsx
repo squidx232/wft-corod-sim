@@ -41,31 +41,33 @@ import { computeAssessmentReport } from './utils/assessmentScore';
 import { addLeaderboardEntry } from './utils/leaderboard';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import { AssessmentHud } from './components/AssessmentHud';
-import { AssessmentReportModal } from './components/AssessmentReportModal';
-import { LeaderboardModal } from './components/LeaderboardModal';
 import { IntroSplash } from './components/IntroSplash';
 import { useInputSystem } from './input/useInputSystem';
-import { ControlBindingsPanel } from './components/ControlBindingsPanel';
 import { InputStatusHud } from './components/InputStatusHud';
 import { StatusBanner } from './components/StatusBanner';
-import { GlossaryModal } from './components/GlossaryModal';
 import { soundManager } from './utils/audio';
 import { OperatorStationView } from './components/OperatorStationView';
 import { AuxiliaryPanels } from './components/AuxiliaryPanels';
 import { ScenarioRunner } from './components/ScenarioRunner';
-import { PerformanceAnalytics } from './components/PerformanceAnalytics';
-import { EmergencyDrillModal } from './components/EmergencyDrillModal';
-import { ManualReferenceModal } from './components/ManualReferenceModal';
-import { JsaModal } from './components/JsaModal';
-import { EngineStartModal } from './components/EngineStartModal';
 import { EmergencyResponseHud } from './components/EmergencyResponseHud';
-import { Rig3DViewport } from './components/Rig3DViewport';
+import {
+  LeaderboardModal,
+  AssessmentReportModal,
+  GlossaryModal,
+  ManualReferenceModal,
+  JsaModal,
+  EngineStartModal,
+  EmergencyDrillModal,
+  ControlBindingsPanel,
+  PerformanceAnalytics,
+  InstructorConsole,
+  CraneControlPanel,
+  Rig3DViewport,
+} from './components/lazy';
 import { WeatherfordControlConsole } from './components/WeatherfordControlConsole';
-import { InstructorConsole } from './components/InstructorConsole';
-import { CraneControlPanel } from './components/CraneControlPanel';
 import { Button, Badge, SegmentedControl, cx } from './components/ui';
 import { useT } from './i18n';
-import { InstructorCommand, onEnvironmentChangeRequest } from './utils/simEvents';
+import { InstructorCommand, isInstructorCommand, onEnvironmentChangeRequest } from './utils/simEvents';
 
 import {
   Gauge,
@@ -277,6 +279,54 @@ const INITIAL_STATE: SimulatorState = {
 // ======================================================================
 const BROADCAST_CHANNEL_NAME = 'corod-sim-state';
 
+// --- BroadcastChannel message validation ------------------------------------
+// Messages come from other same-origin tabs/windows (any open copy of the app,
+// including stale builds), so treat them as untrusted input.
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isSimulatorStateSnapshot(v: unknown): boolean {
+  return (
+    isPlainObject(v) &&
+    isPlainObject(v.hydraulics) &&
+    isPlainObject(v.rod) &&
+    isPlainObject(v.bop) &&
+    typeof v.isSimulating === 'boolean'
+  );
+}
+
+/**
+ * Apply a secondary-window patch onto `prev`, accepting only known top-level
+ * keys whose value has the same JSON "kind" as the current value. Nested
+ * objects are shallow-merged so a partial sub-object cannot drop fields.
+ */
+function sanitizeStatePatch(prev: SimulatorState, patch: Record<string, unknown>): SimulatorState {
+  const base = prev as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...base };
+  let changed = false;
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (!Object.prototype.hasOwnProperty.call(base, key)) continue;
+    const cur = base[key];
+    if (isPlainObject(cur)) {
+      if (!isPlainObject(value)) continue;
+      out[key] = { ...cur, ...value };
+    } else if (Array.isArray(cur)) {
+      if (!Array.isArray(value)) continue;
+      out[key] = value;
+    } else if (cur === null || value === null) {
+      out[key] = value;
+    } else if (typeof cur === typeof value) {
+      out[key] = value;
+    } else {
+      continue;
+    }
+    changed = true;
+  }
+  return changed ? (out as unknown as SimulatorState) : prev;
+}
+
 
 function useMultiScreenSync(
   state: SimulatorState,
@@ -286,48 +336,78 @@ function useMultiScreenSync(
 ) {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const lastBroadcastRef = useRef(0);
+  const trailingBroadcastRef = useRef<number | null>(null);
+  const latestStateRef = useRef(state);
+  // The primary only pays for structured-cloning the full state (10–20×/s)
+  // once a pop-out window has announced itself on the channel.
+  const hasPeersRef = useRef(false);
   const isSecondaryRef = useRef(isSecondary);
   const onInstructorCommandRef = useRef(onInstructorCommand);
   isSecondaryRef.current = isSecondary;
   onInstructorCommandRef.current = onInstructorCommand;
+  latestStateRef.current = state;
 
   useEffect(() => {
     const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     channelRef.current = ch;
-    ch.onmessage = (e) => {
-      if (e.data?.type === 'state-update') {
+    ch.onmessage = (e: MessageEvent) => {
+      const msg: unknown = e.data;
+      if (!isPlainObject(msg)) return;
+      if (msg.type === 'primary-ready') {
+        // The primary (re)loaded after this pop-out opened: re-register.
+        ch.postMessage({ type: isSecondaryRef.current ? 'hello' : 'primary-ready' });
+      } else if (msg.type === 'hello') {
+        // A secondary window opened: start syncing and send it a snapshot now.
+        if (!isSecondaryRef.current) {
+          hasPeersRef.current = true;
+          ch.postMessage({ type: 'state-update', state: latestStateRef.current });
+        }
+      } else if (msg.type === 'state-update') {
         // Only SECONDARY windows accept full-state snapshots (from the primary).
         // Normalise snapshots from older builds that predate `environment`.
-        if (isSecondaryRef.current) {
-          const incoming = e.data.state as SimulatorState;
+        if (isSecondaryRef.current && isSimulatorStateSnapshot(msg.state)) {
+          const incoming = msg.state as SimulatorState;
           setState({ ...incoming, environment: incoming.environment ?? DEFAULT_ENVIRONMENT });
         }
-      } else if (e.data?.type === 'state-patch') {
+      } else if (msg.type === 'state-patch') {
         // Only the PRIMARY applies control patches sent by secondary windows.
-        if (!isSecondaryRef.current) {
-          setState((prev) => ({ ...prev, ...e.data.patch }));
+        if (!isSecondaryRef.current && isPlainObject(msg.patch)) {
+          hasPeersRef.current = true;
+          const patch = msg.patch;
           setState((prev) => {
-            channelRef.current?.postMessage({ type: 'state-update', state: prev });
-            return prev;
+            const next = sanitizeStatePatch(prev, patch);
+            if (next === prev) return prev;
+            channelRef.current?.postMessage({ type: 'state-update', state: next });
+            return next;
           });
         }
-      } else if (e.data?.type === 'instructor-command') {
+      } else if (msg.type === 'instructor-command') {
         // Only the PRIMARY executes instructor commands.
-        if (!isSecondaryRef.current) {
-          onInstructorCommandRef.current?.(e.data.command);
+        if (!isSecondaryRef.current && isInstructorCommand(msg.command)) {
+          onInstructorCommandRef.current?.(msg.command);
         }
       }
     };
-    return () => ch.close();
+    ch.postMessage({ type: isSecondaryRef.current ? 'hello' : 'primary-ready' });
+    return () => {
+      ch.close();
+      channelRef.current = null;
+      if (trailingBroadcastRef.current !== null) window.clearTimeout(trailingBroadcastRef.current);
+    };
   }, [setState]);
 
-  // Primary window broadcasts state changes (throttled to ~20fps)
+  // Primary window broadcasts state changes (throttled to ~20fps, with a
+  // trailing send so the last change inside a throttle window is never lost).
   useEffect(() => {
-    if (isSecondary) return;
-    const now = Date.now();
-    if (now - lastBroadcastRef.current < 50) return; // 20fps throttle
-    lastBroadcastRef.current = now;
-    channelRef.current?.postMessage({ type: 'state-update', state });
+    if (isSecondary || !hasPeersRef.current) return;
+    const send = () => {
+      trailingBroadcastRef.current = null;
+      lastBroadcastRef.current = Date.now();
+      channelRef.current?.postMessage({ type: 'state-update', state: latestStateRef.current });
+    };
+    const wait = 50 - (Date.now() - lastBroadcastRef.current);
+    if (wait <= 0) send();
+    else if (trailingBroadcastRef.current === null) trailingBroadcastRef.current = window.setTimeout(send, wait);
   }, [state, isSecondary]);
 
   // Secondary windows broadcast control changes back to primary

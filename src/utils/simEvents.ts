@@ -13,6 +13,23 @@ export type InstructorCommand =
   | { kind: 'cancel-emergency' }
   | { kind: 'set-environment'; patch: Partial<EnvironmentState> };
 
+/** Runtime guard for commands received over BroadcastChannel. */
+export function isInstructorCommand(v: unknown): v is InstructorCommand {
+  if (typeof v !== 'object' || v === null) return false;
+  const c = v as Record<string, unknown>;
+  switch (c.kind) {
+    case 'trigger-emergency':
+      return typeof c.scenarioId === 'string' && c.scenarioId.length > 0 && c.scenarioId.length < 100;
+    case 'resolve-emergency':
+    case 'cancel-emergency':
+      return true;
+    case 'set-environment':
+      return typeof c.patch === 'object' && c.patch !== null && !Array.isArray(c.patch);
+    default:
+      return false;
+  }
+}
+
 export const SET_ENVIRONMENT_EVENT = 'corod-sim:set-environment';
 
 export function requestEnvironmentChange(patch: Partial<EnvironmentState>): void {

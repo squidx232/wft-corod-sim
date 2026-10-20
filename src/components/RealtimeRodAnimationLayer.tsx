@@ -1,4 +1,4 @@
-import { reelRpmForSpeed } from './three/serviceReelDetails';
+import { reelRpmForSpeed } from './three/serviceReelGeometry';
 import React, { useEffect, useRef, useState, useId } from 'react';
 import { SimulatorState } from '../types';
 import {
