@@ -6,6 +6,17 @@ import { MeshKit, placement } from './meshKit';
  * front (cab) at −X ≈ −14.5, rear at +X ≈ 3.2, deck top at Y = 1.7, frame
  * rails at Z = ±0.95. The mast base sits at the local origin.
  */
+/**
+ * Crew-facing points on the carrier, in TRUCK-LOCAL space (truck is rotated π
+ * inside the pulling-unit group, so world = (unitX − x, y, −z)).
+ */
+export const PU_CREW_POINTS = {
+  deckY: 1.7,
+  leverZ: [0.38, 0.82] as const,
+  leverTopY: 3.42,
+  stairs: { x: 2.72, width: 0.55, topY: 1.7, topZ: -1.5, bottomZ: -3.5 },
+} as const;
+
 export function addPullingUnitCarrierDetails(truck: THREE.Group, kit: MeshKit): void {
   const { mat, box, cyl, strut, railing } = kit;
   const black = mat(0x14181d, 0.7, 0.5);
@@ -64,6 +75,27 @@ export function addPullingUnitCarrierDetails(truck: THREE.Group, kit: MeshKit): 
   box(truck, 0.5, 0.6, 0.9, mat(0x1f2937, 0.5, 0.5), 2.3, 2.9, 0.6);
   cyl(truck, 0.2, 0.04, gaugeFace, 2.56, 3.0, 0.6, 'x', 24, false); // weight indicator
   for (const z of [0.25, 0.95]) cyl(truck, 0.1, 0.04, gaugeFace, 2.56, 2.78, z, 'x', 18, false);
+
+  // Driller's control levers on the console top (worked by the pulling-unit driller).
+  for (const z of PU_CREW_POINTS.leverZ) {
+    strut(truck, new THREE.Vector3(2.12, 3.2, z), new THREE.Vector3(2.12, PU_CREW_POINTS.leverTopY, z), 0.018, chrome);
+    cyl(truck, 0.035, 0.08, black, 2.12, PU_CREW_POINTS.leverTopY, z, 'y', 10, false);
+  }
+
+  // Access stairs from the rear work floor down the service-lane side (truck-local −Z).
+  const st = PU_CREW_POINTS.stairs;
+  const steps = 8;
+  for (let k = 1; k < steps; k++) {
+    const f = k / steps;
+    box(truck, st.width, 0.04, 0.3, black, st.x, st.topY * (1 - f), st.topZ + (st.bottomZ - st.topZ) * f, false);
+  }
+  for (const dx of [-st.width / 2, st.width / 2]) {
+    const x = st.x + dx;
+    strut(truck, new THREE.Vector3(x, st.topY, st.topZ), new THREE.Vector3(x, 0.02, st.bottomZ), 0.035, yellow);
+    strut(truck, new THREE.Vector3(x, st.topY + 0.95, st.topZ), new THREE.Vector3(x, 0.95, st.bottomZ), 0.022, yellow);
+    strut(truck, new THREE.Vector3(x, 0.02, st.bottomZ), new THREE.Vector3(x, 0.95, st.bottomZ), 0.022, yellow);
+    strut(truck, new THREE.Vector3(x, st.topY, st.topZ), new THREE.Vector3(x, st.topY + 0.95, st.topZ), 0.022, yellow);
+  }
 
   // Rear bumper with chevron safety striping.
   box(truck, 0.2, 0.3, 3.0, black, 3.35, 0.9, 0, false);

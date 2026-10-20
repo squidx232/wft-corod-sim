@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { AlarmTier } from '../../types';
-import { createEmergencyAudioController } from './emergencyAudio';
 import { createMechanicalFaults } from './mechanicalFaults';
 
 /**
@@ -194,7 +193,6 @@ export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnc
 
   const rand = (s = 1) => (Math.random() * 2 - 1) * s;
 
-  const audio = createEmergencyAudioController();
   const faults = createMechanicalFaults(scene, a);
 
   const update = (f: EmergencyEffectsFrame) => {
@@ -202,7 +200,6 @@ export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnc
     const alarm = f.alarmTier !== 'none';
     const active = alarm || !!id;
 
-    audio.update(id, f.time);
     faults.update(id, f.time);
 
     // --- Beacons: rotating-strobe look (sharp double pulse), color by scenario -----
@@ -306,7 +303,6 @@ export function createEmergencyEffects(scene: THREE.Scene, a: EmergencyEffectAnc
   return {
     update,
     dispose() {
-      audio.dispose();
       faults.dispose();
       sparks.dispose();
       spray.dispose();

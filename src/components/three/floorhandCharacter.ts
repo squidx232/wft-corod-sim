@@ -37,7 +37,7 @@ export interface FloorhandAnchors {
 }
 
 /** Emergencies where the crew evacuates to the muster point, and the delay (s) before walking off. */
-const EVACUATE: Record<string, number> = { 'emg-h2s': 2.5, 'emg-blowout': 5 };
+export const EVACUATE: Record<string, number> = { 'emg-h2s': 2.5, 'emg-blowout': 5 };
 const THIGH = 0.44;
 const SHIN = 0.47; // knee → sole
 const REST_DEPTH = THIGH + SHIN;

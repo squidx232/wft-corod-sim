@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { isolateRenders, simStore, useSimSelector } from '../state/simStore';
 import { createPullingUnitCrew } from './three/pullingUnitCrew';
 import { createFieldSky } from './three/fieldSky';
 import { GRAPHICS_PRESETS, GraphicsQuality, readGraphicsQuality } from './three/graphicsQuality';
@@ -28,6 +29,7 @@ import type { Vec3, Collider } from '../crane/craneSim';
 import { createOperatorCharacter, OperatorCharacter } from './three/operatorCharacter';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { SimulatorState, DEFAULT_ENVIRONMENT, EnvironmentState, TimeOfDay, WeatherKind } from '../types';
 import { soundManager } from '../utils/audio';
 import {
@@ -360,7 +362,8 @@ const OG = {
 };
 
 // Shared glTF loader for the imported Blender equipment models.
-const gltfLoader = new GLTFLoader();
+// Models are meshopt-compressed + quantized (EXT_meshopt_compression) — ~4x smaller.
+const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 
 /**
  * Detect the vertical BORE centre (X/Z) of a well-control model such as a
@@ -448,6 +451,9 @@ function loadEquipmentModel(
         if ((child as THREE.Mesh).isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          // Boolean cutters / reference paths exported from Blender have no
+          // material and would otherwise render as default white boxes.
+          if (/Cutter|_Ref$/.test(child.name)) child.visible = false;
         }
       });
       // Normalise: measure bounds, scale to target height, seat base on ground.
@@ -495,7 +501,7 @@ function loadEquipmentModel(
   );
 }
 
-export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
+const Rig3DViewportInner: React.FC<Rig3DViewportProps> = ({
   state,
   craneMode = false,
   onInstallClamp,
@@ -513,13 +519,25 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const simSpeed = state.simulationSpeedMultiplier ?? 1;
+  // Only the display-rounded values below trigger React renders; the 60 fps
+  // render loop reads the full live state through `stateRef` instead.
+  const view = useSimSelector((s) => ({
+    simSpeed: s.simulationSpeedMultiplier ?? 1,
+    environment: s.environment ?? DEFAULT_ENVIRONMENT,
+    depthFt: Math.round(s.rod.currentDepthFt),
+    weightLbs: Math.round(s.rod.totalStringWeightLbs),
+    rodSpeed: Math.round(s.rod.rodSpeedFtPerMin * 10) / 10,
+    squeezePsi: Math.round(s.hydraulics.squeezePressure),
+    safetyClampLever: s.hydraulics.safetyClampLever,
+    emergencyStopTripped: s.hydraulics.emergencyStopTripped,
+  }), state);
+  const simSpeed = view.simSpeed;
 
   const [cameraPreset, setCameraPreset] = useState<CameraViewPreset>('operator');
   const cameraPresetRef = useRef<CameraViewPreset>('operator');
   // Live site conditions come from `state.environment` (instructor/toolbar
   // controlled) and are applied every frame by the atmosphere module.
-  const environment: EnvironmentState = state.environment ?? DEFAULT_ENVIRONMENT;
+  const environment: EnvironmentState = view.environment;
   const skyMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
   const siteHandlesRef = useRef<OilfieldSiteHandles | null>(null);
   const fieldDevRef = useRef<FieldDevelopmentHandles | null>(null);
@@ -547,9 +565,13 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
 
   // Keep a mutable ref of state for the 60fps render loop
   const stateRef = useRef<SimulatorState>(state);
+  // The component is render-isolated (see export below), so the live state is
+  // pulled from the store on every App commit rather than from props.
   useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+    const sync = () => { stateRef.current = simStore.get() ?? stateRef.current; };
+    sync();
+    return simStore.subscribe(sync);
+  }, []);
 
   // Scene references
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1074,7 +1096,12 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     floorhand.root.rotation.y = Math.atan2(-(2.25 - FLOORHAND_POS.z), -5.85 - FLOORHAND_POS.x);
     scene.add(floorhand.root);
     floorhandRef.current = floorhand;
-    const pullingCrew = createPullingUnitCrew(scene, { groundAt: terrain.groundAt });
+    const pullingCrew = createPullingUnitCrew(scene, {
+      groundAt: terrain.groundAt,
+      unitX: WELL_X + MAST_OFFSET_X,
+      muster: new THREE.Vector3(MUSTER_SIGN.x + 2.6, 0, MUSTER_SIGN.z - 0.6),
+      injector: new THREE.Vector3(WELL_X, INJECTOR_BASE_Y + 2.5, 0),
+    });
     const fieldSky = createFieldSky(scene, quality.clouds);
 
     // 5e. Knuckle crane (Fassi F215C) at the rear of the MG deck. Re-mounted on
@@ -1471,7 +1498,6 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
       // 6b. Atmosphere, emergencies and the floorhand.
       const liveEnv = liveState.environment ?? DEFAULT_ENVIRONMENT;
       const scenarioId = liveState.emergencyScenarioId;
-      pullingCrew.update(delta, time / 1000, scenarioId);
       fieldSky.update(liveEnv, time / 1000, cameraRef.current?.position ?? camera.position);
       // A high-wind drill forces a visible gale regardless of the set weather.
       const effectiveEnv: EnvironmentState = scenarioId === 'emg-wind'
@@ -1499,6 +1525,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
           wind: atmosphere?.wind ?? new THREE.Vector3(),
         });
       }
+      pullingCrew.update({
+        time: time / 1000,
+        delta,
+        activity: speed < -0.1 ? 'rih' : speed > 0.1 ? 'pooh' : 'idle',
+        speedRatio: Math.min(1, Math.abs(speed) / 85),
+        alarm: alarmActive,
+        emergencyId: scenarioId,
+      });
       if (floorhandRef.current) {
         floorhandRef.current.update({
           time: time / 1000,
@@ -4157,6 +4191,8 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               injectorDetailsRef.current = addInjectorDetails(injectorGroup, sceneRef.current, bounds, {
                 groundWorldY: 0,
                 hoseEndWorld: new THREE.Vector3(MG_UNIT_X + 6.4, 1.0, -0.9),
+                model: root,
+                rodRadiusWorld: 0.045,
               });
             }
           }
@@ -4727,14 +4763,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               <div className="bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-1.5">
                 <span className="text-slate-400 text-[10px]">DEPTH:</span>
                 <span className="font-bold text-emerald-400 text-sm">
-                  {Math.round(state.rod.currentDepthFt)} FT
+                  {view.depthFt} FT
                 </span>
               </div>
 
               <div className="bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-1.5">
                 <span className="text-slate-400 text-[10px]">WEIGHT:</span>
                 <span className="font-bold text-amber-400 text-sm">
-                  {Math.round(state.rod.totalStringWeightLbs).toLocaleString()} LBS
+                  {view.weightLbs.toLocaleString()} LBS
                 </span>
               </div>
 
@@ -4742,23 +4778,23 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                 <span className="text-slate-400 text-[10px]">SPEED:</span>
                 <span
                   className={`font-bold text-xs ${
-                    state.rod.rodSpeedFtPerMin > 0
+                    view.rodSpeed > 0
                       ? 'text-emerald-400'
-                      : state.rod.rodSpeedFtPerMin < 0
+                      : view.rodSpeed < 0
                       ? 'text-blue-400'
                       : 'text-slate-400'
                   }`}
                 >
-                  {state.rod.rodSpeedFtPerMin > 0
-                    ? `+${state.rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN POOH`
-                    : state.rod.rodSpeedFtPerMin < 0
-                    ? `${state.rod.rodSpeedFtPerMin.toFixed(1)} FT/MIN RIH`
+                  {view.rodSpeed > 0
+                    ? `+${view.rodSpeed.toFixed(1)} FT/MIN POOH`
+                    : view.rodSpeed < 0
+                    ? `${view.rodSpeed.toFixed(1)} FT/MIN RIH`
                     : '0.0 FT/MIN'}
                 </span>
                 {/* On-screen rate = gauge speed × training time-acceleration;
                     reel RPM follows the same effective rod rate (one turn per wrap). */}
                 <span className="text-slate-500 text-[10px]">
-                  {`≈ ${((Math.abs(state.rod.rodSpeedFtPerMin) / 60) * simSpeed).toFixed(2)} FT/S · REEL ${(reelRpmForSpeed(state.rod.rodSpeedFtPerMin) * simSpeed).toFixed(2)} RPM`}
+                  {`≈ ${((Math.abs(view.rodSpeed) / 60) * simSpeed).toFixed(2)} FT/S · REEL ${(reelRpmForSpeed(view.rodSpeed) * simSpeed).toFixed(2)} RPM`}
                   {simSpeed !== 1 && <span className="text-amber-400 font-bold">{` (×${simSpeed} SIM)`}</span>}
                 </span>
               </div>
@@ -4793,14 +4829,14 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs font-mono">
                 <span className="text-slate-400 text-[10px]">SQUEEZE (S):</span>
                 <span className="font-bold text-slate-200 min-w-[55px]">
-                  {Math.round(state.hydraulics.squeezePressure)} PSI
+                  {view.squeezePsi} PSI
                 </span>
                 <button
                   type="button"
                   onClick={() =>
                     onUpdateHydraulics &&
                     onUpdateHydraulics({
-                      squeezePressureTarget: Math.max(0, state.hydraulics.squeezePressureTarget - 100),
+                      squeezePressureTarget: Math.max(0, stateRef.current.hydraulics.squeezePressureTarget - 100),
                     })
                   }
                   className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
@@ -4812,7 +4848,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                   onClick={() =>
                     onUpdateHydraulics &&
                     onUpdateHydraulics({
-                      squeezePressureTarget: Math.min(3000, state.hydraulics.squeezePressureTarget + 100),
+                      squeezePressureTarget: Math.min(3000, stateRef.current.hydraulics.squeezePressureTarget + 100),
                     })
                   }
                   className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
@@ -4827,17 +4863,17 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                 onClick={() =>
                   onUpdateHydraulics &&
                   onUpdateHydraulics({
-                    safetyClampLever: state.hydraulics.safetyClampLever === 'ON' ? 'OFF' : 'ON',
+                    safetyClampLever: stateRef.current.hydraulics.safetyClampLever === 'ON' ? 'OFF' : 'ON',
                   })
                 }
                 className={`px-3 py-1.5 rounded-xl font-mono font-bold text-xs uppercase border transition-all active:scale-95 ${
-                  state.hydraulics.safetyClampLever === 'ON'
+                  view.safetyClampLever === 'ON'
                     ? 'bg-amber-600 text-white border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
                 }`}
                 title="Toggle Rod Safety Clamp (V)"
               >
-                CLAMP (V): {state.hydraulics.safetyClampLever}
+                CLAMP (V): {view.safetyClampLever}
               </button>
 
               {/* Air Horn Alert Button */}
@@ -4857,22 +4893,22 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (state.hydraulics.emergencyStopTripped) {
+                  if (stateRef.current.hydraulics.emergencyStopTripped) {
                     if (onResetEmergencyStop) onResetEmergencyStop();
                   } else {
                     if (onTriggerEmergencyStop) onTriggerEmergencyStop();
                   }
                 }}
                 className={`p-2 rounded-xl font-bold text-xs uppercase flex items-center gap-1 shadow active:scale-95 ${
-                  state.hydraulics.emergencyStopTripped
+                  view.emergencyStopTripped
                     ? 'bg-emerald-600 text-white animate-pulse'
                     : 'bg-red-600 hover:bg-red-500 text-white'
                 }`}
-                title={state.hydraulics.emergencyStopTripped ? 'Reset E-Stop (J)' : 'Trigger E-Stop (J)'}
+                title={view.emergencyStopTripped ? 'Reset E-Stop (J)' : 'Trigger E-Stop (J)'}
               >
                 <ShieldAlert className="w-4 h-4" />
                 <span className="hidden md:inline">
-                  {state.hydraulics.emergencyStopTripped ? 'RESET E-STOP' : 'E-STOP (J)'}
+                  {view.emergencyStopTripped ? 'RESET E-STOP' : 'E-STOP (J)'}
                 </span>
               </button>
             </div>
@@ -4883,7 +4919,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                 type="button"
                 onClick={() => {
                   soundManager.playMetalTap();
-                  if (onUpdateJoystick) onUpdateJoystick(Math.min(1.0, state.joystickPosition + 0.35));
+                  if (onUpdateJoystick) onUpdateJoystick(Math.min(1.0, stateRef.current.joystickPosition + 0.35));
                 }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 border border-emerald-500 text-white font-mono font-bold text-xs active:scale-95 transition-all shadow"
                 title="Pull Out Of Hole (POOH)"
@@ -4909,7 +4945,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
                 type="button"
                 onClick={() => {
                   soundManager.playMetalTap();
-                  if (onUpdateJoystick) onUpdateJoystick(Math.max(-1.0, state.joystickPosition - 0.35));
+                  if (onUpdateJoystick) onUpdateJoystick(Math.max(-1.0, stateRef.current.joystickPosition - 0.35));
                 }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 border border-blue-500 text-white font-mono font-bold text-xs active:scale-95 transition-all shadow"
                 title="Run In Hole (RIH)"
@@ -4924,3 +4960,7 @@ export const Rig3DViewport: React.FC<Rig3DViewportProps> = ({
     </div>
   );
 };
+
+/** Render-isolated: App's per-tick re-render no longer cascades into the 3D view;
+ * it re-renders only for the rounded HUD slice above or non-state prop changes. */
+export const Rig3DViewport = isolateRenders(Rig3DViewportInner, ['state']);
