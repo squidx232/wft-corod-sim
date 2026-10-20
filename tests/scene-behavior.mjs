@@ -54,5 +54,31 @@ try {
     atmosphere.dispose(); return n;
   };
   assert.ok(weatherCount(0.18) < weatherCount(1)*0.2);
-  console.log('PASS: signed chain speed/direction, bounded links, 10-minute crew paths, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations');
+  // --- perf: engine loop compaction is mono, bounded and seamless ---------
+  const { compactLoopBuffer } = await vite.ssrLoadModule('/src/utils/audio.ts');
+  const mkBuf = (ch, len, sr) => { const data = Array.from({length: ch}, () => new Float32Array(len)); return { numberOfChannels: ch, length: len, sampleRate: sr, duration: len / sr, getChannelData: c => data[c] }; };
+  const fakeCtx = { createBuffer: (ch, len, sr) => mkBuf(ch, len, sr) };
+  const sr = 1000, srcBuf = mkBuf(2, 60 * sr, sr);
+  for (let c = 0; c < 2; c++) { const d = srcBuf.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = Math.sin(i * 0.05); }
+  const loop = compactLoopBuffer(fakeCtx, srcBuf, 20, 0.35, 0.05);
+  assert.equal(loop.numberOfChannels, 1);
+  assert.equal(loop.length, 20 * sr);
+  const L = loop.getChannelData(0);
+  const step = Math.abs(L[0] - L[L.length - 1]);
+  assert.ok(step < 0.06, `loop seam jump ${step}`);
+  assert.equal(compactLoopBuffer(fakeCtx, mkBuf(2, 5 * sr, sr)), null);
+  // --- security: persisted data guards drop malformed records ------------
+  const G = await vite.ssrLoadModule('/src/utils/storageGuards.ts');
+  const good = { id: 'a', name: 'Op', role: 'r', unit: 'u', grade: 'A', difficulty: 'easy', score: 90, eventsResolved: 1, eventsHandled: 1, avgReactionSec: null, hintsUsed: 0, durationSec: 60, timestamp: 1 };
+  const rows = G.parseStoredArray(JSON.stringify([good, { ...good, score: 'x' }, null, 7, { ...good, name: 'x'.repeat(5000) }]), G.isLeaderboardEntry);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(G.parseStoredArray('{"a":1}', G.isLeaderboardEntry), []);
+  const merged = G.mergeKnownKeys({ a: 1, b: 'x' }, JSON.parse('{"a":"bad","b":"ok","__proto__":{"polluted":1},"c":3}'));
+  assert.deepEqual(merged, { a: 1, b: 'ok' });
+  assert.equal({}.polluted, undefined);
+  const { isInstructorCommand } = await vite.ssrLoadModule('/src/utils/simEvents.ts');
+  assert.ok(isInstructorCommand({ kind: 'trigger-emergency', scenarioId: 'emg-h2s' }));
+  assert.ok(!isInstructorCommand({ kind: 'trigger-emergency' }));
+  assert.ok(!isInstructorCommand({ kind: 'rm -rf' }));
+  console.log('PASS: signed chain speed/direction, bounded links, 10-minute crew paths, 13 isolated drills, invisible H2S, cleanup, sky transitions and reduced weather/emergency allocations; seamless compact engine loop; storage/broadcast guards');
 } finally { await vite.close(); }

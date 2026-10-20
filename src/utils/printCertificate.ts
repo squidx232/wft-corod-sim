@@ -33,8 +33,18 @@ export interface CertificateSpec {
   serial?: string;
 }
 
-const esc = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Escape for both HTML text and quoted attribute contexts. */
+const esc = (s: unknown): string =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+/** Only allow simple CSS colour tokens inside the inline style attribute. */
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|rgba?\(\s*[\d.\s,%]+\)|hsla?\(\s*[\d.\s,%deg]+\))$/i;
+const safeColor = (c?: string): string | null => (c && SAFE_COLOR.test(c.trim()) ? c.trim() : null);
 
 function buildCertificateHtml(spec: CertificateSpec): string {
   const rows = spec.fields
@@ -43,7 +53,7 @@ function buildCertificateHtml(spec: CertificateSpec): string {
         <div class="row">
           <span class="row-label">${esc(f.label)}</span>
           <span class="dots"></span>
-          <span class="row-value" style="${f.accent ? `color:${esc(f.accent)}` : ''}">${esc(f.value)}</span>
+          <span class="row-value" style="${safeColor(f.accent) ? `color:${esc(safeColor(f.accent))}` : ''}">${esc(f.value)}</span>
         </div>`,
     )
     .join('');

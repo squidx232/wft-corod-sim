@@ -1,4 +1,5 @@
 import { LeaderboardEntry } from '../types';
+import { isLeaderboardEntry, parseStoredArray } from './storageGuards';
 
 const STORAGE_KEY = 'corod-assessment-leaderboard-v1';
 const MAX_ENTRIES = 100;
@@ -6,11 +7,8 @@ const MAX_ENTRIES = 100;
 /** Load the persisted leaderboard (highest score first). Safe on SSR/no-storage. */
 export function loadLeaderboard(): LeaderboardEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as LeaderboardEntry[];
-    if (!Array.isArray(parsed)) return [];
-    return sortLeaderboard(parsed);
+    const parsed = parseStoredArray(localStorage.getItem(STORAGE_KEY), isLeaderboardEntry);
+    return sortLeaderboard(parsed).slice(0, MAX_ENTRIES);
   } catch {
     return [];
   }

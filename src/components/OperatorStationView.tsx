@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useT } from '../i18n';
 import { DynamicRigSightline } from './DynamicRigSightline';
-import { Rig3DViewport } from './Rig3DViewport';
+import { Rig3DViewport } from './lazy';
 import { WeatherfordControlConsole } from './WeatherfordControlConsole';
 import { OperatorHandsOverlay } from './OperatorHandsOverlay';
 import { SimulatorState } from '../types';

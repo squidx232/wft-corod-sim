@@ -273,6 +273,13 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
   const leftHand = new THREE.Vector3();
   const rightHand = new THREE.Vector3();
   const tmp = new THREE.Vector3();
+  // Per-frame scratch objects (update() runs every frame; avoid GC churn).
+  const _gazeLocal = new THREE.Vector3();
+  const _leftGoal = new THREE.Vector3();
+  const _rightGoal = new THREE.Vector3();
+  const _trim = new THREE.Vector3();
+  const _rootQuat = new THREE.Quaternion();
+  const _armTarget = new THREE.Vector3();
   let initialised = false;
   let yaw = 0;
   let pitch = 0;
@@ -329,7 +336,7 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     gaze.lerp(gazeTarget, damp(f.alarm ? 9 : 4.5, dt));
     // Measure gaze in the (untwisted) hip frame, relative to the neck base, so the
     // chest twist below doesn't feed back into the yaw estimate.
-    const local = hips.worldToLocal(gaze.clone()).sub(tmp.set(0, spine.position.y + neck.position.y, 0));
+    const local = hips.worldToLocal(_gazeLocal.copy(gaze)).sub(tmp.set(0, spine.position.y + neck.position.y, 0));
     const targetYaw = THREE.MathUtils.clamp(Math.atan2(-local.z, local.x), -1.25, 1.25);
     const targetPitch = THREE.MathUtils.clamp(Math.atan2(local.y - 0.2, Math.hypot(local.x, local.z)), -0.65, 0.55);
     yaw += (targetYaw - yaw) * damp(f.alarm ? 12 : 7, dt);
@@ -341,19 +348,19 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     // Hands: left on the joystick (follows its tilt), right on the squeeze lever
     // while working; relaxed at the sides when idle with an occasional hat adjust.
     const leftGoal = f.engineOn || working
-      ? anchors.joystickHandle.getWorldPosition(new THREE.Vector3())
-      : root.localToWorld(new THREE.Vector3(0.02, 0.84, -0.27));
+      ? anchors.joystickHandle.getWorldPosition(_leftGoal)
+      : root.localToWorld(_leftGoal.set(0.02, 0.84, -0.27));
     let rightGoal: THREE.Vector3;
     if (working || f.alarm) {
-      rightGoal = anchors.squeezeLever.getWorldPosition(new THREE.Vector3());
+      rightGoal = anchors.squeezeLever.getWorldPosition(_rightGoal);
       // Fine squeeze trims: small nudges on the lever, quicker when tense.
       const trim = Math.sin(t * (f.alarm ? 5.0 : 1.7)) * 0.012 + (hash(Math.floor(t / 2.5)) - 0.5) * 0.02;
-      rightGoal.add(new THREE.Vector3(trim, 0.03, 0).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion())));
+      rightGoal.add(_trim.set(trim, 0.03, 0).applyQuaternion(root.getWorldQuaternion(_rootQuat)));
     } else {
       const cycle = t % 14;
       rightGoal = cycle > 10.2 && cycle < 11.6
-        ? head.localToWorld(new THREE.Vector3(0.15, 0.2, 0.06)) // adjust hard-hat brim
-        : root.localToWorld(new THREE.Vector3(0.03 + Math.sin(t * 0.45) * 0.01, 0.84, 0.27));
+        ? head.localToWorld(_rightGoal.set(0.15, 0.2, 0.06)) // adjust hard-hat brim
+        : root.localToWorld(_rightGoal.set(0.03 + Math.sin(t * 0.45) * 0.01, 0.84, 0.27));
     }
     if (!initialised) {
       leftHand.copy(leftGoal);
@@ -362,8 +369,8 @@ export function createOperatorCharacter(kit: MeshKit, anchors: OperatorAnchors):
     }
     leftHand.lerp(leftGoal, damp(working ? 14 : 6, dt));
     rightHand.lerp(rightGoal, damp(f.alarm ? 12 : 5, dt));
-    solveArm(leftArm.shoulder, leftArm.elbow, spine.worldToLocal(leftHand.clone()), leftArm.pole);
-    solveArm(rightArm.shoulder, rightArm.elbow, spine.worldToLocal(rightHand.clone()), rightArm.pole);
+    solveArm(leftArm.shoulder, leftArm.elbow, spine.worldToLocal(_armTarget.copy(leftHand)), leftArm.pole);
+    solveArm(rightArm.shoulder, rightArm.elbow, spine.worldToLocal(_armTarget.copy(rightHand)), rightArm.pole);
   }
 
   return { root, update };
